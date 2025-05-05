@@ -1,26 +1,22 @@
-from flask import Flask, jsonify
-import os
+from flask import Flask
 from dotenv import load_dotenv
+import os
 from src.config.config import Config
 
-# loading environment variables
-load_dotenv()
+def create_app():
+    # Charger les variables d'environnement
+    load_dotenv()
 
-# declaring flask application
-app = Flask(__name__)
+    # Créer l'application Flask
+    app = Flask(__name__)
 
-# calling the dev configuration
-config = Config().dev_config
+    # Charger la configuration en fonction de l'environnement
+    env = os.getenv("FLASK_ENV", "dev")
+    config = Config().dev_config if env == "dev" else Config().production_config
+    app.config.from_object(config)
 
-# making our application to use dev env
-app.env = config.ENV
+    # Enregistrer les routes
+    from src.routes import register_routes
+    register_routes(app)
 
-# Reroute for the root URL
-@app.route('/')
-def index():
-    return jsonify({"message": "Welcome to the Flask API!"})
-
-# Example API route
-@app.route('/api/hello', methods=['GET'])
-def hello_world():
-    return jsonify({"message": "Hello, World!"})
+    return app
