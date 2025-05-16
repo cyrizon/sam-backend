@@ -5,6 +5,7 @@ from flask import jsonify, request
 from flask_cors import CORS
 from pathlib import Path
 from src.services.tolls_finder import find_tolls_on_route
+import requests
 
 def register_routes(app):
     CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})  # Autorise uniquement le frontend
@@ -53,3 +54,23 @@ def register_routes(app):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route('/api/test-ors', methods=['GET'])
+    def test_ors():
+        ors_base_url = os.environ.get("ORS_BASE_URL")
+        url = f"{ors_base_url}/v2/directions/driving-car"
+        params = {
+            # "start": "8.68149,49.4141",
+            # "end": "8.68787,49.42031"
+            # "start": "7.448595,48.262004", #Selestat
+            # "end": "7.330118,47.750059", #Mulhouse
+            "start": "7.330118,47.750059", #Mulhouse
+            # "end": "7.758374,48.570721" #Strasbourg
+            "end" : "6.17963,49.115164" #Metz
+        }
+        try:
+            response = requests.get(url, params=params)
+            print("Request URL:", response.url)
+            response.raise_for_status()
+            return jsonify(response.json())
+        except requests.RequestException as e:
+            return jsonify({"error": str(e)}), 500

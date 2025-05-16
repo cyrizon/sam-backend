@@ -78,6 +78,9 @@ def find_tolls_on_route(
 
     selected = df[mask]
 
+    # Affichae des péages sélectionnés
+    print("Péages sélectionnés :", selected[["id", lon_col, lat_col, "_lon", "_lat"]])
+
     # --- 4) Construction de la réponse ------------------------------------- #
     results: List[Dict] = []
     for _, row in selected.iterrows():
