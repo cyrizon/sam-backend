@@ -6,9 +6,20 @@ from flask_cors import CORS
 from pathlib import Path
 from src.services.tolls_finder import find_tolls_on_route
 import requests
+from dotenv import load_dotenv
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+load_dotenv()
 
 def register_routes(app):
     CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})  # Autorise uniquement le frontend
+
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=[]
+    )
 
     @app.route('/')
     def index():
@@ -54,6 +65,49 @@ def register_routes(app):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route('/api/route', methods=['GET'])
+    def api_route_get():
+        ors_base_url = os.environ.get("ORS_BASE_URL")
+        url = f"{ors_base_url}/v2/directions/driving-car"
+        start = request.args.get('start')
+        end = request.args.get('end')
+        if not start or not end:
+            return jsonify({"error": "Missing start or end parameter"}), 400
+        params = {"start": start, "end": end}
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            return jsonify(response.json())
+        except requests.RequestException as e:
+            return jsonify({"error": str(e)}), 500
+        
+    @app.route('/api/route/', methods=['POST'])
+    def api_route_post():
+        ors_base_url = os.environ.get("ORS_BASE_URL")
+        url = f"{ors_base_url}/v2/directions/driving-car"
+        data = request.get_json()
+        print("Received data:", data)
+        if not data or 'coordinates' not in data:
+            return jsonify({"error": "Missing coordinates"}), 400
+
+        payload = {
+            "coordinates": data['coordinates']
+        }
+        if 'options' in data:
+            payload["options"] = data['options']
+
+        headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "Accept": "application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8",
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            return jsonify(response.json())
+        except requests.RequestException as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route('/api/test-ors', methods=['GET'])
     def test_ors():
         ors_base_url = os.environ.get("ORS_BASE_URL")
@@ -61,16 +115,57 @@ def register_routes(app):
         params = {
             # "start": "8.68149,49.4141",
             # "end": "8.68787,49.42031"
-            # "start": "7.448595,48.262004", #Selestat
+            "start": "7.448595,48.262004", #Selestat
             # "end": "7.330118,47.750059", #Mulhouse
-            "start": "7.330118,47.750059", #Mulhouse
+            # "start": "7.330118,47.750059", #Mulhouse
             # "end": "7.758374,48.570721" #Strasbourg
-            "end" : "6.17963,49.115164" #Metz
+            # "end" : "6.17963,49.115164" #Metz
+            "end": "5.037793,47.317743" #Dijon
         }
         try:
             response = requests.get(url, params=params)
-            print("Request URL:", response.url)
             response.raise_for_status()
             return jsonify(response.json())
         except requests.RequestException as e:
             return jsonify({"error": str(e)}), 500
+
+    @app.route('/api/geocode/search', methods=['GET'])
+    @limiter.limit("3 per minute")
+    def geocode_search():
+        api_key = os.environ.get("ORS_API_KEY")
+        text = request.args.get('text')
+        if not api_key or not text:
+            return jsonify({"error": "Missing ORS_API_KEY or text parameter"}), 400
+        url = "https://api.openrouteservice.org/geocode/search"
+        params = {
+            "api_key": api_key,
+            "text": text,
+            "boundary.country": "FR"
+        }
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            return jsonify(response.json())
+        except requests.RequestException as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/api/geocode/autocomplete', methods=['GET'])
+    @limiter.limit("3 per minute")
+    def geocode_autocomplete():
+        api_key = os.environ.get("ORS_API_KEY")
+        text = request.args.get('text')
+        if not api_key or not text:
+            return jsonify({"error": "Missing ORS_API_KEY or text parameter"}), 400
+        url = "https://api.openrouteservice.org/geocode/autocomplete"
+        params = {
+            "api_key": api_key,
+            "text": text,
+            "boundary.country": "FR"
+        }
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            return jsonify(response.json())
+        except requests.RequestException as e:
+            return jsonify({"error": str(e)}), 500
+
