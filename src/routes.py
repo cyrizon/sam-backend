@@ -1,10 +1,9 @@
-# filepath: c:\Users\pecni\Desktop\SAM\sam-backend\src\routes.py
 import json
 import os
 from flask import jsonify, request
 from flask_cors import CORS
 from pathlib import Path
-from src.services.tolls_finder import find_tolls_on_route
+from services.tolls_finder import find_tolls_on_route
 import requests
 from dotenv import load_dotenv
 from flask_limiter import Limiter
@@ -46,7 +45,7 @@ def register_routes(app):
             return jsonify({"message": "CORS preflight check successful"}), 200
         try:
             # Récupérer les données GeoJSON envoyées par le frontend
-            geojson_data = request.get_json()
+            geojson_data = request.get_json(silent=True)
             if not geojson_data:
                 print("Données GeoJSON manquantes ou invalides :", geojson_data)
                 return jsonify({"error": "No data provided"}), 400
