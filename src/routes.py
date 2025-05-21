@@ -3,7 +3,7 @@ import os
 from flask import jsonify, request
 from flask_cors import CORS
 from pathlib import Path
-from services.tolls_finder import find_tolls_on_route
+from src.services.tolls_finder import find_tolls_on_route
 import requests
 from dotenv import load_dotenv
 from flask_limiter import Limiter

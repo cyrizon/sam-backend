@@ -1,7 +1,7 @@
 import pytest
 import json
 from flask import Flask
-from routes import register_routes
+from src.routes import register_routes
 
 @pytest.fixture
 def app():
