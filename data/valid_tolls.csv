@@ -1,0 +1,106 @@
+name_base_aprr,name_norm,name_base_peages,id
+AMBERIEU,amberieu,Amberieu,APRR_O001
+ARLAY,arlay,Arlay,APRR_O002
+AUXERRE NORD,auxerrenord,Auxerre Nord,APRR_O003
+AUXERRE SUD,auxerresud,Auxerre Sud,APRR_O004
+AVALLON,avallon,Avallon,APRR_O005
+BALAN,balan,Balan,APRR_O006
+BAUME-LES-DAMES,baumelesdames,Baume-Les-Dames,APRR_O007
+BEAUNE NORD,beaunenord,Beaune Nord,APRR_O008
+BEAUNE SUD,beaunesud,Beaune Sud,APRR_O009
+BEAUPONT,beaupont,Beaupont,APRR_O010
+BEAUREPAIRE,beaurepaire,Beaurepaire,APRR_O011
+BERSAILLIN,bersaillin,Bersaillin,APRR_O013
+BESANCON EST,besanconest,Besancon Est,APRR_O014
+BESANCON NORD,besanconnord,Besancon Nord,APRR_O015
+BESANCON OUEST,besanconouest,Besancon Ouest,APRR_O016
+BEYNOST,beynost,Beynost,APRR_O017
+BIERRE-LES-SEMUR,bierrelessemur,Bierre-Les-Semur,APRR_O018
+BOURG NORD,bourgnord,Bourg Nord,APRR_O019
+BOURG SUD,bourgsud,Bourg Sud,APRR_O020
+BULGNEVILLE,bulgneville,Bulgneville,APRR_O022
+CHALON SUD,chalonsud,Chalon Sud,APRR_O024
+CHATENOIS,chatenois,Chatenois,APRR_O027
+CHATILLON-LABORDE,chatillonlaborde,Chatillon-Laborde,APRR_O028
+CHAUMONT-SEMOUTIERS,chaumontsemoutiers,Chaumont-Semoutiers,APRR_O029
+CHOISEY,choisey,Choisey,APRR_O030
+COLOMBEY-LES-BELLES,colombeylesbelles,Colombey-Les-Belles,APRR_O032
+COURTENAY,courtenay,Courtenay,APRR_O034
+DIJON SUD,dijonsud,Dijon Sud,APRR_O036
+DIJON-ARC S/TILLE,dijonarcstille,Dijon-Arc S/Tille,APRR_O037
+DIJON-CRIMOLOIS,dijoncrimolois,Dijon-Crimolois,APRR_O038
+DOLE,dole,Dole,APRR_O039
+FEILLENS,feillens,Feillens,APRR_O042
+FLEURY-EN-BIERE,fleuryenbiere,Fleury-En-Biere,APRR_O043
+FONTAINEBLEAU,fontainebleau,Fontainebleau,APRR_O045
+FORGES,forges,Forges,APRR_O047
+GENDREY,gendrey,Gendrey,APRR_O050
+GROISSIAT,groissiat,Groissiat,APRR_O052
+GYE,gye,Gye,APRR_O053
+JOIGNY,joigny,Joigny,APRR_O054
+L ISLE-S/LE-DOUBS,lislesledoubs,L'Isle-S/Le-Doubs,APRR_O055
+LA BOISSE,laboisse,La Boisse,APRR_O056
+LA BOISSE - MONTLUEL,laboissemontluel,La Boisse - Montluel,APRR_O057
+LA COTIERE,lacotiere,La Cotiere,APRR_O058
+LA CROIX-CHALON,lacroixchalon,La Croix-Chalon,APRR_O059
+LANGRES NORD,langresnord,Langres Nord,APRR_O060
+LANGRES SUD,langressud,Langres Sud,APRR_O061
+LE MIROIR,lemiroir,Le Miroir,APRR_O062
+LES EPRUNES,leseprunes,Les Eprunes,APRR_O064
+MACON CENTRE,maconcentre,Macon Centre,APRR_O065
+MACON NORD,maconnord,Macon Nord,APRR_O066
+MAGNANT,magnant,Magnant,APRR_O068
+MAROLLES-SUR-SEINE,marollessurseine,Marolles-Sur-Seine,APRR_O069
+MONTIGNY-LE-ROI,montignyleroi,Montigny-Le-Roi,APRR_O071
+NEMOURS,nemours,Nemours,APRR_O075
+NITRY,nitry,Nitry,APRR_O076
+NUITS-ST-GEORGES,nuitsstgeorges,Nuits-St-Georges,APRR_O077
+PEROUGES,perouges,Perouges,APRR_O078
+PONT D AIN,pontdain,Pont D'Ain,APRR_O079
+POUILLY-EN-AUXOIS,pouillyenauxois,Pouilly-En-Auxois,APRR_O080
+REPLONGES,replonges,Replonges,APRR_O082
+ROBECOURT,robecourt,Robecourt,APRR_O084
+SAINT GENIS,saintgenis,Saint Genis,APRR_O085
+SAINT MAURICE,saintmaurice,Saint Maurice,APRR_O086
+SAINT THIBAULT,saintthibault,Saint Thibault,APRR_O087
+SEURRE,seurre,Seurre,APRR_O088
+SOIRANS,soirans,Soirans,APRR_O089
+ST MARTIN-DU-FRESNE,stmartindufresne,St Martin-Du-Fresne,APRR_O091
+ST-DENIS-LES-SENS,stdenislessens,St-Denis-Les-Sens,APRR_O092
+ST-GERMAIN-LAXIS,stgermainlaxis,St-Germain-Laxis,APRR_O093
+SYLANS,sylans,Sylans,APRR_O094
+THENNELIERES,thennelieres,Thennelieres,APRR_O095
+TIL CHATEL,tilchatel,Tilchatel,APRR_O096
+TORVILLIERS,torvilliers,Torvilliers,APRR_O097
+TOURNUS,tournus,Tournus,APRR_O098
+URY,ury,Ury,APRR_O099
+VAL DE SAONE,valdesaone,Val De Saone,APRR_O101
+VILLE SOUS LAFERTE,villesouslaferte,Ville Sous Laferte,APRR_O103
+VILLENEUVE-DONDAGRE,villeneuvedondagre,Villeneuve-Dondagre,APRR_O107
+VIRIAT,viriat,Viriat,APRR_O108
+VULAINES,vulaines,Vulaines,APRR_O109
+CHALON NORD,chalonnord,Chalon Nord,APRR_O023
+BELLEVILLE S/SAONE,bellevillessaone,Belleville S/Saone,APRR_O012
+MACON SUD,maconsud,Macon Sud,APRR_O067
+VILLEFRANCHE-LIMAS,villefranchelimas,Villefranche-Limas,APRR_O105
+VILLEFRANCHE-NORD,villefranchenord,Villefranche Nord,APRR_O104
+VILLEFRANCHE-VILLE,villefrancheville,Villefranche-Ville,APRR_O106
+CLERMONT-BARRIERE,clermontbarriere,Clermont-Barriere,APRR_O031
+COMBRONDE,combronde,Combronde,APRR_O033
+FORET DE TRONCAIS,foretdetroncais,Foret De Troncais,APRR_O046
+GANNAT,gannat,Gannat,APRR_O048
+MONTLUCON,montlucon,Montlucon,APRR_O072
+MONTMARAULT,montmarault,Montmarault,APRR_O073
+RIOM,riom,Riom,APRR_O083
+ST AMAND-MONTROND,stamandmontrond,St Amand-Montrond,APRR_O090
+GERZAT-VILLE,gerzatville,Gerzat-Ville,APRR_O051
+CROTTET,crottet,Crottet,APRR_O035
+VAL DE LOING-SOUPPES,valdeloingsouppes,Val De Loing-Souppes,APRR_O100
+FONTAINE-LARIVIERE,fontainelariviere,Fontaine-Lariviere,APRR_O044
+GENAY,genay,Genay,APRR_O049
+LE TOURNEAU,letourneau,Le Tourneau,APRR_O063
+LUSSE,lusse,Lusse,DIRE_O001
+MIONNAY,mionnay,Mionnay,APRR_O070
+MYENNES,myennes,Myennes,APRR_O074
+QUINCIEUX BARRIERE,quincieuxbarriere,Quincieux Barriere,APRR_O081
+VICHY,vichy,Vichy,APRR_O102

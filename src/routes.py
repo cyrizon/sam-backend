@@ -4,10 +4,13 @@ from flask import jsonify, request
 from flask_cors import CORS
 from pathlib import Path
 from src.services.tolls_finder import find_tolls_on_route
+from src.services.smart_route import compute_route_with_toll_limit
+from src.services.toll_locator import locate_tolls
 import requests
 from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+
 
 load_dotenv()
 
@@ -46,20 +49,25 @@ def register_routes(app):
         try:
             # Récupérer les données GeoJSON envoyées par le frontend
             geojson_data = request.get_json(silent=True)
+            print("Received GeoJSON data:", geojson_data)
             if not geojson_data:
                 print("Données GeoJSON manquantes ou invalides :", geojson_data)
                 return jsonify({"error": "No data provided"}), 400
 
             # Chemin vers le fichier CSV des péages
-            csv_path = os.path.join(os.path.dirname(__file__), "../data/gares-peage-2024-with-id.csv")
+            csv_path = os.path.join(os.path.dirname(__file__), "../data/barriers.csv")
             if not os.path.exists(csv_path):
                 print("Fichier CSV des péages introuvable :", csv_path)
                 return jsonify({"error": "CSV file not found"}), 404
 
-            # Utiliser l'algorithme pour trouver les péages
-            tolls = find_tolls_on_route(geojson_data, csv_path, distance_threshold=100)
+            # Si c'est une liste de features, on crée un FeatureCollection
+            if isinstance(geojson_data, list):
+                geojson_data = {
+                    "type": "FeatureCollection",
+                    "features": geojson_data
+                }
 
-            # Retourner les péages trouvés
+            tolls = locate_tolls(geojson_data, csv_path, buffer_m=120)
             return jsonify(tolls)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -126,6 +134,57 @@ def register_routes(app):
             response.raise_for_status()
             return jsonify(response.json())
         except requests.RequestException as e:
+            return jsonify({"error": str(e)}), 500
+        
+    @app.route('/api/test-ors-post', methods=['POST'])
+    def test_ors_post():
+        ors_base_url = os.environ.get("ORS_BASE_URL")
+        url = f"{ors_base_url}/v2/directions/driving-car"
+        # Exemple de données pour tester l'API ORS en POST
+        data = {
+            "coordinates": [
+            [7.448595, 48.262004],  # Sélestat
+            [5.037793, 47.317743]   # Dijon
+            ],
+            "options": {
+                "avoid_polygons": {
+                    "type": "Polygon",
+                    "coordinates": [
+                    [
+                        [6.980495693677426, 47.67687393097131],
+                        [6.980495693677426, 47.675166068437846],
+                        [6.982838471592885, 47.675166068437846],
+                        [6.982838471592885, 47.67687393097131],
+                        [6.980495693677426, 47.67687393097131]
+                    ]
+                    ]
+                }
+            }
+        }
+
+        headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "Accept": "application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8",
+        }
+
+        try:
+            response = requests.post(url, json=data, headers=headers)
+            response.raise_for_status()
+            return jsonify(response.json())
+        except requests.RequestException as e:
+            return jsonify({"error": str(e)}), 500
+        
+    @app.route('/api/smart-route', methods=['POST'])
+    def smart_route():
+        data = request.get_json()
+        coords = data.get("coordinates")
+        max_tolls = int(data.get("max_tolls", 99))
+        veh_class = data.get("vehicle_class", "c1")
+
+        try:
+            res = compute_route_with_toll_limit(coords, max_tolls, veh_class)
+            return jsonify(res)
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
 
     @app.route('/api/geocode/search', methods=['GET'])
