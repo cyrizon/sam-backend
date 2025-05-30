@@ -13,6 +13,7 @@ def avoidance_multipolygon(
     tolls_to_avoid: List[Dict],
     radius_m: float = 200,
 ) -> dict:
+    print(f"Création d'un MultiPolygon pour {len(tolls_to_avoid)} péages à éviter.")
     polys = [
         Point(t["longitude"], t["latitude"]).buffer(radius_m / 111120)  # ≈ m ➜ °(lat)
         for t in tolls_to_avoid

@@ -47,7 +47,7 @@ def locate_tolls(
     ors_geojson: dict,
     csv_path: str | Path = "data/barriers.csv",
     buffer_m: float = 120,
-) -> List[Dict]:
+) -> Dict[str, List[Dict]]:
     """
     Renvoie la liste *ordonnée le long de la route* des péages
     rencontrés dans un rayon de `buffer_m` mètres.
@@ -91,8 +91,6 @@ def locate_tolls(
         ]
         df_nearby = _BARRIERS_DF.loc[nearby].copy()
         df_nearby["longitude"], df_nearby["latitude"] = zip(*coords)
-        print("Péages proches (hors buffer principal) :")
-        print(df_nearby[["id", "longitude", "latitude", "role"]])
 
     # 4) Tri selon l’avancement sur le tronçon
     project = route_3857.project
@@ -102,8 +100,26 @@ def locate_tolls(
         .sort_values("_proj")
     )
 
-    return (
-        sel[["id", "x", "y", "role"]]
-        .rename(columns={"x": "longitude", "y": "latitude"})
-        .to_dict(orient="records")
-    )
+    # Conversion des coordonnées projetées vers WGS84
+    to_wgs84 = Transformer.from_crs(_WEBM, _WGS84, always_xy=True).transform
+    coords = [
+        to_wgs84(geom.x, geom.y)
+        for geom in sel["_geom3857"]
+    ]
+    sel["longitude"], sel["latitude"] = zip(*coords)
+
+    # Pour les péages proches (déjà convertis plus haut)
+    nearby_list = []
+    if nearby:
+        df_nearby = _BARRIERS_DF.loc[nearby].copy()
+        coords_nearby = [
+            to_wgs84(geom.x, geom.y)
+            for geom in df_nearby["_geom3857"]
+        ]
+        df_nearby["longitude"], df_nearby["latitude"] = zip(*coords_nearby)
+        nearby_list = df_nearby[["id", "longitude", "latitude", "role"]].to_dict(orient="records")
+
+    return {
+        "on_route": sel[["id", "longitude", "latitude", "role"]].to_dict(orient="records"),
+        "nearby": nearby_list
+    }

@@ -14,6 +14,7 @@ Pipeline complet :
 """
 from __future__ import annotations
 import requests, os, copy
+from itertools import combinations
 
 from src.services.toll_locator import locate_tolls
 from src.services.toll_cost import add_marginal_cost, rank_by_saving
@@ -36,6 +37,7 @@ def compute_route_with_toll_limit(
     max_tolls: int,
     veh_class: str = "c1",
     max_loops: int = 5,
+    max_comb_size: int = 2,  # Limite la taille des combinaisons pour éviter l'explosion combinatoire
 ):
     # 1) premier appel (rapide)
     base_payload = {
@@ -45,50 +47,55 @@ def compute_route_with_toll_limit(
     base_route = _call_ors(base_payload)
 
     # 2) Localisation + coûts
-    tolls = locate_tolls(base_route, "data/barriers.csv")
-    print(tolls)
-    add_marginal_cost(tolls, veh_class)
-    print('ok')
-    to_avoid = rank_by_saving(tolls, max_tolls)
+    tolls_dict = locate_tolls(base_route, "data/barriers.csv")
+    tolls_on_route = tolls_dict["on_route"]
+    tolls_nearby = tolls_dict["nearby"]
+    print("Péages sur la route :")
+    print(tolls_on_route)
+    print("Péages proches :")
+    print(tolls_nearby)
 
-    if not to_avoid:
+    # On fusionne les deux listes pour générer toutes les combinaisons
+    all_tolls = tolls_on_route + tolls_nearby
+    add_marginal_cost(all_tolls, veh_class)
+
+    # On trie par coût décroissant pour prioriser les plus chers
+    all_tolls_sorted = sorted(all_tolls, key=lambda t: t.get("cost", 0), reverse=True)
+
+    # Si aucun péage, on retourne la route de base
+    if not all_tolls_sorted:
         return {"fastest": base_route, "cheapest": base_route}
 
     best_fast, best_cheap = None, None
     seen_polygons = set()
 
-    # 3) Boucle d’évitement progressive
-    for i in range(1, max_loops + 1):
-        poly = avoidance_multipolygon(to_avoid[:i])
-        sig = tuple(sorted(t["id"] for t in to_avoid[:i]))
-        if sig in seen_polygons:
-            continue
-        seen_polygons.add(sig)
+    # 3) Génère toutes les combinaisons de péages à éviter (taille 1 à max_comb_size)
+    for k in range(1, min(len(all_tolls_sorted), max_comb_size) + 1):
+        for to_avoid in combinations(all_tolls_sorted, k):
+            sig = tuple(sorted(t["id"] for t in to_avoid))
+            if sig in seen_polygons:
+                continue
+            seen_polygons.add(sig)
 
-        pay = copy.deepcopy(base_payload)
-        pay["options"] = {"avoid_polygons": poly}
-        try:
-            alt_route = _call_ors(pay)
-        except requests.HTTPError:
-            continue  # ORS n’a pas trouvé d’itinéraire
+            poly = avoidance_multipolygon(to_avoid)
+            pay = copy.deepcopy(base_payload)
+            pay["options"] = {"avoid_polygons": poly}
+            print(f"Test combinaison évitement : {sig}")
+            try:
+                alt_route = _call_ors(pay)
+            except requests.HTTPError:
+                continue  # ORS n’a pas trouvé d’itinéraire
 
-        # Re-compte des péages
-        alt_tolls = locate_tolls(alt_route, "data/barriers.csv")
-        if len(alt_tolls) > max_tolls:
-            continue  # toujours trop de péages
+            alt_tolls_dict = locate_tolls(alt_route, "data/barriers.csv")
+            alt_tolls_on_route = alt_tolls_dict["on_route"]
+            add_marginal_cost(alt_tolls_on_route, veh_class)
+            cost = sum(t.get("cost", 0) for t in alt_tolls_on_route)
+            duration = alt_route["features"][0]["properties"]["summary"]["duration"]
 
-        add_marginal_cost(alt_tolls, veh_class)
-        cost = sum(t["cost"] for t in alt_tolls)
-        duration = alt_route["features"][0]["properties"]["summary"]["duration"]
-
-        if best_cheap is None or cost < best_cheap["cost"]:
-            best_cheap = {"route": alt_route, "cost": cost, "duration": duration}
-        if best_fast is None or duration < best_fast["duration"]:
-            best_fast = {"route": alt_route, "cost": cost, "duration": duration}
-
-        # Early-exit : on a déjà ≤ max_tolls et coût min
-        if i == len(to_avoid):
-            break
+            if best_cheap is None or cost < best_cheap["cost"]:
+                best_cheap = {"route": alt_route, "cost": cost, "duration": duration}
+            if best_fast is None or duration < best_fast["duration"]:
+                best_fast = {"route": alt_route, "cost": cost, "duration": duration}
 
     # Fallback si rien trouvé
     if best_fast is None:

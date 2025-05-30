@@ -47,28 +47,41 @@ def register_routes(app):
         if request.method == 'OPTIONS':
             return jsonify({"message": "CORS preflight check successful"}), 200
         try:
-            # Récupérer les données GeoJSON envoyées par le frontend
             geojson_data = request.get_json(silent=True)
-            print("Received GeoJSON data:", geojson_data)
             if not geojson_data:
                 print("Données GeoJSON manquantes ou invalides :", geojson_data)
                 return jsonify({"error": "No data provided"}), 400
 
-            # Chemin vers le fichier CSV des péages
             csv_path = os.path.join(os.path.dirname(__file__), "../data/barriers.csv")
             if not os.path.exists(csv_path):
                 print("Fichier CSV des péages introuvable :", csv_path)
                 return jsonify({"error": "CSV file not found"}), 404
 
-            # Si c'est une liste de features, on crée un FeatureCollection
+            # Si c'est une liste, on traite chaque trajet séparément
             if isinstance(geojson_data, list):
-                geojson_data = {
-                    "type": "FeatureCollection",
-                    "features": geojson_data
-                }
-
-            tolls = locate_tolls(geojson_data, csv_path, buffer_m=120)
-            return jsonify(tolls)
+                results = []
+                for traj in geojson_data:
+                    # Normalisation du format
+                    if traj.get("type") == "FeatureCollection":
+                        traj_data = traj
+                    elif traj.get("type") == "Feature":
+                        traj_data = {"type": "FeatureCollection", "features": [traj]}
+                    else:
+                        continue  # Ignore format inconnu
+                    tolls_dict = locate_tolls(traj_data, csv_path, buffer_m=120)
+                    # Tu peux choisir de retourner on_route ou les deux listes
+                    results.append(tolls_dict["on_route"])
+                return jsonify(results)
+            else:
+                # Cas unique
+                if geojson_data.get("type") == "FeatureCollection":
+                    geojson_data = geojson_data
+                elif geojson_data.get("type") == "Feature":
+                    geojson_data = {"type": "FeatureCollection", "features": [geojson_data]}
+                else:
+                    return jsonify({"error": "Invalid GeoJSON format"}), 400
+                tolls_dict = locate_tolls(geojson_data, csv_path, buffer_m=120)
+                return jsonify([tolls_dict["on_route"]])
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
