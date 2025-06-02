@@ -4,7 +4,7 @@ from flask import jsonify, request
 from flask_cors import CORS
 from pathlib import Path
 from src.services.tolls_finder import find_tolls_on_route
-from src.services.smart_route import compute_route_with_toll_limit
+from src.services.smart_route import compute_route_with_toll_limit, compute_route_with_budget_limit
 from src.services.toll_locator import locate_tolls
 import requests
 from dotenv import load_dotenv
@@ -186,16 +186,33 @@ def register_routes(app):
             return jsonify(response.json())
         except requests.RequestException as e:
             return jsonify({"error": str(e)}), 500
-        
-    @app.route('/api/smart-route', methods=['POST'])
-    def smart_route():
+
+    @app.route('/api/smart-route/tolls', methods=['POST'])
+    def smart_route_tolls():
         data = request.get_json()
         coords = data.get("coordinates")
         max_tolls = int(data.get("max_tolls", 99))
         veh_class = data.get("vehicle_class", "c1")
-
         try:
             res = compute_route_with_toll_limit(coords, max_tolls, veh_class)
+            return jsonify(res)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/api/smart-route/budget', methods=['POST'])
+    def smart_route_budget():
+        data = request.get_json()
+        coords = data.get("coordinates")
+        veh_class = data.get("vehicle_class", "c1")
+        max_price = data.get("max_price")
+        max_price_percent = data.get("max_price_percent")
+        try:
+            res = compute_route_with_budget_limit(
+                coords,
+                max_price=max_price,
+                max_price_percent=max_price_percent,
+                veh_class=veh_class
+            )
             return jsonify(res)
         except Exception as e:
             return jsonify({"error": str(e)}), 500

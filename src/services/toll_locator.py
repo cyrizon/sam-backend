@@ -106,7 +106,10 @@ def locate_tolls(
         to_wgs84(geom.x, geom.y)
         for geom in sel["_geom3857"]
     ]
-    sel["longitude"], sel["latitude"] = zip(*coords)
+    if coords:
+        sel["longitude"], sel["latitude"] = zip(*coords)
+    else:
+        sel["longitude"], sel["latitude"] = [], []
 
     # Pour les péages proches (déjà convertis plus haut)
     nearby_list = []
@@ -116,10 +119,80 @@ def locate_tolls(
             to_wgs84(geom.x, geom.y)
             for geom in df_nearby["_geom3857"]
         ]
-        df_nearby["longitude"], df_nearby["latitude"] = zip(*coords_nearby)
+        if coords_nearby:
+            df_nearby["longitude"], df_nearby["latitude"] = zip(*coords_nearby)
+        else:
+            df_nearby["longitude"], df_nearby["latitude"] = [], []
         nearby_list = df_nearby[["id", "longitude", "latitude", "role"]].to_dict(orient="records")
 
     return {
         "on_route": sel[["id", "longitude", "latitude", "role"]].to_dict(orient="records"),
         "nearby": nearby_list
     }
+
+def get_all_open_tolls_by_proximity(
+    ors_geojson: dict,
+    csv_path: str | Path = "data/barriers.csv",
+    max_distance_m: float = 100000,  # 100 km par défaut
+) -> List[Dict]:
+    """
+    Renvoie tous les péages à système ouvert, triés par proximité avec l'itinéraire.
+    Utilise la distance minimale du péage à la ligne de l'itinéraire pour déterminer sa proximité.
+    
+    Args:
+        ors_geojson: Géométrie de l'itinéraire au format GeoJSON
+        csv_path: Chemin vers le fichier CSV des barrières de péage
+        max_distance_m: Distance maximale (en mètres) entre le péage et l'itinéraire
+        
+    Returns:
+        List[Dict]: Liste des péages ouverts triés par proximité, à moins de max_distance_m mètres
+    """
+    from shapely.geometry import shape  # import léger
+    import re
+
+    # Charger les données de péages
+    _ensure_barriers(csv_path)
+    
+    # 1) Géométrie ORS → LineString WGS84
+    route_line = shape(ors_geojson["features"][0]["geometry"])
+    
+    # 2) Convertir en Web Mercator pour le calcul de distance
+    wgs_to_3857 = Transformer.from_crs(_WGS84, _WEBM, always_xy=True).transform
+    route_3857 = LineString([wgs_to_3857(*coord) for coord in route_line.coords])
+    
+    # 3) Filtrer tous les péages à système ouvert (à partir du nom)
+    # On utilise le critère "_o" dans l'ID pour identifier les systèmes ouverts
+    open_toll_mask = _BARRIERS_DF['id'].str.contains('_o', case=False, regex=True)
+    open_tolls_df = _BARRIERS_DF[open_toll_mask].copy()
+    
+    if len(open_tolls_df) == 0:
+        return []
+    
+    # 4) Calcul des distances à l'itinéraire
+    open_tolls_df['distance_to_route'] = open_tolls_df['_geom3857'].apply(
+        lambda p: p.distance(route_3857)
+    )
+    
+    # 5) Appliquer la limite de distance (filtre sur max_distance_m)
+    open_tolls_df = open_tolls_df[open_tolls_df['distance_to_route'] <= max_distance_m]
+    
+    # Si aucun péage n'est dans le rayon, retourner une liste vide
+    if len(open_tolls_df) == 0:
+        print(f"Aucun péage à système ouvert trouvé dans un rayon de {max_distance_m/1000:.1f} km")
+        return []
+    
+    # 6) Tri par distance croissante
+    open_tolls_df = open_tolls_df.sort_values('distance_to_route')
+    
+    print(f"Trouvé {len(open_tolls_df)} péages à système ouvert dans un rayon de {max_distance_m/1000:.1f} km")
+    
+    # 7) Conversion des coordonnées en WGS84 pour le résultat
+    to_wgs84 = Transformer.from_crs(_WEBM, _WGS84, always_xy=True).transform
+    coords = [
+        to_wgs84(geom.x, geom.y)
+        for geom in open_tolls_df["_geom3857"]
+    ]
+    open_tolls_df["longitude"], open_tolls_df["latitude"] = zip(*coords)
+    
+    # 8) Retourner le résultat sous forme de liste de dictionnaires
+    return open_tolls_df[["id", "longitude", "latitude", "role", "distance_to_route"]].to_dict(orient="records")
