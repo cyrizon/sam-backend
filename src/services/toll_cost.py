@@ -14,13 +14,16 @@ On retourne la séquence assortie du champ `cost`, puis un tri décroissant.
 """
 from __future__ import annotations
 from typing import List, Dict
+import os
 
 import pandas as pd
 
-def _load_edges(csv_path: str | None = "data/virtual_edges.csv"):
-    df = pd.read_csv(csv_path)
-    price_cols = [c for c in df.columns if c.startswith("c")]
-    return df.set_index(["entree_id", "sortie_id"])[price_cols]
+def _load_edges():
+    """Load virtual edges data with toll costs"""
+    file_path = os.path.join(os.path.dirname(__file__), '../../data/virtual_edges.csv')
+    df = pd.read_csv(file_path)
+    price_cols = ['c1', 'c2', 'c3', 'c4', 'c5']
+    return df.set_index(["entree", "sortie"])[price_cols]
 
 _EDGES = _load_edges()
 

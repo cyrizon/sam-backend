@@ -4,7 +4,7 @@ from flask import jsonify, request
 from flask_cors import CORS
 from pathlib import Path
 from src.services.tolls_finder import find_tolls_on_route
-from src.services.smart_route import compute_route_with_toll_limit, compute_route_with_budget_limit
+from src.services.smart_route import SmartRouteService
 from src.services.toll_locator import locate_tolls
 import requests
 from dotenv import load_dotenv
@@ -13,6 +13,9 @@ from flask_limiter.util import get_remote_address
 
 
 load_dotenv()
+
+# Initialisation du service de routage intelligent
+smart_route_service = SmartRouteService()
 
 def register_routes(app):
     CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})  # Autorise uniquement le frontend
@@ -185,8 +188,8 @@ def register_routes(app):
             response.raise_for_status()
             return jsonify(response.json())
         except requests.RequestException as e:
-            return jsonify({"error": str(e)}), 500
-
+            return jsonify({"error": str(e)}), 500    
+        
     @app.route('/api/smart-route/tolls', methods=['POST'])
     def smart_route_tolls():
         data = request.get_json()
@@ -194,11 +197,11 @@ def register_routes(app):
         max_tolls = int(data.get("max_tolls", 99))
         veh_class = data.get("vehicle_class", "c1")
         try:
-            res = compute_route_with_toll_limit(coords, max_tolls, veh_class)
+            res = smart_route_service.compute_route_with_toll_limit(coords, max_tolls, veh_class)
             return jsonify(res)
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
+            return jsonify({"error": str(e)}), 500    
+        
     @app.route('/api/smart-route/budget', methods=['POST'])
     def smart_route_budget():
         data = request.get_json()
@@ -207,7 +210,7 @@ def register_routes(app):
         max_price = data.get("max_price")
         max_price_percent = data.get("max_price_percent")
         try:
-            res = compute_route_with_budget_limit(
+            res = smart_route_service.compute_route_with_budget_limit(
                 coords,
                 max_price=max_price,
                 max_price_percent=max_price_percent,
