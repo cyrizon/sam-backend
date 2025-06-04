@@ -11,6 +11,7 @@ from src.services.toll.no_toll_strategy import NoTollStrategy
 from src.services.toll.fallback_strategy import FallbackStrategy
 from src.services.toll.one_open_toll_strategy import OneOpenTollStrategy
 from src.services.toll.many_tolls_strategy import ManyTollsStrategy
+from src.services.toll.constants import TollOptimizationConfig as Config
 
 class TollRouteOptimizer:
     """
@@ -29,9 +30,9 @@ class TollRouteOptimizer:
         self.no_toll_strategy = NoTollStrategy(ors_service)
         self.fallback_strategy = FallbackStrategy(ors_service)
         self.one_open_toll_strategy = OneOpenTollStrategy(ors_service)
-        self.many_tolls_strategy = ManyTollsStrategy(ors_service)  # Ajouter cette ligne
+        self.many_tolls_strategy = ManyTollsStrategy(ors_service)
     
-    def compute_route_with_toll_limit(self, coordinates, max_tolls, veh_class="c1", max_comb_size=2):
+    def compute_route_with_toll_limit(self, coordinates, max_tolls, veh_class=Config.DEFAULT_VEH_CLASS, max_comb_size=Config.DEFAULT_MAX_COMB_SIZE):
         """
         Calcule un itinéraire avec une limite sur le nombre de péages.
         
@@ -44,7 +45,7 @@ class TollRouteOptimizer:
         Returns:
             dict: Résultats optimisés (fastest, cheapest, min_tolls, status)
         """
-        with performance_tracker.measure_operation("compute_route_with_toll_limit", {
+        with performance_tracker.measure_operation(Config.Operations.COMPUTE_ROUTE_WITH_TOLL_LIMIT, {
             "max_tolls": max_tolls,
             "veh_class": veh_class,
             "max_comb_size": max_comb_size
@@ -69,7 +70,7 @@ class TollRouteOptimizer:
                     return result
                 else:
                     # Fallback avec la route de base
-                    return self._get_fallback_route(coordinates, veh_class, "NO_VALID_ROUTE_WITH_MAX_TOLLS")
+                    return self._get_fallback_route(coordinates, veh_class, Config.StatusCodes.NO_VALID_ROUTE_WITH_MAX_TOLLS)
     
     def _handle_no_toll_route(self, coordinates, veh_class):
         """Délègue à la stratégie spécialisée"""

@@ -7,6 +7,7 @@ Responsabilité unique : gérer les critères d'optimisation (coût, durée, nom
 """
 
 from src.utils.route_utils import format_route_result
+from src.services.toll.constants import TollOptimizationConfig as Config
 
 
 class RouteResultManager:
@@ -146,22 +147,38 @@ class RouteResultManager:
             base_cost: Coût de la route de base
             base_duration: Durée de la route de base
         """
-        print(f"[RESULT] Base: {base_toll_count} péages, coût={base_cost}€, durée={base_duration/60:.1f} min")
+        print(Config.Messages.RESULT_BASE.format(
+            toll_count=base_toll_count, 
+            cost=base_cost, 
+            duration=base_duration/60
+        ))
         
         if self.best_cheap["route"]:
-            print(f"[RESULT] Cheapest: {self.best_cheap['toll_count']} péages, coût={self.best_cheap['cost']}€, durée={self.best_cheap['duration']/60:.1f} min")
+            print(Config.Messages.RESULT_CHEAPEST.format(
+                toll_count=self.best_cheap['toll_count'], 
+                cost=self.best_cheap['cost'], 
+                duration=self.best_cheap['duration']/60
+            ))
         else:
-            print("[RESULT] Pas d'itinéraire économique trouvé respectant la contrainte de max_tolls")
+            print(Config.Messages.NO_ECONOMIC_ROUTE)
             
         if self.best_fast["route"]:
-            print(f"[RESULT] Fastest: {self.best_fast['toll_count']} péages, coût={self.best_fast['cost']}€, durée={self.best_fast['duration']/60:.1f} min")
+            print(Config.Messages.RESULT_FASTEST.format(
+                toll_count=self.best_fast['toll_count'], 
+                cost=self.best_fast['cost'], 
+                duration=self.best_fast['duration']/60
+            ))
         else:
-            print("[RESULT] Pas d'itinéraire rapide trouvé respectant la contrainte de max_tolls")
+            print(Config.Messages.NO_FAST_ROUTE)
             
         if self.best_min_tolls["route"]:
-            print(f"[RESULT] Minimum tolls: {self.best_min_tolls['toll_count']} péages, coût={self.best_min_tolls['cost']}€, durée={self.best_min_tolls['duration']/60:.1f} min")
+            print(Config.Messages.RESULT_MIN_TOLLS.format(
+                toll_count=self.best_min_tolls['toll_count'], 
+                cost=self.best_min_tolls['cost'], 
+                duration=self.best_min_tolls['duration']/60
+            ))
         else:
-            print("[RESULT] Pas d'itinéraire avec un minimum de péages trouvé")
+            print(Config.Messages.NO_MIN_TOLLS_ROUTE)
     
     @classmethod
     def create_uniform_result(cls, route_result, status):

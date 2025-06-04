@@ -8,6 +8,7 @@ Stratégie de repli pour générer une route de base quand aucune solution n'est
 from src.utils.route_utils import format_route_result
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
+from src.services.toll.constants import TollOptimizationConfig as Config
 
 
 class FallbackStrategy:
@@ -33,11 +34,11 @@ class FallbackStrategy:
         """
         from src.services.toll.result_manager import RouteResultManager
         
-        with performance_tracker.measure_operation("get_fallback_route"):
+        with performance_tracker.measure_operation(Config.Operations.GET_FALLBACK_ROUTE):
             base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
             
             tolls_dict = self.route_calculator.locate_and_cost_tolls(
-                base_route, veh_class, "locate_tolls_fallback"
+                base_route, veh_class, Config.Operations.LOCATE_TOLLS_FALLBACK
             )
             
             base_cost = sum(t.get("cost", 0) for t in tolls_dict["on_route"])
