@@ -11,6 +11,7 @@ from src.services.toll_cost import add_marginal_cost
 from src.utils.poly_utils import avoidance_multipolygon
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.constants import TollOptimizationConfig as Config
+from src.services.toll.route_validator import RouteValidator
 
 
 class RouteCalculator:
@@ -88,12 +89,7 @@ class RouteCalculator:
     
     def _has_unwanted_tolls(self, tolls, target_toll_id, part_name):
         """Vérifie s'il reste des péages indésirables après évitement."""
-        final_unwanted = [t for t in tolls if t["id"] != target_toll_id]
-        if final_unwanted:
-            unwanted_ids = [t['id'] for t in final_unwanted]
-            print(Config.Messages.IMPOSSIBLE_AVOID_TOLLS.format(part_name=part_name, unwanted_ids=unwanted_ids))
-            return True
-        return False
+        return not RouteValidator.validate_unwanted_tolls_avoided(tolls, target_toll_id, part_name)
 
     def get_route_avoid_tollways_with_tracking(self, coordinates):
         """Appel ORS pour éviter les péages avec tracking."""

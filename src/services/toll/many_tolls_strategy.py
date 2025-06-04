@@ -13,6 +13,7 @@ from src.services.toll.result_manager import RouteResultManager
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.constants import TollOptimizationConfig as Config
+from src.services.toll.route_validator import RouteValidator
 
 
 class ManyTollsStrategy:
@@ -193,16 +194,14 @@ class ManyTollsStrategy:
             duration = alt_route["features"][0]["properties"]["summary"]["duration"]
             toll_count = len(set(t["id"] for t in alt_tolls_on_route))
 
-            # Vérifications de validité
-            avoided_ids = set(str(t["id"]).strip().lower() for t in to_avoid)
-            present_ids = set(str(t["id"]).strip().lower() for t in alt_tolls_on_route)
-            
-            if avoided_ids & present_ids:
-                print(Config.Messages.AVOIDED_TOLLS_STILL_PRESENT.format(present_tolls=avoided_ids & present_ids))
-                return None
-
-            if toll_count > max_tolls:
-                print(Config.Messages.ROUTE_IGNORED_MAX_TOLLS.format(toll_count=toll_count, max_tolls=max_tolls))
+            # Validation complète avec le RouteValidator
+            if not RouteValidator.validate_all_constraints(
+                alt_tolls_on_route, 
+                toll_count, 
+                max_tolls, 
+                avoided_tolls=to_avoid,
+                operation_name="analyze_alternative_route"
+            ):
                 return None
                 
             return format_route_result(alt_route, cost, duration, toll_count)

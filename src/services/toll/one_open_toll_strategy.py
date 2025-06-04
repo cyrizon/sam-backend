@@ -13,6 +13,7 @@ from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll_cost import add_marginal_cost
 from src.services.toll.constants import TollOptimizationConfig as Config
+from src.services.toll.route_validator import RouteValidator
 
 
 class OneOpenTollStrategy:
@@ -173,9 +174,11 @@ class OneOpenTollStrategy:
                 toll_count = len(set(t["id"] for t in total_tolls))
             
             # 5) Vérifier la validité (doit contenir le péage cible)
-            toll_ids = set(t["id"] for t in total_tolls)
-            if toll["id"] not in toll_ids:
-                print(f"Le péage cible {toll['id']} n'est pas présent dans l'itinéraire final")
+            if not RouteValidator.validate_target_toll_present(
+                total_tolls, 
+                toll["id"], 
+                f"calculate_route_through_{toll['id']}"
+            ):
                 return None
             
             # 6) Log de la solution trouvée
