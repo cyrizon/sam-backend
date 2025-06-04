@@ -6,13 +6,6 @@ Stratégies pour calculer des itinéraires avec des contraintes sur le nombre de
 Intègre le système de mesure des performances pour optimiser les appels.
 """
 
-import copy
-import requests
-from itertools import combinations
-from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity
-from src.services.toll_cost import add_marginal_cost
-from src.utils.poly_utils import avoidance_multipolygon
-from src.utils.route_utils import is_toll_open_system, merge_routes, format_route_result
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.no_toll_strategy import NoTollStrategy
 from src.services.toll.fallback_strategy import FallbackStrategy
@@ -68,10 +61,11 @@ class TollRouteOptimizer:
                 
             # Cas général: Plusieurs péages autorisés
             else:
-                result = self.many_tolls_strategy.compute_route_with_many_tolls(coordinates, max_tolls, veh_class, max_comb_size)
+                result = self.many_tolls_strategy.compute_route_with_many_tolls(
+                    coordinates, max_tolls, veh_class, max_comb_size
+                )
                 
                 if result:
-                    result["status"] = "MULTI_TOLL_SUCCESS"
                     return result
                 else:
                     # Fallback avec la route de base

@@ -1,0 +1,186 @@
+"""
+result_manager.py
+----------------
+
+Gestionnaire pour comparer et sélectionner les meilleurs itinéraires.
+Responsabilité unique : gérer les critères d'optimisation (coût, durée, nombre de péages).
+"""
+
+from src.utils.route_utils import format_route_result
+
+
+class RouteResultManager:
+    """
+    Gestionnaire pour les résultats d'optimisation d'itinéraires.
+    Maintient et met à jour les meilleures solutions selon différents critères.
+    """
+    
+    def __init__(self):
+        """Initialise le gestionnaire avec des résultats vides."""
+        self.reset()
+    
+    def reset(self):
+        """Remet à zéro tous les résultats suivis."""
+        self.best_cheap = self._create_empty_result()
+        self.best_fast = self._create_empty_result()
+        self.best_min_tolls = self._create_empty_result()
+    
+    def _create_empty_result(self):
+        """Crée une structure de résultat vide."""
+        return {
+            "route": None,
+            "cost": float('inf'),
+            "duration": float('inf'),
+            "toll_count": float('inf')
+        }
+    
+    def initialize_with_base_route(self, base_route, base_cost, base_duration, base_toll_count, max_tolls):
+        """
+        Initialise les résultats avec la route de base si elle respecte les contraintes.
+        
+        Args:
+            base_route: Route de base
+            base_cost: Coût de la route de base
+            base_duration: Durée de la route de base
+            base_toll_count: Nombre de péages de la route de base
+            max_tolls: Nombre maximum de péages autorisés
+        """
+        if base_toll_count <= max_tolls:
+            base_result = format_route_result(base_route, base_cost, base_duration, base_toll_count)
+            self.best_cheap = base_result.copy()
+            self.best_fast = base_result.copy()
+            self.best_min_tolls = base_result.copy()
+    
+    def update_with_route(self, route_data, base_cost):
+        """
+        Met à jour les meilleurs résultats avec un nouveau candidat d'itinéraire.
+        
+        Args:
+            route_data: Données de l'itinéraire (doit contenir cost, duration, toll_count)
+            base_cost: Coût de la route de base pour comparaison
+            
+        Returns:
+            bool: True si au moins un résultat a été mis à jour
+        """
+        cost = route_data["cost"]
+        duration = route_data["duration"]
+        toll_count = route_data["toll_count"]
+        
+        updated = False
+        
+        # Mise à jour de l'itinéraire avec le moins de péages
+        if toll_count < self.best_min_tolls["toll_count"]:
+            self.best_min_tolls = route_data.copy()
+            updated = True
+        
+        # Mise à jour de l'itinéraire le moins cher
+        if cost < self.best_cheap["cost"]:
+            self.best_cheap = route_data.copy()
+            updated = True
+            
+            # Si best_fast n'est pas encore défini ou si cet itinéraire est plus rapide
+            if self.best_fast["route"] is None or duration < self.best_fast["duration"]:
+                self.best_fast = route_data.copy()
+        
+        # Mise à jour du plus rapide (seulement si le coût <= coût de base)
+        if cost <= base_cost:
+            if self.best_fast["route"] is None or duration < self.best_fast["duration"]:
+                self.best_fast = route_data.copy()
+                updated = True
+        
+        return updated
+    
+    def apply_fallback_if_needed(self, base_route, base_cost, base_duration, base_toll_count, max_tolls):
+        """
+        Applique la route de base comme solution de repli si nécessaire.
+        
+        Args:
+            base_route: Route de base
+            base_cost: Coût de la route de base
+            base_duration: Durée de la route de base
+            base_toll_count: Nombre de péages de la route de base
+            max_tolls: Nombre maximum de péages autorisés
+        """
+        if base_toll_count <= max_tolls:
+            base_result = format_route_result(base_route, base_cost, base_duration, base_toll_count)
+            
+            if self.best_fast["route"] is None:
+                self.best_fast = base_result.copy()
+                
+            if self.best_cheap["route"] is None:
+                self.best_cheap = base_result.copy()
+                
+            if self.best_min_tolls["route"] is None:
+                self.best_min_tolls = base_result.copy()
+    
+    def get_results(self):
+        """
+        Retourne les résultats finaux dans le format attendu.
+        
+        Returns:
+            dict: Dictionnaire avec fastest, cheapest, min_tolls
+        """
+        return {
+            "fastest": self.best_fast,
+            "cheapest": self.best_cheap,
+            "min_tolls": self.best_min_tolls
+        }
+    
+    def has_valid_results(self):
+        """
+        Vérifie si au moins un résultat valide a été trouvé.
+        
+        Returns:
+            bool: True si au moins une solution existe
+        """
+        return (self.best_fast["route"] is not None or 
+                self.best_cheap["route"] is not None or 
+                self.best_min_tolls["route"] is not None)
+    
+    def log_results(self, base_toll_count, base_cost, base_duration):
+        """
+        Affiche un résumé des résultats finaux.
+        
+        Args:
+            base_toll_count: Nombre de péages de la route de base
+            base_cost: Coût de la route de base
+            base_duration: Durée de la route de base
+        """
+        print(f"[RESULT] Base: {base_toll_count} péages, coût={base_cost}€, durée={base_duration/60:.1f} min")
+        
+        if self.best_cheap["route"]:
+            print(f"[RESULT] Cheapest: {self.best_cheap['toll_count']} péages, coût={self.best_cheap['cost']}€, durée={self.best_cheap['duration']/60:.1f} min")
+        else:
+            print("[RESULT] Pas d'itinéraire économique trouvé respectant la contrainte de max_tolls")
+            
+        if self.best_fast["route"]:
+            print(f"[RESULT] Fastest: {self.best_fast['toll_count']} péages, coût={self.best_fast['cost']}€, durée={self.best_fast['duration']/60:.1f} min")
+        else:
+            print("[RESULT] Pas d'itinéraire rapide trouvé respectant la contrainte de max_tolls")
+            
+        if self.best_min_tolls["route"]:
+            print(f"[RESULT] Minimum tolls: {self.best_min_tolls['toll_count']} péages, coût={self.best_min_tolls['cost']}€, durée={self.best_min_tolls['duration']/60:.1f} min")
+        else:
+            print("[RESULT] Pas d'itinéraire avec un minimum de péages trouvé")
+    
+    @classmethod
+    def create_uniform_result(cls, route_result, status):
+        """
+        Crée un résultat uniforme à partir d'une seule route.
+        Utile pour les stratégies qui n'ont qu'une solution.
+        
+        Args:
+            route_result: Résultat d'une route formatée
+            status: Statut à attacher
+            
+        Returns:
+            dict: Résultat uniforme avec status
+        """
+        manager = cls()
+        manager.best_cheap = route_result
+        manager.best_fast = route_result
+        manager.best_min_tolls = route_result
+        
+        results = manager.get_results()
+        results["status"] = status
+        return results

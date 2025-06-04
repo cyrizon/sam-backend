@@ -10,6 +10,7 @@ from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proxim
 from src.services.toll_cost import add_marginal_cost
 from src.utils.poly_utils import avoidance_multipolygon
 from src.utils.route_utils import is_toll_open_system, merge_routes, format_route_result
+from src.services.toll.result_manager import RouteResultManager
 from benchmark.performance_tracker import performance_tracker
 
 
@@ -62,32 +63,21 @@ class OneOpenTollStrategy:
             with performance_tracker.measure_operation("filter_open_tolls"):
                 nearby_open_tolls = [toll for toll in local_tolls if is_toll_open_system(toll["id"])]
             
-            # Variables pour stocker la meilleure solution
-            best_route = None
-            best_cost = float('inf')
-            best_duration = float('inf')
-            best_toll_id = None
-            min_toll_count = float('inf')
-            min_toll_route = None
-            min_toll_cost = float('inf')
-            min_toll_duration = float('inf')
-            min_toll_id = None
+            # 4) Initialiser le gestionnaire de résultats
+            result_manager = RouteResultManager()
             
             print(f"Trouvé {len(nearby_open_tolls)} péages ouverts à proximité immédiate")
             
-            # 4) Première étape: test avec les péages ouverts à proximité immédiate
+            # 5) Première étape: test avec les péages ouverts à proximité immédiate
             if nearby_open_tolls:
                 with performance_tracker.measure_operation("test_nearby_open_tolls", {"count": len(nearby_open_tolls)}):
-                    best_route, best_cost, best_duration, best_toll_id, min_toll_count, min_toll_route, min_toll_cost, min_toll_duration, min_toll_id = self._try_route_with_tolls(
-                        coordinates, nearby_open_tolls, veh_class
-                    )
+                    self._try_route_with_tolls(coordinates, nearby_open_tolls, veh_class, result_manager)
             
-            # 5) Si aucun résultat avec les péages proches, tester avec tous les péages ouverts du réseau
-            if best_route is None:
+            # 6) Si aucun résultat avec les péages proches, tester avec tous les péages ouverts du réseau
+            if not result_manager.has_valid_results():
                 print("Aucune solution trouvée avec les péages ouverts à proximité. Test avec tous les péages ouverts du réseau...")
                 
-                # 5.1) Récupérer tous les péages ouverts triés par proximité avec la route
-                # Limiter la recherche aux péages dans un rayon de 100 km
+                # 6.1) Récupérer tous les péages ouverts triés par proximité avec la route
                 max_distance_m = 100000  # 100 km
                 with performance_tracker.measure_operation("get_all_open_tolls", {"max_distance_m": max_distance_m}):
                     all_open_tolls = get_all_open_tolls_by_proximity(base_route, "data/barriers.csv", max_distance_m)
@@ -98,198 +88,193 @@ class OneOpenTollStrategy:
                 
                 print(f"Trouvé {len(all_open_tolls)} péages ouverts dans un rayon de {max_distance_m/1000:.1f} km")
                 
-                # 5.2) Les tester dans l'ordre de proximité
-                # On n'utilise que les 10 plus proches pour limiter le temps de calcul
+                # 6.2) Les tester dans l'ordre de proximité (limité aux 10 plus proches)
                 with performance_tracker.measure_operation("test_all_open_tolls", {"count": min(10, len(all_open_tolls))}):
-                    best_route, best_cost, best_duration, best_toll_id, min_toll_count, min_toll_route, min_toll_cost, min_toll_duration, min_toll_id = self._try_route_with_tolls(
-                        coordinates, all_open_tolls[:10], veh_class, best_route, best_cost, best_duration, best_toll_id, 
-                        min_toll_count, min_toll_route, min_toll_cost, min_toll_duration, min_toll_id
-                    )
+                    self._try_route_with_tolls(coordinates, all_open_tolls[:10], veh_class, result_manager)
             
-            # 6) Résultat final
-            if best_route:
-                result = format_route_result(
-                    best_route,
-                    best_cost,
-                    best_duration,
-                    1,
-                    best_toll_id
-                )
-                return result, "ONE_OPEN_TOLL_SUCCESS"
-            elif min_toll_route:
-                # Si on n'a pas trouvé de solution avec exactement un péage, on retourne la solution avec le minimum de péages
-                print(f"Pas de solution trouvée avec exactement un péage ouvert, mais trouvé une solution avec {min_toll_count} péages")
-                result = format_route_result(
-                    min_toll_route,
-                    min_toll_cost,
-                    min_toll_duration,
-                    min_toll_count,
-                    min_toll_id
-                )
-                return result, "MINIMUM_TOLLS_SOLUTION"
-            else:
-                return None, "NO_VALID_OPEN_TOLL_ROUTE"
+            # 7) Analyser les résultats et retourner la meilleure solution
+            return self._analyze_final_results(result_manager)
     
-    def _try_route_with_tolls(
-        self,
-        coordinates, 
-        tolls_to_try, 
-        veh_class="c1",
-        current_best_route=None,
-        current_best_cost=float('inf'),
-        current_best_duration=float('inf'),
-        current_best_toll_id=None,
-        current_min_toll_count=float('inf'),
-        current_min_toll_route=None,
-        current_min_toll_cost=float('inf'),
-        current_min_toll_duration=float('inf'),
-        current_min_toll_id=None
-    ):
+    def _try_route_with_tolls(self, coordinates, tolls_to_try, veh_class, result_manager):
         """
         Fonction auxiliaire pour tester des itinéraires avec une liste de péages donnée.
+        Met à jour le gestionnaire de résultats avec les meilleures solutions trouvées.
         
-        Returns:
-            tuple: (best_route, best_cost, best_duration, best_toll_id, min_toll_count, min_toll_route, min_toll_cost, min_toll_duration, min_toll_id)
+        Args:
+            coordinates: Liste de coordonnées [départ, arrivée]
+            tolls_to_try: Liste des péages à tester
+            veh_class: Classe de véhicule
+            result_manager: Gestionnaire pour stocker les résultats
         """
         with performance_tracker.measure_operation("try_route_with_tolls", {"tolls_count": len(tolls_to_try)}):
-            best_route = current_best_route
-            best_cost = current_best_cost
-            best_duration = current_best_duration
-            best_toll_id = current_best_toll_id
-            min_toll_count = current_min_toll_count
-            min_toll_route = current_min_toll_route
-            min_toll_cost = current_min_toll_cost
-            min_toll_duration = current_min_toll_duration
-            min_toll_id = current_min_toll_id
-            
             for toll in tolls_to_try:
                 with performance_tracker.measure_operation("test_single_toll", {"toll_id": toll["id"]}):
                     print(f"Test avec péage ouvert: {toll['id']}")
-                    toll_coords = [toll["longitude"], toll["latitude"]]
                     
-                    # 1) Partie 1: Départ → péage (d'abord sans restrictions)
-                    part1_payload = {
-                        "coordinates": [coordinates[0], toll_coords],
-                        "extra_info": ["tollways"]
-                    }
+                    route_data = self._calculate_route_through_toll(coordinates, toll, veh_class)
                     
-                    try:
-                        # D'abord on génère un itinéraire sans restrictions
-                        with performance_tracker.measure_operation("ORS_part1_route"):
-                            performance_tracker.count_api_call("ORS_alternative_route")
-                            part1_route = self.ors.call_ors(part1_payload)
+                    if route_data:
+                        # Mettre à jour le gestionnaire avec cette nouvelle route
+                        # Utiliser un coût de base très élevé pour ne pas limiter les mises à jour
+                        result_manager.update_with_route(route_data, float('inf'))
                         
-                        # On vérifie quels péages sont sur cet itinéraire
-                        with performance_tracker.measure_operation("locate_tolls_part1"):
-                            part1_tolls = locate_tolls(part1_route, "data/barriers.csv")["on_route"]
-                        
-                        # Si le péage cible n'est pas le seul sur l'itinéraire, on doit éviter les autres
-                        if len(part1_tolls) > 1 or (len(part1_tolls) == 1 and part1_tolls[0]["id"] != toll["id"]):
-                            # On crée une liste des péages à éviter (tous sauf celui qu'on veut)
-                            tolls_to_avoid = [t for t in part1_tolls if t["id"] != toll["id"]]
-                            
-                            if tolls_to_avoid:
-                                # On génère des polygones d'évitement pour ces péages
-                                with performance_tracker.measure_operation("create_avoidance_polygon"):
-                                    avoid_poly = avoidance_multipolygon(tolls_to_avoid)
-                                
-                                # On refait l'appel en évitant les péages indésirables
-                                part1_payload["options"] = {"avoid_polygons": avoid_poly}
-                                with performance_tracker.measure_operation("ORS_part1_route_avoid"):
-                                    performance_tracker.count_api_call("ORS_alternative_route")
-                                    part1_route = self.ors.call_ors(part1_payload)
-                                
-                                # Vérification finale
-                                with performance_tracker.measure_operation("locate_tolls_part1_verify"):
-                                    part1_tolls = locate_tolls(part1_route, "data/barriers.csv")["on_route"]
-                                unwanted_tolls = [t for t in part1_tolls if t["id"] != toll["id"]]
-                                if unwanted_tolls:
-                                    print(f"Impossible d'éviter les péages supplémentaires sur la partie 1 pour {toll['id']}")
-                                    continue
-                        
-                        # 2) Partie 2: péage → arrivée (même approche)
-                        part2_payload = {
-                            "coordinates": [toll_coords, coordinates[1]],
-                            "extra_info": ["tollways"]
-                        }
-                        
-                        # D'abord on génère un itinéraire sans restrictions
-                        with performance_tracker.measure_operation("ORS_part2_route"):
-                            performance_tracker.count_api_call("ORS_alternative_route")
-                            part2_route = self.ors.call_ors(part2_payload)
-                        
-                        # On vérifie quels péages sont sur cet itinéraire
-                        with performance_tracker.measure_operation("locate_tolls_part2"):
-                            part2_tolls = locate_tolls(part2_route, "data/barriers.csv")["on_route"]
-                            add_marginal_cost(part2_tolls, veh_class)
-                        
-                        # Si le péage cible n'est pas le seul sur l'itinéraire, on doit éviter les autres
-                        if len(part2_tolls) > 0:
-                            # On crée une liste des péages à éviter (tous les péages de cette partie)
-                            tolls_to_avoid = part2_tolls
-                            
-                            if tolls_to_avoid:
-                                # On génère des polygones d'évitement pour ces péages
-                                with performance_tracker.measure_operation("create_avoidance_polygon"):
-                                    avoid_poly = avoidance_multipolygon(tolls_to_avoid)
-                                
-                                # On refait l'appel en évitant les péages indésirables
-                                part2_payload["options"] = {"avoid_polygons": avoid_poly}
-                                try:
-                                    with performance_tracker.measure_operation("ORS_part2_route_avoid"):
-                                        performance_tracker.count_api_call("ORS_alternative_route")
-                                        part2_route = self.ors.call_ors(part2_payload)
-                                    
-                                    # Vérification finale
-                                    with performance_tracker.measure_operation("locate_tolls_part2_verify"):
-                                        part2_tolls = locate_tolls(part2_route, "data/barriers.csv")["on_route"]
-                                        add_marginal_cost(part2_tolls, veh_class)
-                                    unwanted_tolls = [t for t in part2_tolls if t["id"] != toll["id"]]
-                                    if unwanted_tolls:
-                                        print(f"Impossible d'éviter les péages supplémentaires sur la partie 2 pour {toll['id']}")
-                                        continue
-                                except Exception as e:
-                                    performance_tracker.log_error(f"Erreur lors de l'évitement des péages sur la partie 2: {e}")
-                                    print(f"Erreur lors de l'évitement des péages sur la partie 2: {e}")
-                                    continue
-                        
-                        # 3) Fusionner les deux parties de l'itinéraire
-                        with performance_tracker.measure_operation("merge_routes"):
-                            merged_route = merge_routes(part1_route, part2_route)
-                        
-                        # 4) Vérifier le coût total et la durée
-                        with performance_tracker.measure_operation("calculate_final_metrics"):
-                            total_tolls = part1_tolls + part2_tolls
-                            add_marginal_cost(total_tolls, veh_class)
-                            cost = sum(t.get("cost", 0) for t in total_tolls)
-                            duration = merged_route["features"][0]["properties"]["summary"]["duration"]
-                            toll_count = len(set(t["id"] for t in total_tolls))
-                        
-                        # 5) Vérifier si c'est une solution avec exactement un péage
-                        if toll_count == 1 and (len(total_tolls) == 0 or toll["id"] == total_tolls[0]["id"]):
-                            if cost < best_cost or (cost == best_cost and duration < best_duration):
-                                best_cost = cost
-                                best_duration = duration
-                                best_route = merged_route
-                                best_toll_id = toll["id"]
-                                print(f"Nouvelle meilleure solution: péage={best_toll_id}, coût={best_cost}€, durée={best_duration/60:.1f}min")
-                        
-                        # 6) Même si ce n'est pas une solution avec exactement un péage, voir si c'est la solution avec le minimum de péages
-                        if toll_count < min_toll_count or (toll_count == min_toll_count and cost < min_toll_cost):
-                            min_toll_count = toll_count
-                            min_toll_route = merged_route
-                            min_toll_cost = cost
-                            min_toll_duration = duration
-                            min_toll_id = toll["id"]
-                            print(f"Nouvelle solution avec minimum de péages: {min_toll_count} péages, péage={min_toll_id}, coût={min_toll_cost}€, durée={min_toll_duration/60:.1f}min")
-                            
-                    except Exception as e:
-                        performance_tracker.log_error(f"Erreur lors du calcul de l'itinéraire via {toll['id']}: {e}")
-                        print(f"Erreur lors du calcul de l'itinéraire via {toll['id']}: {e}")
-                        continue
+                        # Arrêt anticipé si on trouve une solution avec exactement 1 péage et coût 0
+                        if route_data["toll_count"] == 1 and route_data["cost"] == 0:
+                            break
+    
+    def _calculate_route_through_toll(self, coordinates, toll, veh_class):
+        """
+        Calcule un itinéraire passant par un péage spécifique.
+        
+        Args:
+            coordinates: Liste de coordonnées [départ, arrivée]
+            toll: Données du péage
+            veh_class: Classe de véhicule
             
-            return (best_route, best_cost, best_duration, best_toll_id, 
-                    min_toll_count, min_toll_route, min_toll_cost, min_toll_duration, min_toll_id)
+        Returns:
+            dict: Données de l'itinéraire ou None si échec
+        """
+        toll_coords = [toll["longitude"], toll["latitude"]]
+        
+        try:
+            # 1) Calculer partie 1: Départ → péage
+            part1_route = self._calculate_route_part(
+                [coordinates[0], toll_coords], 
+                toll["id"], 
+                veh_class, 
+                part_name="part1"
+            )
+            
+            if not part1_route:
+                return None
+            
+            # 2) Calculer partie 2: péage → arrivée
+            part2_route = self._calculate_route_part(
+                [toll_coords, coordinates[1]], 
+                toll["id"], 
+                veh_class, 
+                part_name="part2"
+            )
+            
+            if not part2_route:
+                return None
+            
+            # 3) Fusionner les deux parties
+            with performance_tracker.measure_operation("merge_routes"):
+                merged_route = merge_routes(part1_route["route"], part2_route["route"])
+            
+            # 4) Calculer les métriques finales
+            with performance_tracker.measure_operation("calculate_final_metrics"):
+                total_tolls = part1_route["tolls"] + part2_route["tolls"]
+                add_marginal_cost(total_tolls, veh_class)
+                cost = sum(t.get("cost", 0) for t in total_tolls)
+                duration = merged_route["features"][0]["properties"]["summary"]["duration"]
+                toll_count = len(set(t["id"] for t in total_tolls))
+            
+            # 5) Vérifier la validité (doit contenir le péage cible)
+            toll_ids = set(t["id"] for t in total_tolls)
+            if toll["id"] not in toll_ids:
+                print(f"Le péage cible {toll['id']} n'est pas présent dans l'itinéraire final")
+                return None
+            
+            # 6) Log de la solution trouvée
+            if toll_count == 1:
+                print(f"Solution avec exactement 1 péage: péage={toll['id']}, coût={cost}€, durée={duration/60:.1f}min")
+            else:
+                print(f"Solution avec {toll_count} péages: péage principal={toll['id']}, coût={cost}€, durée={duration/60:.1f}min")
+            
+            return format_route_result(merged_route, cost, duration, toll_count, toll["id"])
+            
+        except Exception as e:
+            performance_tracker.log_error(f"Erreur lors du calcul de l'itinéraire via {toll['id']}: {e}")
+            print(f"Erreur lors du calcul de l'itinéraire via {toll['id']}: {e}")
+            return None
+    
+    def _calculate_route_part(self, coordinates, target_toll_id, veh_class, part_name):
+        """
+        Calcule une partie d'itinéraire en évitant les péages indésirables.
+        
+        Args:
+            coordinates: Coordonnées de la partie [départ, arrivée]
+            target_toll_id: ID du péage cible à conserver
+            veh_class: Classe de véhicule
+            part_name: Nom de la partie pour le logging
+            
+        Returns:
+            dict: {"route": route_data, "tolls": tolls_list} ou None
+        """
+        payload = {
+            "coordinates": coordinates,
+            "extra_info": ["tollways"]
+        }
+        
+        try:
+            # Premier appel sans restrictions
+            with performance_tracker.measure_operation(f"ORS_{part_name}_route"):
+                performance_tracker.count_api_call("ORS_alternative_route")
+                route = self.ors.call_ors(payload)
+            
+            # Vérifier les péages présents
+            with performance_tracker.measure_operation(f"locate_tolls_{part_name}"):
+                tolls = locate_tolls(route, "data/barriers.csv")["on_route"]
+            
+            # Si des péages indésirables sont présents, les éviter
+            unwanted_tolls = [t for t in tolls if t["id"] != target_toll_id]
+            
+            if unwanted_tolls:
+                with performance_tracker.measure_operation("create_avoidance_polygon"):
+                    avoid_poly = avoidance_multipolygon(unwanted_tolls)
+                
+                payload["options"] = {"avoid_polygons": avoid_poly}
+                
+                with performance_tracker.measure_operation(f"ORS_{part_name}_route_avoid"):
+                    performance_tracker.count_api_call("ORS_alternative_route")
+                    route = self.ors.call_ors(payload)
+                
+                # Vérification finale
+                with performance_tracker.measure_operation(f"locate_tolls_{part_name}_verify"):
+                    tolls = locate_tolls(route, "data/barriers.csv")["on_route"]
+                
+                # Vérifier qu'on a bien évité les péages indésirables
+                final_unwanted = [t for t in tolls if t["id"] != target_toll_id]
+                if final_unwanted:
+                    print(f"Impossible d'éviter les péages indésirables sur {part_name}: {[t['id'] for t in final_unwanted]}")
+                    return None
+            
+            return {"route": route, "tolls": tolls}
+            
+        except Exception as e:
+            performance_tracker.log_error(f"Erreur lors du calcul de {part_name}: {e}")
+            return None
+    
+    def _analyze_final_results(self, result_manager):
+        """
+        Analyse les résultats finaux et retourne la meilleure solution.
+        
+        Args:
+            result_manager: Gestionnaire contenant tous les résultats
+            
+        Returns:
+            tuple: (route_data, status_code)
+        """
+        if not result_manager.has_valid_results():
+            return None, "NO_VALID_OPEN_TOLL_ROUTE"
+        
+        results = result_manager.get_results()
+        
+        # Privilégier les solutions avec exactement 1 péage
+        for result_type in ["min_tolls", "cheapest", "fastest"]:
+            result = results[result_type]
+            if result["route"] and result["toll_count"] == 1:
+                return result, "ONE_OPEN_TOLL_SUCCESS"
+        
+        # Si aucune solution avec exactement 1 péage, prendre celle avec le minimum de péages
+        min_tolls_result = results["min_tolls"]
+        if min_tolls_result["route"]:
+            print(f"Pas de solution avec exactement un péage ouvert, mais trouvé une solution avec {min_tolls_result['toll_count']} péages")
+            return min_tolls_result, "MINIMUM_TOLLS_SOLUTION"
+        
+        return None, "NO_VALID_OPEN_TOLL_ROUTE"
     
     def handle_one_toll_route(self, coordinates, veh_class, max_comb_size):
         """
@@ -313,7 +298,6 @@ class OneOpenTollStrategy:
                 }
             
             # Si l'approche spécialisée n'a pas fonctionné, utiliser la stratégie générale
-            # Import ici pour éviter les imports circulaires
             from src.services.toll.many_tolls_strategy import ManyTollsStrategy
             many_tolls_strategy = ManyTollsStrategy(self.ors)
             many_result = many_tolls_strategy.compute_route_with_many_tolls(coordinates, 2, veh_class, max_comb_size)

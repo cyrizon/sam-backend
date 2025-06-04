@@ -81,16 +81,13 @@ class NoTollStrategy:
         Returns:
             dict: Résultat formaté avec fastest, cheapest, min_tolls, status
         """
+        from src.services.toll.result_manager import RouteResultManager
+        
         with performance_tracker.measure_operation("handle_no_toll_route"):
             no_toll_result, status = self.compute_route_no_toll(coordinates, veh_class)
             
             if no_toll_result:
-                return {
-                    "fastest": no_toll_result,
-                    "cheapest": no_toll_result,
-                    "min_tolls": no_toll_result,
-                    "status": status
-                }
+                return RouteResultManager.create_uniform_result(no_toll_result, status)
             else:
                 # Import ici pour éviter les imports circulaires
                 from src.services.toll.fallback_strategy import FallbackStrategy

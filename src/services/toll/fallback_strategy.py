@@ -29,8 +29,10 @@ class FallbackStrategy:
             status: Statut d'erreur à retourner
             
         Returns:
-            dict: Route de base formatée
+            dict: Route de base formatée avec format uniforme
         """
+        from src.services.toll.result_manager import RouteResultManager
+        
         with performance_tracker.measure_operation("get_fallback_route"):
             with performance_tracker.measure_operation("ORS_base_route_fallback"):
                 performance_tracker.count_api_call("ORS_base_route")
@@ -50,9 +52,4 @@ class FallbackStrategy:
                 len(tolls_on_route)
             )
             
-            return {
-                "fastest": result,
-                "cheapest": result,
-                "min_tolls": result,
-                "status": status
-            }
+            return RouteResultManager.create_uniform_result(result, status)

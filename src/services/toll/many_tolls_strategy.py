@@ -11,6 +11,7 @@ from src.services.toll_locator import locate_tolls
 from src.services.toll_cost import add_marginal_cost
 from src.utils.poly_utils import avoidance_multipolygon
 from src.utils.route_utils import format_route_result
+from src.services.toll.result_manager import RouteResultManager
 from benchmark.performance_tracker import performance_tracker
 
 
@@ -48,12 +49,12 @@ class ManyTollsStrategy:
         }):
             print(f"Recherche d'itinéraires avec max {max_tolls} péages...")
             
-            # 1) Premier appel (rapide)
+            # 1) Premier appel pour obtenir la route de base
             with performance_tracker.measure_operation("ORS_base_route_many_tolls"):
                 performance_tracker.count_api_call("ORS_base_route")
                 base_route = self.ors.get_base_route(coordinates)
 
-            # 2) Localisation + coûts
+            # 2) Localisation des péages
             with performance_tracker.measure_operation("locate_tolls_many_tolls"):
                 tolls_dict = locate_tolls(base_route, "data/barriers.csv")
                 tolls_on_route = tolls_dict["on_route"]
@@ -61,56 +62,49 @@ class ManyTollsStrategy:
                 print("Péages sur la route :", tolls_on_route)
                 print("Péages proches :", tolls_nearby)
 
-            # On fusionne les deux listes pour générer toutes les combinaisons
+            # 3) Préparation des péages et calcul des coûts
             with performance_tracker.measure_operation("prepare_toll_combinations"):
                 all_tolls = tolls_on_route + tolls_nearby
                 add_marginal_cost(all_tolls, veh_class)
                 all_tolls_sorted = sorted(all_tolls, key=lambda t: t.get("cost", 0), reverse=True)
 
-            # Si aucun péage, on retourne la route de base
+            # Si aucun péage, retourner la route de base
             if not all_tolls_sorted:
                 return self._create_base_route_result(base_route)
 
-            # Initialisation des métriques de base
-            base_result = self._initialize_base_metrics(base_route, veh_class, max_tolls)
-            best_cheap = base_result["best_cheap"]
-            best_fast = base_result["best_fast"]
-            best_min_tolls = base_result["best_min_tolls"]
-            base_cost = base_result["base_cost"]
+            # 4) Initialisation du gestionnaire de résultats
+            result_manager = RouteResultManager()
+            base_metrics = self._get_base_metrics(base_route, veh_class)
+            result_manager.initialize_with_base_route(
+                base_route, base_metrics["cost"], base_metrics["duration"], 
+                base_metrics["toll_count"], max_tolls
+            )
 
-            # Génération et test des combinaisons
-            combination_results = self._test_toll_combinations(
+            # 5) Test des combinaisons de péages à éviter
+            self._test_toll_combinations(
                 coordinates, all_tolls_sorted, max_tolls, veh_class, max_comb_size, 
-                base_cost, best_cheap, best_fast, best_min_tolls
+                base_metrics["cost"], result_manager
             )
-            
-            best_cheap = combination_results["best_cheap"]
-            best_fast = combination_results["best_fast"]
-            best_min_tolls = combination_results["best_min_tolls"]
 
-            # Fallback si rien trouvé
-            fallback_result = self._apply_fallback_if_needed(
-                base_route, veh_class, max_tolls, best_fast, best_cheap, best_min_tolls
+            # 6) Application du fallback si nécessaire
+            result_manager.apply_fallback_if_needed(
+                base_route, base_metrics["cost"], base_metrics["duration"], 
+                base_metrics["toll_count"], max_tolls
             )
-            
-            best_cheap = fallback_result["best_cheap"]
-            best_fast = fallback_result["best_fast"]
-            best_min_tolls = fallback_result["best_min_tolls"]
 
-            # Affichage des résultats et validation finale
-            self._log_final_results(best_cheap, best_fast, best_min_tolls, base_result["base_toll_count"], base_result["base_cost"], base_result["base_duration"])
+            # 7) Affichage des résultats
+            result_manager.log_results(
+                base_metrics["toll_count"], base_metrics["cost"], base_metrics["duration"]
+            )
 
-            # Si aucune solution trouvée, retourner None
-            if not (best_fast["route"] or best_cheap["route"] or best_min_tolls["route"]):
+            # 8) Vérification finale et retour des résultats
+            if not result_manager.has_valid_results():
                 print("Aucun itinéraire trouvé respectant la contrainte de max_tolls")
                 return None
                 
-            # Formater les résultats avec structure complète
-            return {
-                "fastest": best_fast,
-                "cheapest": best_cheap,
-                "min_tolls": best_min_tolls
-            }
+            results = result_manager.get_results()
+            results["status"] = "MULTI_TOLL_SUCCESS"
+            return results
     
     def _create_base_route_result(self, base_route):
         """Crée un résultat avec la route de base quand aucun péage n'est trouvé."""
@@ -120,52 +114,20 @@ class ManyTollsStrategy:
             "min_tolls": format_route_result(base_route, 0, base_route["features"][0]["properties"]["summary"]["duration"], 0)
         }
     
-    def _initialize_base_metrics(self, base_route, veh_class, max_tolls):
-        """Initialise les métriques de base pour la comparaison."""
-        with performance_tracker.measure_operation("initialize_base_metrics"):
+    def _get_base_metrics(self, base_route, veh_class):
+        """Calcule les métriques de la route de base."""
+        with performance_tracker.measure_operation("get_base_metrics"):
             base_tolls = locate_tolls(base_route, "data/barriers.csv")["on_route"]
             add_marginal_cost(base_tolls, veh_class)
-            base_cost = sum(t.get("cost", 0) for t in base_tolls)
-            base_duration = base_route["features"][0]["properties"]["summary"]["duration"]
-            base_toll_count = len(base_tolls)
-            
-            # Si le nombre de péages de la route de base est déjà <= max_tolls, c'est un bon point de départ
-            if base_toll_count <= max_tolls:
-                best_cheap = format_route_result(base_route, base_cost, base_duration, base_toll_count)
-                best_fast = format_route_result(base_route, base_cost, base_duration, base_toll_count)
-                best_min_tolls = format_route_result(base_route, base_cost, base_duration, base_toll_count)
-            else:
-                # Sinon, on initialise avec des valeurs par défaut qui seront remplacées
-                best_cheap = {
-                    "route": None,
-                    "cost": float('inf'),
-                    "duration": float('inf'),
-                    "toll_count": float('inf')
-                }
-                best_fast = {
-                    "route": None,
-                    "cost": float('inf'),
-                    "duration": float('inf'),
-                    "toll_count": float('inf')
-                }
-                best_min_tolls = {
-                    "route": None,
-                    "cost": float('inf'),
-                    "duration": float('inf'),
-                    "toll_count": float('inf')
-                }
             
             return {
-                "best_cheap": best_cheap,
-                "best_fast": best_fast,
-                "best_min_tolls": best_min_tolls,
-                "base_cost": base_cost,
-                "base_duration": base_duration,
-                "base_toll_count": base_toll_count
+                "cost": sum(t.get("cost", 0) for t in base_tolls),
+                "duration": base_route["features"][0]["properties"]["summary"]["duration"],
+                "toll_count": len(base_tolls)
             }
     
-    def _test_toll_combinations(self, coordinates, all_tolls_sorted, max_tolls, veh_class, max_comb_size, 
-                              base_cost, best_cheap, best_fast, best_min_tolls):
+    def _test_toll_combinations(self, coordinates, all_tolls_sorted, max_tolls, veh_class, 
+                              max_comb_size, base_cost, result_manager):
         """Teste toutes les combinaisons de péages à éviter."""
         with performance_tracker.measure_operation("test_toll_combinations"):
             seen_polygons = set()
@@ -177,163 +139,76 @@ class ManyTollsStrategy:
                     combination_count += 1
                     
                     # Affichage périodique des stats
-                    if combination_count % 10 == 0:  # Tous les 10 tests
+                    if combination_count % 10 == 0:
                         stats = performance_tracker.get_current_stats()
                         print(f"Progression: {combination_count} combinaisons testées")
                     
-                    result = self._test_single_combination(
+                    route_data = self._test_single_combination(
                         coordinates, to_avoid, max_tolls, veh_class, combination_count, k,
-                        seen_polygons, tested_combinations, base_cost, best_cheap, best_fast, best_min_tolls
+                        seen_polygons, tested_combinations, base_cost
                     )
                     
-                    if result:
-                        best_cheap = result["best_cheap"]
-                        best_fast = result["best_fast"]
-                        best_min_tolls = result["best_min_tolls"]
+                    if route_data:
+                        updated = result_manager.update_with_route(route_data, base_cost)
                         
-                        # Arrêt anticipé si coût nul
-                        if best_cheap["cost"] == 0:
+                        # Arrêt anticipé si coût nul trouvé
+                        if updated and route_data["cost"] == 0:
                             break
-            
-            return {
-                "best_cheap": best_cheap,
-                "best_fast": best_fast,
-                "best_min_tolls": best_min_tolls
-            }
     
-    def _test_single_combination(self, coordinates, to_avoid, max_tolls, veh_class, combination_count, k,
-                               seen_polygons, tested_combinations, base_cost, best_cheap, best_fast, best_min_tolls):
+    def _test_single_combination(self, coordinates, to_avoid, max_tolls, veh_class, 
+                               combination_count, k, seen_polygons, tested_combinations, base_cost):
         """Teste une combinaison spécifique de péages à éviter."""
         with performance_tracker.measure_operation("test_single_combination", {
             "combination_size": k,
             "combination_count": combination_count
         }):
             sig = tuple(sorted(t["id"] for t in to_avoid))
-            if sig in seen_polygons:
+            if sig in seen_polygons or sig in tested_combinations:
                 return None
+            
             seen_polygons.add(sig)
-
-            # Heuristique : coût potentiel économisé
-            potential_saving = sum(t.get("cost", 0) for t in to_avoid)
-            # Si l'économie potentielle ne permet pas de passer sous le coût de base, on skip
-            if base_cost - potential_saving <= 0:
-                return None
-            # Caching/mémorisation
-            if sig in tested_combinations:
-                return None
             tested_combinations.add(sig)
 
+            # Heuristique d'optimisation précoce
+            potential_saving = sum(t.get("cost", 0) for t in to_avoid)
+            if base_cost - potential_saving <= 0:
+                return None
+
+            # Création du polygone d'évitement
             with performance_tracker.measure_operation("create_avoidance_polygon"):
                 poly = avoidance_multipolygon(to_avoid)
             
+            # Appel ORS pour l'itinéraire alternatif
             try:
                 with performance_tracker.measure_operation("ORS_alternative_route"):
                     performance_tracker.count_api_call("ORS_alternative_route")
                     alt_route = self.ors.get_route_avoiding_polygons(coordinates, poly)
             except Exception:
-                return None  # ORS n'a pas trouvé d'itinéraire
+                return None
 
-            return self._analyze_alternative_route(
-                alt_route, to_avoid, max_tolls, veh_class, base_cost, best_cheap, best_fast, best_min_tolls
-            )
+            return self._analyze_alternative_route(alt_route, to_avoid, max_tolls, veh_class)
     
-    def _analyze_alternative_route(self, alt_route, to_avoid, max_tolls, veh_class, base_cost, 
-                                 best_cheap, best_fast, best_min_tolls):
-        """Analyse un itinéraire alternatif et met à jour les meilleures solutions."""
+    def _analyze_alternative_route(self, alt_route, to_avoid, max_tolls, veh_class):
+        """Analyse un itinéraire alternatif et retourne les métriques."""
         with performance_tracker.measure_operation("analyze_alternative_route"):
             alt_tolls_dict = locate_tolls(alt_route, "data/barriers.csv")
             alt_tolls_on_route = alt_tolls_dict["on_route"]
             add_marginal_cost(alt_tolls_on_route, veh_class)
+            
             cost = sum(t.get("cost", 0) for t in alt_tolls_on_route)
             duration = alt_route["features"][0]["properties"]["summary"]["duration"]
             toll_count = len(set(t["id"] for t in alt_tolls_on_route))
 
-            # Vérification : les péages à éviter ne doivent pas être présents
+            # Vérifications de validité
             avoided_ids = set(str(t["id"]).strip().lower() for t in to_avoid)
             present_ids = set(str(t["id"]).strip().lower() for t in alt_tolls_on_route)
-            print(f"Vérif exclusion : à éviter={avoided_ids}, présents={present_ids}")
+            
             if avoided_ids & present_ids:
-                print(f"Attention : certains péages à éviter sont toujours présents dans l'itinéraire alternatif : {avoided_ids & present_ids}")
-                return None  # On ignore cet itinéraire
+                print(f"Attention : certains péages à éviter sont toujours présents : {avoided_ids & present_ids}")
+                return None
 
-            # Contrainte : respecter max_tolls
             if toll_count > max_tolls:
                 print(f"Itinéraire ignoré : {toll_count} péages > max_tolls={max_tolls}")
                 return None
                 
-            # Création du dictionnaire pour cet itinéraire
-            route_data = format_route_result(alt_route, cost, duration, toll_count)
-
-            # Mise à jour des meilleures solutions
-            updated_best_cheap = best_cheap
-            updated_best_fast = best_fast
-            updated_best_min_tolls = best_min_tolls
-
-            # Mise à jour de l'itinéraire avec le moins de péages
-            if toll_count < best_min_tolls["toll_count"]:
-                updated_best_min_tolls = route_data
-
-            # Si l'itinéraire est moins cher que le best_cheap actuel
-            if cost < best_cheap["cost"]:
-                updated_best_cheap = route_data
-                # Si best_fast n'est pas encore défini ou si cet itinéraire est plus rapide et respecte le budget
-                if best_fast["route"] is None or duration < best_fast["duration"]:
-                    updated_best_fast = route_data
-            
-            # Pour le plus rapide : on ne retient que les itinéraires dont le coût <= coût de base
-            if cost <= base_cost:
-                if best_fast["route"] is None or duration < best_fast["duration"]:
-                    updated_best_fast = route_data
-
-            return {
-                "best_cheap": updated_best_cheap,
-                "best_fast": updated_best_fast,
-                "best_min_tolls": updated_best_min_tolls
-            }
-    
-    def _apply_fallback_if_needed(self, base_route, veh_class, max_tolls, best_fast, best_cheap, best_min_tolls):
-        """Applique la route de base comme fallback si nécessaire."""
-        base_tolls = locate_tolls(base_route, "data/barriers.csv")["on_route"]
-        add_marginal_cost(base_tolls, veh_class)
-        base_cost = sum(t.get("cost", 0) for t in base_tolls)
-        base_duration = base_route["features"][0]["properties"]["summary"]["duration"]
-        base_toll_count = len(base_tolls)
-        
-        updated_best_fast = best_fast
-        updated_best_cheap = best_cheap
-        updated_best_min_tolls = best_min_tolls
-        
-        # Fallback si rien trouvé (mais seulement si base_toll_count <= max_tolls)
-        if best_fast["route"] is None and base_toll_count <= max_tolls:
-            updated_best_fast = format_route_result(base_route, base_cost, base_duration, base_toll_count)
-            
-        if best_cheap["route"] is None and base_toll_count <= max_tolls:
-            updated_best_cheap = format_route_result(base_route, base_cost, base_duration, base_toll_count)
-            
-        if best_min_tolls["route"] is None and base_toll_count <= max_tolls:
-            updated_best_min_tolls = format_route_result(base_route, base_cost, base_duration, base_toll_count)
-        
-        return {
-            "best_fast": updated_best_fast,
-            "best_cheap": updated_best_cheap,
-            "best_min_tolls": updated_best_min_tolls
-        }
-    
-    def _log_final_results(self, best_cheap, best_fast, best_min_tolls, base_toll_count, base_cost, base_duration):
-        """Affiche les résultats finaux."""
-        print(f"[RESULT] Base: {base_toll_count} péages, coût={base_cost}€, durée={base_duration/60:.1f} min")
-        
-        if best_cheap["route"]:
-            print(f"[RESULT] Cheapest: {best_cheap['toll_count']} péages, coût={best_cheap['cost']}€, durée={best_cheap['duration']/60:.1f} min")
-        else:
-            print("[RESULT] Pas d'itinéraire économique trouvé respectant la contrainte de max_tolls")
-            
-        if best_fast["route"]:
-            print(f"[RESULT] Fastest: {best_fast['toll_count']} péages, coût={best_fast['cost']}€, durée={best_fast['duration']/60:.1f} min")
-        else:
-            print("[RESULT] Pas d'itinéraire rapide trouvé respectant la contrainte de max_tolls")
-            
-        if best_min_tolls["route"]:
-            print(f"[RESULT] Minimum tolls: {best_min_tolls['toll_count']} péages, coût={best_min_tolls['cost']}€, durée={best_min_tolls['duration']/60:.1f} min")
-        else:
-            print("[RESULT] Pas d'itinéraire avec un minimum de péages trouvé")
+            return format_route_result(alt_route, cost, duration, toll_count)
