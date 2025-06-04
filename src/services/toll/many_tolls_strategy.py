@@ -7,12 +7,11 @@ Responsabilité unique : optimiser les routes en testant des combinaisons de pé
 """
 
 from itertools import combinations
-from src.services.toll_locator import locate_tolls
-from src.services.toll_cost import add_marginal_cost
 from src.utils.poly_utils import avoidance_multipolygon
 from src.utils.route_utils import format_route_result
 from src.services.toll.result_manager import RouteResultManager
 from benchmark.performance_tracker import performance_tracker
+from src.services.toll.route_calculator import RouteCalculator
 
 
 class ManyTollsStrategy:
@@ -29,6 +28,7 @@ class ManyTollsStrategy:
             ors_service: Instance de ORSService pour les appels API
         """
         self.ors = ors_service
+        self.route_calculator = RouteCalculator(ors_service)  # Ajouter cette ligne
     
     def compute_route_with_many_tolls(self, coordinates, max_tolls, veh_class="c1", max_comb_size=2):
         """
@@ -50,22 +50,18 @@ class ManyTollsStrategy:
             print(f"Recherche d'itinéraires avec max {max_tolls} péages...")
             
             # 1) Premier appel pour obtenir la route de base
-            with performance_tracker.measure_operation("ORS_base_route_many_tolls"):
-                performance_tracker.count_api_call("ORS_base_route")
-                base_route = self.ors.get_base_route(coordinates)
+            base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
 
-            # 2) Localisation des péages
-            with performance_tracker.measure_operation("locate_tolls_many_tolls"):
-                tolls_dict = locate_tolls(base_route, "data/barriers.csv")
-                tolls_on_route = tolls_dict["on_route"]
-                tolls_nearby = tolls_dict["nearby"]
-                print("Péages sur la route :", tolls_on_route)
-                print("Péages proches :", tolls_nearby)
+            # 2) Localisation des péages (coûts calculés automatiquement)
+            tolls_dict = self.route_calculator.locate_and_cost_tolls(base_route, veh_class, "locate_tolls_many_tolls")
+            tolls_on_route = tolls_dict["on_route"]
+            tolls_nearby = tolls_dict["nearby"]
+            print("Péages sur la route :", tolls_on_route)
+            print("Péages proches :", tolls_nearby)
 
-            # 3) Préparation des péages et calcul des coûts
+            # 3) Préparation des péages (coûts déjà calculés)
             with performance_tracker.measure_operation("prepare_toll_combinations"):
                 all_tolls = tolls_on_route + tolls_nearby
-                add_marginal_cost(all_tolls, veh_class)
                 all_tolls_sorted = sorted(all_tolls, key=lambda t: t.get("cost", 0), reverse=True)
 
             # Si aucun péage, retourner la route de base
@@ -117,8 +113,8 @@ class ManyTollsStrategy:
     def _get_base_metrics(self, base_route, veh_class):
         """Calcule les métriques de la route de base."""
         with performance_tracker.measure_operation("get_base_metrics"):
-            base_tolls = locate_tolls(base_route, "data/barriers.csv")["on_route"]
-            add_marginal_cost(base_tolls, veh_class)
+            tolls_dict = self.route_calculator.locate_and_cost_tolls(base_route, veh_class, "get_base_metrics")
+            base_tolls = tolls_dict["on_route"]
             
             return {
                 "cost": sum(t.get("cost", 0) for t in base_tolls),
@@ -180,20 +176,17 @@ class ManyTollsStrategy:
             
             # Appel ORS pour l'itinéraire alternatif
             try:
-                with performance_tracker.measure_operation("ORS_alternative_route"):
-                    performance_tracker.count_api_call("ORS_alternative_route")
-                    alt_route = self.ors.get_route_avoiding_polygons(coordinates, poly)
+                alt_route = self.route_calculator.get_route_avoiding_polygons_with_tracking(coordinates, poly)
             except Exception:
-                return None
+                return None  # ORS n'a pas trouvé d'itinéraire
 
             return self._analyze_alternative_route(alt_route, to_avoid, max_tolls, veh_class)
     
     def _analyze_alternative_route(self, alt_route, to_avoid, max_tolls, veh_class):
         """Analyse un itinéraire alternatif et retourne les métriques."""
         with performance_tracker.measure_operation("analyze_alternative_route"):
-            alt_tolls_dict = locate_tolls(alt_route, "data/barriers.csv")
+            alt_tolls_dict = self.route_calculator.locate_and_cost_tolls(alt_route, veh_class, "analyze_alternative_route")
             alt_tolls_on_route = alt_tolls_dict["on_route"]
-            add_marginal_cost(alt_tolls_on_route, veh_class)
             
             cost = sum(t.get("cost", 0) for t in alt_tolls_on_route)
             duration = alt_route["features"][0]["properties"]["summary"]["duration"]

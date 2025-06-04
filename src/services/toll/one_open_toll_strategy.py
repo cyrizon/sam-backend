@@ -6,12 +6,12 @@ Stratégie pour calculer des itinéraires passant par exactement un péage à sy
 Responsabilité unique : optimiser les routes avec un seul péage ouvert.
 """
 
-from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity
-from src.services.toll_cost import add_marginal_cost
-from src.utils.poly_utils import avoidance_multipolygon
+from src.services.toll_locator import get_all_open_tolls_by_proximity
 from src.utils.route_utils import is_toll_open_system, merge_routes, format_route_result
 from src.services.toll.result_manager import RouteResultManager
 from benchmark.performance_tracker import performance_tracker
+from src.services.toll.route_calculator import RouteCalculator
+from src.services.toll_cost import add_marginal_cost
 
 
 class OneOpenTollStrategy:
@@ -27,6 +27,7 @@ class OneOpenTollStrategy:
             ors_service: Instance de ORSService pour les appels API
         """
         self.ors = ors_service
+        self.route_calculator = RouteCalculator(ors_service)  # Ajouter cette ligne
     
     def compute_route_with_one_open_toll(self, coordinates, veh_class="c1"):
         """
@@ -44,9 +45,7 @@ class OneOpenTollStrategy:
             
             # 1) Obtenir la route de base pour identifier les péages à proximité
             try:
-                with performance_tracker.measure_operation("ORS_base_route_one_toll"):
-                    performance_tracker.count_api_call("ORS_base_route")
-                    base_route = self.ors.get_base_route(coordinates)
+                base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
             except Exception as e:
                 performance_tracker.log_error(f"Erreur lors de l'appel initial à ORS: {e}")
                 print(f"Erreur lors de l'appel initial à ORS: {e}")
@@ -54,7 +53,7 @@ class OneOpenTollStrategy:
             
             # 2) Localiser tous les péages sur et à proximité de la route
             with performance_tracker.measure_operation("locate_tolls_one_toll"):
-                tolls_dict = locate_tolls(base_route, "data/barriers.csv")
+                tolls_dict = self.route_calculator.locate_and_cost_tolls(base_route, veh_class, "locate_tolls_one_toll")
                 tolls_on_route = tolls_dict["on_route"]
                 tolls_nearby = tolls_dict["nearby"]
                 local_tolls = tolls_on_route + tolls_nearby
@@ -197,55 +196,15 @@ class OneOpenTollStrategy:
         Args:
             coordinates: Coordonnées de la partie [départ, arrivée]
             target_toll_id: ID du péage cible à conserver
-            veh_class: Classe de véhicule
+            veh_class: Classe de véhicule (non utilisé ici mais gardé pour compatibilité)
             part_name: Nom de la partie pour le logging
             
         Returns:
             dict: {"route": route_data, "tolls": tolls_list} ou None
         """
-        payload = {
-            "coordinates": coordinates,
-            "extra_info": ["tollways"]
-        }
-        
-        try:
-            # Premier appel sans restrictions
-            with performance_tracker.measure_operation(f"ORS_{part_name}_route"):
-                performance_tracker.count_api_call("ORS_alternative_route")
-                route = self.ors.call_ors(payload)
-            
-            # Vérifier les péages présents
-            with performance_tracker.measure_operation(f"locate_tolls_{part_name}"):
-                tolls = locate_tolls(route, "data/barriers.csv")["on_route"]
-            
-            # Si des péages indésirables sont présents, les éviter
-            unwanted_tolls = [t for t in tolls if t["id"] != target_toll_id]
-            
-            if unwanted_tolls:
-                with performance_tracker.measure_operation("create_avoidance_polygon"):
-                    avoid_poly = avoidance_multipolygon(unwanted_tolls)
-                
-                payload["options"] = {"avoid_polygons": avoid_poly}
-                
-                with performance_tracker.measure_operation(f"ORS_{part_name}_route_avoid"):
-                    performance_tracker.count_api_call("ORS_alternative_route")
-                    route = self.ors.call_ors(payload)
-                
-                # Vérification finale
-                with performance_tracker.measure_operation(f"locate_tolls_{part_name}_verify"):
-                    tolls = locate_tolls(route, "data/barriers.csv")["on_route"]
-                
-                # Vérifier qu'on a bien évité les péages indésirables
-                final_unwanted = [t for t in tolls if t["id"] != target_toll_id]
-                if final_unwanted:
-                    print(f"Impossible d'éviter les péages indésirables sur {part_name}: {[t['id'] for t in final_unwanted]}")
-                    return None
-            
-            return {"route": route, "tolls": tolls}
-            
-        except Exception as e:
-            performance_tracker.log_error(f"Erreur lors du calcul de {part_name}: {e}")
-            return None
+        return self.route_calculator.calculate_route_avoiding_unwanted_tolls(
+            coordinates, target_toll_id, part_name
+        )
     
     def _analyze_final_results(self, result_manager):
         """

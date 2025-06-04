@@ -6,10 +6,9 @@ Stratégie pour calculer des itinéraires sans péage.
 Responsabilité unique : éviter complètement les péages.
 """
 
-from src.services.toll_locator import locate_tolls
-from src.services.toll_cost import add_marginal_cost
 from src.utils.route_utils import format_route_result
 from benchmark.performance_tracker import performance_tracker
+from src.services.toll.route_calculator import RouteCalculator
 
 
 class NoTollStrategy:
@@ -25,33 +24,26 @@ class NoTollStrategy:
             ors_service: Instance de ORSService pour les appels API
         """
         self.ors = ors_service
+        self.route_calculator = RouteCalculator(ors_service)  # Ajouter cette ligne
     
     def compute_route_no_toll(self, coordinates, veh_class="c1"):
         """
         Calcule un itinéraire sans péage en utilisant l'option avoid_features.
-        
-        Args:
-            coordinates: Liste de coordonnées [départ, arrivée]
-            veh_class: Classe de véhicule pour le calcul des coûts
-            
-        Returns:
-            tuple: (route_data, status_code)
         """
         with performance_tracker.measure_operation("compute_route_no_toll"):
             print("Recherche d'un itinéraire sans péage...")
             
             try:
-                with performance_tracker.measure_operation("ORS_avoid_tollways"):
-                    performance_tracker.count_api_call("ORS_avoid_tollways")
-                    toll_free_route = self.ors.get_route_avoid_tollways(coordinates)
+                toll_free_route = self.route_calculator.get_route_avoid_tollways_with_tracking(coordinates)
                 
-                # Vérification qu'il n'y a vraiment pas de péage
-                with performance_tracker.measure_operation("locate_tolls_no_toll"):
-                    tolls_on_route = locate_tolls(toll_free_route, "data/barriers.csv")["on_route"]
+                # Vérification avec le calculateur
+                tolls_dict = self.route_calculator.locate_and_cost_tolls(
+                    toll_free_route, veh_class, "locate_tolls_no_toll"
+                )
+                tolls_on_route = tolls_dict["on_route"]
                 
                 if tolls_on_route:
                     print(f"Attention: l'itinéraire sans péage contient quand même {len(tolls_on_route)} péages")
-                    add_marginal_cost(tolls_on_route, veh_class)
                     cost = sum(t.get("cost", 0) for t in tolls_on_route)
                     
                     return format_route_result(
