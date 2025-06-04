@@ -151,7 +151,7 @@ class PerformanceTracker:
     
     @contextmanager
     def measure_operation(self, operation: str, details: Dict[str, Any] = None):
-        """Context manager to measure operation duration"""
+        """Context manager to measure operation duration with progress info"""
         start_time = time.perf_counter()
         start_timestamp = datetime.now().isoformat()
         
@@ -171,17 +171,25 @@ class PerformanceTracker:
             with self._lock:
                 self._metrics.append(metric)
             
-            # Log slow operations immediately
+            # Log avec compteurs API si disponibles
+            total_api_calls = sum(self._api_calls.values())
+            
+            # Log slow operations immediately avec compteurs
             if duration_ms > 5000:  # 5 seconds
-                self.logger.warning(f"Slow operation: {operation} took {duration_ms:.2f}ms")
+                self.logger.warning(f"Slow operation: {operation} took {duration_ms:.2f}ms | Total API calls: {total_api_calls}")
             elif duration_ms > 1000:  # 1 second
-                self.logger.info(f"Operation: {operation} took {duration_ms:.2f}ms")
-    
+                self.logger.info(f"Operation: {operation} took {duration_ms:.2f}ms | Total API calls: {total_api_calls}")
+
     def count_api_call(self, api_name: str):
-        """Increment API call counter"""
+        """Increment API call counter with immediate logging"""
         with self._lock:
             self._api_calls[api_name] = self._api_calls.get(api_name, 0) + 1
-    
+            total_calls = sum(self._api_calls.values())
+        
+        # Log tous les 5 appels pour suivre la progression
+        if total_calls % 5 == 0:
+            self.logger.info(f"🔄 API Progress: {total_calls} total calls | Latest: {api_name} (#{self._api_calls[api_name]})")
+
     def log_error(self, error_msg: str):
         """Log an error during optimization"""
         with self._lock:
@@ -208,7 +216,7 @@ class PerformanceTracker:
             self.logger.error(f"Failed to save session data: {e}")
     
     def _log_session_summary(self):
-        """Log a summary of the optimization session"""
+        """Log a comprehensive summary of the optimization session"""
         if not self._current_session:
             return
         
@@ -216,57 +224,113 @@ class PerformanceTracker:
         total_api_calls = sum(session.api_calls.values())
         
         summary = f"""
-Optimization Session Summary - {session.session_id}
-=================================================
-Route: {session.origin} -> {session.destination}
-Distance: {session.route_distance_km:.1f} km
-Total Duration: {session.total_duration_ms:.2f}ms
-Operations Measured: {len(session.metrics)}
-API Calls: {total_api_calls}
-Toll Networks: {', '.join(session.toll_networks) if session.toll_networks else 'None'}
-Errors: {len(session.errors)}
+🎯 RÉSUMÉ COMPLET - Session {session.session_id}
+================================================================
+📍 Itinéraire: {session.origin} -> {session.destination}
+📏 Distance: {session.route_distance_km:.1f} km
+⏱️  Durée totale: {session.total_duration_ms:.2f}ms ({session.total_duration_ms/1000:.1f}s)
+🔧 Opérations mesurées: {len(session.metrics)}
+🌐 Appels API totaux: {total_api_calls}
+🛣️  Réseaux de péage: {', '.join(session.toll_networks) if session.toll_networks else 'Aucun'}
+❌ Erreurs: {len(session.errors)}
 
-Performance Breakdown:
+📊 DÉTAIL DES APPELS API:
 """
+    
+        if session.api_calls:
+            for api, count in sorted(session.api_calls.items(), key=lambda x: x[1], reverse=True):
+                percentage = (count / total_api_calls * 100) if total_api_calls > 0 else 0
+                summary += f"   🔗 {api}: {count} appels ({percentage:.1f}%)\n"
+        else:
+            summary += "   Aucun appel API enregistré\n"
+        
+        summary += "\n⚡ PERFORMANCE PAR OPÉRATION:\n"
         
         # Group metrics by operation
         operation_stats = {}
         for metric in session.metrics:
             op = metric.operation
             if op not in operation_stats:
-                operation_stats[op] = {'count': 0, 'total_ms': 0, 'max_ms': 0}
+                operation_stats[op] = {'count': 0, 'total_ms': 0, 'max_ms': 0, 'min_ms': float('inf')}
             
             operation_stats[op]['count'] += 1
             operation_stats[op]['total_ms'] += metric.duration_ms
             operation_stats[op]['max_ms'] = max(operation_stats[op]['max_ms'], metric.duration_ms)
+            operation_stats[op]['min_ms'] = min(operation_stats[op]['min_ms'], metric.duration_ms)
         
-        for op, stats in operation_stats.items():
+        # Sort by total time consumed
+        sorted_ops = sorted(operation_stats.items(), key=lambda x: x[1]['total_ms'], reverse=True)
+        
+        for op, stats in sorted_ops:
             avg_ms = stats['total_ms'] / stats['count']
-            summary += f"  {op}: {stats['count']}x, avg: {avg_ms:.2f}ms, max: {stats['max_ms']:.2f}ms, total: {stats['total_ms']:.2f}ms\n"
+            percentage = (stats['total_ms'] / session.total_duration_ms * 100) if session.total_duration_ms > 0 else 0
+            
+            summary += f"   📈 {op}:\n"
+            summary += f"      • Exécutions: {stats['count']}x\n"
+            summary += f"      • Temps total: {stats['total_ms']:.2f}ms ({percentage:.1f}% du total)\n"
+            summary += f"      • Moyenne: {avg_ms:.2f}ms\n"
+            summary += f"      • Min/Max: {stats['min_ms']:.2f}ms / {stats['max_ms']:.2f}ms\n\n"
         
-        if session.api_calls:
-            summary += "\nAPI Calls:\n"
-            for api, count in session.api_calls.items():
-                summary += f"  {api}: {count}\n"
+        # Performance insights
+        summary += "🔍 ANALYSE DE PERFORMANCE:\n"
+        
+        # Find bottlenecks
+        if operation_stats:
+            slowest_op = max(operation_stats.items(), key=lambda x: x[1]['max_ms'])
+            most_time_consuming = max(operation_stats.items(), key=lambda x: x[1]['total_ms'])
+            most_frequent = max(operation_stats.items(), key=lambda x: x[1]['count'])
+            
+            summary += f"   🐌 Opération la plus lente: {slowest_op[0]} ({slowest_op[1]['max_ms']:.2f}ms)\n"
+            summary += f"   ⏰ Plus consommatrice de temps: {most_time_consuming[0]} ({most_time_consuming[1]['total_ms']:.2f}ms total)\n"
+            summary += f"   🔄 Plus fréquente: {most_frequent[0]} ({most_frequent[1]['count']} exécutions)\n"
+            
+            # API call efficiency
+            if total_api_calls > 0:
+                api_time_per_call = session.total_duration_ms / total_api_calls
+                summary += f"   📡 Temps moyen par appel API: {api_time_per_call:.2f}ms\n"
+                
+                if api_time_per_call > 3000:
+                    summary += "   ⚠️  Les appels API sont lents (>3s en moyenne)\n"
+                
+                if total_api_calls > 100:
+                    summary += "   ⚠️  Nombre élevé d'appels API - considérer la mise en cache\n"
         
         if session.errors:
-            summary += f"\nErrors: {len(session.errors)}\n"
+            summary += f"\n❌ ERREURS ({len(session.errors)}):\n"
+            for i, error in enumerate(session.errors[-5:], 1):  # Show last 5 errors
+                summary += f"   {i}. {error}\n"
+            if len(session.errors) > 5:
+                summary += f"   ... et {len(session.errors) - 5} autres erreurs\n"
+        
+        summary += "\n" + "="*80 + "\n"
         
         self.logger.info(summary)
     
     def get_current_stats(self) -> Dict[str, Any]:
-        """Get current session statistics"""
+        """Get current session statistics with real-time display"""
         with self._lock:
             if not self._current_session:
                 return {}
             
-            return {
+            stats = {
                 'session_id': self._current_session.session_id,
                 'operations_count': len(self._metrics),
                 'api_calls': self._api_calls.copy(),
                 'errors_count': len(self._errors),
                 'elapsed_time_ms': (datetime.now() - datetime.fromisoformat(self._current_session.start_time)).total_seconds() * 1000
             }
+            
+            # Affichage temps réel des stats importantes
+            total_api_calls = sum(self._api_calls.values())
+            print(f"\n📊 STATS TEMPS RÉEL:")
+            print(f"   Opérations: {len(self._metrics)}")
+            print(f"   Appels API: {total_api_calls}")
+            for api, count in self._api_calls.items():
+                print(f"     - {api}: {count}")
+            print(f"   Erreurs: {len(self._errors)}")
+            print(f"   Temps écoulé: {stats['elapsed_time_ms']/1000:.1f}s\n")
+            
+            return stats
     
     def analyze_performance_bottlenecks(self, session_file: str = None) -> Dict[str, Any]:
         """Analyze performance bottlenecks from session data"""

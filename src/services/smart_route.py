@@ -53,12 +53,25 @@ class SmartRouteService:
         Returns:
             dict: Résultats optimisés (fastest, cheapest, min_tolls, status)
         """
-        return self.toll_optimizer.compute_route_with_toll_limit(
-            coordinates,
-            max_tolls,
-            veh_class,
-            max_comb_size
+        # DÉMARRER LA SESSION
+        from benchmark.performance_tracker import performance_tracker
+        session_id = performance_tracker.start_optimization_session(
+            origin=f"{coordinates[0][1]:.3f},{coordinates[0][0]:.3f}",
+            destination=f"{coordinates[1][1]:.3f},{coordinates[1][0]:.3f}",
+            route_distance_km=0
         )
+        
+        try:
+            result = self.toll_optimizer.compute_route_with_toll_limit(
+                coordinates,
+                max_tolls,
+                veh_class,
+                max_comb_size
+            )
+            return result
+        finally:
+            # TERMINER LA SESSION - Le résumé sera automatiquement loggé
+            performance_tracker.end_optimization_session(result if 'result' in locals() else {})
     
     def compute_route_with_budget_limit(
         self,
