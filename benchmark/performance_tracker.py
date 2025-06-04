@@ -149,6 +149,16 @@ class PerformanceTracker:
             self._current_session = None
             return session_id
     
+    def count_api_call(self, api_name: str):
+        """Increment API call counter with immediate logging"""
+        with self._lock:
+            self._api_calls[api_name] = self._api_calls.get(api_name, 0) + 1
+            total_calls = sum(self._api_calls.values())
+        
+        # Log every 10 calls for progress tracking
+        if total_calls % 10 == 0:
+            self.logger.info(f"API Progress: {total_calls} total calls | Latest: {api_name} (#{self._api_calls[api_name]})")
+
     @contextmanager
     def measure_operation(self, operation: str, details: Dict[str, Any] = None):
         """Context manager to measure operation duration with progress info"""
@@ -171,24 +181,13 @@ class PerformanceTracker:
             with self._lock:
                 self._metrics.append(metric)
             
-            # Log avec compteurs API si disponibles
             total_api_calls = sum(self._api_calls.values())
             
-            # Log slow operations immediately avec compteurs
+            # Log slow operations immediately
             if duration_ms > 5000:  # 5 seconds
                 self.logger.warning(f"Slow operation: {operation} took {duration_ms:.2f}ms | Total API calls: {total_api_calls}")
             elif duration_ms > 1000:  # 1 second
                 self.logger.info(f"Operation: {operation} took {duration_ms:.2f}ms | Total API calls: {total_api_calls}")
-
-    def count_api_call(self, api_name: str):
-        """Increment API call counter with immediate logging"""
-        with self._lock:
-            self._api_calls[api_name] = self._api_calls.get(api_name, 0) + 1
-            total_calls = sum(self._api_calls.values())
-        
-        # Log tous les 5 appels pour suivre la progression
-        if total_calls % 5 == 0:
-            self.logger.info(f"🔄 API Progress: {total_calls} total calls | Latest: {api_name} (#{self._api_calls[api_name]})")
 
     def log_error(self, error_msg: str):
         """Log an error during optimization"""
@@ -224,27 +223,27 @@ class PerformanceTracker:
         total_api_calls = sum(session.api_calls.values())
         
         summary = f"""
-🎯 RÉSUMÉ COMPLET - Session {session.session_id}
+ROUTE OPTIMIZATION SESSION SUMMARY - {session.session_id}
 ================================================================
-📍 Itinéraire: {session.origin} -> {session.destination}
-📏 Distance: {session.route_distance_km:.1f} km
-⏱️  Durée totale: {session.total_duration_ms:.2f}ms ({session.total_duration_ms/1000:.1f}s)
-🔧 Opérations mesurées: {len(session.metrics)}
-🌐 Appels API totaux: {total_api_calls}
-🛣️  Réseaux de péage: {', '.join(session.toll_networks) if session.toll_networks else 'Aucun'}
-❌ Erreurs: {len(session.errors)}
+Route: {session.origin} -> {session.destination}
+Distance: {session.route_distance_km:.1f} km
+Total Duration: {session.total_duration_ms:.2f}ms ({session.total_duration_ms/1000:.1f}s)
+Operations Measured: {len(session.metrics)}
+Total API Calls: {total_api_calls}
+Toll Networks: {', '.join(session.toll_networks) if session.toll_networks else 'None'}
+Errors: {len(session.errors)}
 
-📊 DÉTAIL DES APPELS API:
+API CALLS BREAKDOWN:
 """
-    
+
         if session.api_calls:
             for api, count in sorted(session.api_calls.items(), key=lambda x: x[1], reverse=True):
                 percentage = (count / total_api_calls * 100) if total_api_calls > 0 else 0
-                summary += f"   🔗 {api}: {count} appels ({percentage:.1f}%)\n"
+                summary += f"  {api}: {count} calls ({percentage:.1f}%)\n"
         else:
-            summary += "   Aucun appel API enregistré\n"
+            summary += "  No API calls recorded\n"
         
-        summary += "\n⚡ PERFORMANCE PAR OPÉRATION:\n"
+        summary += "\nPERFORMANCE BY OPERATION:\n"
         
         # Group metrics by operation
         operation_stats = {}
@@ -261,46 +260,53 @@ class PerformanceTracker:
         # Sort by total time consumed
         sorted_ops = sorted(operation_stats.items(), key=lambda x: x[1]['total_ms'], reverse=True)
         
-        for op, stats in sorted_ops:
+        for op, stats in sorted_ops[:10]:  # Top 10 operations only
             avg_ms = stats['total_ms'] / stats['count']
             percentage = (stats['total_ms'] / session.total_duration_ms * 100) if session.total_duration_ms > 0 else 0
             
-            summary += f"   📈 {op}:\n"
-            summary += f"      • Exécutions: {stats['count']}x\n"
-            summary += f"      • Temps total: {stats['total_ms']:.2f}ms ({percentage:.1f}% du total)\n"
-            summary += f"      • Moyenne: {avg_ms:.2f}ms\n"
-            summary += f"      • Min/Max: {stats['min_ms']:.2f}ms / {stats['max_ms']:.2f}ms\n\n"
+            summary += f"  {op}:\n"
+            summary += f"    Executions: {stats['count']}x\n"
+            summary += f"    Total Time: {stats['total_ms']:.2f}ms ({percentage:.1f}% of total)\n"
+            summary += f"    Average: {avg_ms:.2f}ms\n"
+            summary += f"    Min/Max: {stats['min_ms']:.2f}ms / {stats['max_ms']:.2f}ms\n\n"
         
-        # Performance insights
-        summary += "🔍 ANALYSE DE PERFORMANCE:\n"
+        # Performance analysis
+        summary += "PERFORMANCE ANALYSIS:\n"
         
-        # Find bottlenecks
         if operation_stats:
             slowest_op = max(operation_stats.items(), key=lambda x: x[1]['max_ms'])
             most_time_consuming = max(operation_stats.items(), key=lambda x: x[1]['total_ms'])
             most_frequent = max(operation_stats.items(), key=lambda x: x[1]['count'])
             
-            summary += f"   🐌 Opération la plus lente: {slowest_op[0]} ({slowest_op[1]['max_ms']:.2f}ms)\n"
-            summary += f"   ⏰ Plus consommatrice de temps: {most_time_consuming[0]} ({most_time_consuming[1]['total_ms']:.2f}ms total)\n"
-            summary += f"   🔄 Plus fréquente: {most_frequent[0]} ({most_frequent[1]['count']} exécutions)\n"
+            summary += f"  Slowest Single Operation: {slowest_op[0]} ({slowest_op[1]['max_ms']:.2f}ms)\n"
+            summary += f"  Most Time Consuming: {most_time_consuming[0]} ({most_time_consuming[1]['total_ms']:.2f}ms total)\n"
+            summary += f"  Most Frequent: {most_frequent[0]} ({most_frequent[1]['count']} executions)\n"
             
-            # API call efficiency
+            # API efficiency metrics
             if total_api_calls > 0:
                 api_time_per_call = session.total_duration_ms / total_api_calls
-                summary += f"   📡 Temps moyen par appel API: {api_time_per_call:.2f}ms\n"
+                summary += f"  Average Time per API Call: {api_time_per_call:.2f}ms\n"
                 
+                # Performance warnings
+                warnings = []
                 if api_time_per_call > 3000:
-                    summary += "   ⚠️  Les appels API sont lents (>3s en moyenne)\n"
-                
+                    warnings.append("API calls are slow (>3s average)")
                 if total_api_calls > 100:
-                    summary += "   ⚠️  Nombre élevé d'appels API - considérer la mise en cache\n"
+                    warnings.append("High number of API calls - consider caching")
+                if session.total_duration_ms > 60000:
+                    warnings.append("Optimization taking too long (>1 minute)")
+                
+                if warnings:
+                    summary += "\n  PERFORMANCE WARNINGS:\n"
+                    for warning in warnings:
+                        summary += f"    - {warning}\n"
         
         if session.errors:
-            summary += f"\n❌ ERREURS ({len(session.errors)}):\n"
+            summary += f"\nERRORS ({len(session.errors)}):\n"
             for i, error in enumerate(session.errors[-5:], 1):  # Show last 5 errors
-                summary += f"   {i}. {error}\n"
+                summary += f"  {i}. {error}\n"
             if len(session.errors) > 5:
-                summary += f"   ... et {len(session.errors) - 5} autres erreurs\n"
+                summary += f"  ... and {len(session.errors) - 5} more errors\n"
         
         summary += "\n" + "="*80 + "\n"
         
