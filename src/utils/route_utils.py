@@ -56,29 +56,3 @@ def merge_routes(route1, route2):
     }
     
     return merged
-
-def format_route_result(route, cost, duration, toll_count, toll_id=None):
-    """
-    Formate le résultat d'un calcul d'itinéraire de manière standardisée.
-    
-    Args:
-        route: Données GeoJSON de l'itinéraire
-        cost: Coût total des péages
-        duration: Durée totale du trajet
-        toll_count: Nombre de péages sur l'itinéraire
-        toll_id: Identifiant du péage principal (optionnel)
-        
-    Returns:
-        dict: Résultat formaté de manière standard
-    """
-    result = {
-        "route": route,
-        "cost": cost,
-        "duration": duration,
-        "toll_count": toll_count
-    }
-    
-    if toll_id is not None:
-        result["toll_id"] = toll_id
-        
-    return result

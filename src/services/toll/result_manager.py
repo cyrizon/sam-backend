@@ -6,7 +6,7 @@ Gestionnaire pour comparer et sélectionner les meilleurs itinéraires.
 Responsabilité unique : gérer les critères d'optimisation (coût, durée, nombre de péages).
 """
 
-from src.utils.route_utils import format_route_result
+from src.services.toll.result_formatter import ResultFormatter
 from src.services.toll.constants import TollOptimizationConfig as Config
 
 
@@ -47,7 +47,7 @@ class RouteResultManager:
             max_tolls: Nombre maximum de péages autorisés
         """
         if base_toll_count <= max_tolls:
-            base_result = format_route_result(base_route, base_cost, base_duration, base_toll_count)
+            base_result = ResultFormatter.format_route_result(base_route, base_cost, base_duration, base_toll_count)
             self.best_cheap = base_result.copy()
             self.best_fast = base_result.copy()
             self.best_min_tolls = base_result.copy()
@@ -103,7 +103,7 @@ class RouteResultManager:
             max_tolls: Nombre maximum de péages autorisés
         """
         if base_toll_count <= max_tolls:
-            base_result = format_route_result(base_route, base_cost, base_duration, base_toll_count)
+            base_result = ResultFormatter.format_route_result(base_route, base_cost, base_duration, base_toll_count)
             
             if self.best_fast["route"] is None:
                 self.best_fast = base_result.copy()
@@ -193,11 +193,4 @@ class RouteResultManager:
         Returns:
             dict: Résultat uniforme avec status
         """
-        manager = cls()
-        manager.best_cheap = route_result
-        manager.best_fast = route_result
-        manager.best_min_tolls = route_result
-        
-        results = manager.get_results()
-        results["status"] = status
-        return results
+        return ResultFormatter.format_uniform_result(route_result, status)

@@ -6,12 +6,12 @@ Stratégie pour calculer des itinéraires sans péage.
 Responsabilité unique : éviter complètement les péages.
 """
 
-from src.utils.route_utils import format_route_result
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.exceptions import NoTollRouteError
 from src.services.toll.error_handler import ErrorHandler
+from src.services.toll.result_formatter import ResultFormatter
 
 
 class NoTollStrategy:
@@ -49,14 +49,14 @@ class NoTollStrategy:
                     print(Config.Messages.ATTENTION_TOLLS_PRESENT.format(count=len(tolls_on_route)))
                     cost = sum(t.get("cost", 0) for t in tolls_on_route)
                     
-                    return format_route_result(
+                    return ResultFormatter.format_route_result(
                         toll_free_route,
                         cost,
                         toll_free_route["features"][0]["properties"]["summary"]["duration"],
                         len(tolls_on_route)
                     ), Config.StatusCodes.SOME_TOLLS_PRESENT
                 else:
-                    return format_route_result(
+                    return ResultFormatter.format_route_result(
                         toll_free_route,
                         0,
                         toll_free_route["features"][0]["properties"]["summary"]["duration"],

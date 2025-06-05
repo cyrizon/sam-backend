@@ -7,7 +7,7 @@ Responsabilité unique : optimiser les routes avec un seul péage ouvert.
 """
 
 from src.services.toll_locator import get_all_open_tolls_by_proximity
-from src.utils.route_utils import is_toll_open_system, merge_routes, format_route_result
+from src.utils.route_utils import is_toll_open_system, merge_routes
 from src.services.toll.result_manager import RouteResultManager
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
@@ -16,6 +16,7 @@ from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.route_validator import RouteValidator
 from src.services.toll.exceptions import ORSConnectionError, NoOpenTollError
 from src.services.toll.error_handler import ErrorHandler
+from src.services.toll.result_formatter import ResultFormatter
 
 
 class OneOpenTollStrategy:
@@ -186,7 +187,7 @@ class OneOpenTollStrategy:
             else:
                 print(Config.Messages.SOLUTION_MULTIPLE_TOLLS.format(toll_count=toll_count, toll_id=toll['id'], cost=cost, duration=duration/60))
 
-            return format_route_result(merged_route, cost, duration, toll_count, toll["id"])
+            return ResultFormatter.format_route_result(merged_route, cost, duration, toll_count, toll["id"])
     
         except Exception as e:
             return ErrorHandler.handle_route_calculation_error(e, toll_id=toll['id'])
@@ -243,12 +244,12 @@ class OneOpenTollStrategy:
             
             # Si on a trouvé une solution avec un péage ouvert, on l'utilise directement
             if one_open_result and open_status == Config.StatusCodes.ONE_OPEN_TOLL_SUCCESS:
-                return {
-                    "fastest": one_open_result,
-                    "cheapest": one_open_result,
-                    "min_tolls": one_open_result,
-                    "status": open_status
-                }
+                return ResultFormatter.format_optimization_results(
+                    fastest=one_open_result,
+                    cheapest=one_open_result,
+                    min_tolls=one_open_result,
+                    status=open_status
+                )
             
             # Si l'approche spécialisée n'a pas fonctionné, utiliser la stratégie générale
             from src.services.toll.many_tolls_strategy import ManyTollsStrategy
@@ -272,12 +273,12 @@ class OneOpenTollStrategy:
                     cheapest = min_tolls
                     status = Config.StatusCodes.GENERAL_STRATEGY_WITH_MIN_TOLLS
                 
-                return {
-                    "fastest": fastest,
-                    "cheapest": cheapest,
-                    "min_tolls": min_tolls,
-                    "status": status
-                }
+                return ResultFormatter.format_optimization_results(
+                    fastest=fastest,
+                    cheapest=cheapest,
+                    min_tolls=min_tolls,
+                    status=status
+                )
             
             # Aucune solution trouvée
             else:

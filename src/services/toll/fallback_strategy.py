@@ -5,7 +5,7 @@ fallback_strategy.py
 Stratégie de repli pour générer une route de base quand aucune solution n'est trouvée.
 """
 
-from src.utils.route_utils import format_route_result
+from src.services.toll.result_formatter import ResultFormatter
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.constants import TollOptimizationConfig as Config
@@ -44,11 +44,11 @@ class FallbackStrategy:
             base_cost = sum(t.get("cost", 0) for t in tolls_dict["on_route"])
             base_duration = base_route["features"][0]["properties"]["summary"]["duration"]
             
-            result = format_route_result(
+            result = ResultFormatter.format_route_result(
                 base_route,
                 base_cost,
                 base_duration,
                 len(tolls_dict["on_route"])
             )
             
-            return RouteResultManager.create_uniform_result(result, status)
+            return ResultFormatter.format_uniform_result(result, status)

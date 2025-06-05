@@ -8,7 +8,7 @@ Responsabilité unique : optimiser les routes en testant des combinaisons de pé
 
 from itertools import combinations
 from src.utils.poly_utils import avoidance_multipolygon
-from src.utils.route_utils import format_route_result
+from src.services.toll.result_formatter import ResultFormatter
 from src.services.toll.result_manager import RouteResultManager
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
@@ -102,16 +102,27 @@ class ManyTollsStrategy:
                 return None
                 
             results = result_manager.get_results()
-            results["status"] = Config.StatusCodes.MULTI_TOLL_SUCCESS
-            return results
+            return ResultFormatter.format_optimization_results(
+                fastest=results["fastest"],
+                cheapest=results["cheapest"],
+                min_tolls=results["min_tolls"],
+                status=Config.StatusCodes.MULTI_TOLL_SUCCESS
+            )
     
     def _create_base_route_result(self, base_route):
         """Crée un résultat avec la route de base quand aucun péage n'est trouvé."""
-        return {
-            "fastest": format_route_result(base_route, 0, base_route["features"][0]["properties"]["summary"]["duration"], 0),
-            "cheapest": format_route_result(base_route, 0, base_route["features"][0]["properties"]["summary"]["duration"], 0),
-            "min_tolls": format_route_result(base_route, 0, base_route["features"][0]["properties"]["summary"]["duration"], 0)
-        }
+        base_result = ResultFormatter.format_route_result(
+            base_route, 0, 
+            base_route["features"][0]["properties"]["summary"]["duration"], 
+            0
+        )
+        
+        return ResultFormatter.format_optimization_results(
+            fastest=base_result,
+            cheapest=base_result,
+            min_tolls=base_result,
+            status=Config.StatusCodes.MULTI_TOLL_SUCCESS
+        )
     
     def _get_base_metrics(self, base_route, veh_class):
         """Calcule les métriques de la route de base."""
@@ -209,4 +220,4 @@ class ManyTollsStrategy:
             ):
                 return None
                 
-            return format_route_result(alt_route, cost, duration, toll_count)
+            return ResultFormatter.format_route_result(alt_route, cost, duration, toll_count)

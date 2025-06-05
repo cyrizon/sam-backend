@@ -11,7 +11,6 @@ from itertools import combinations
 from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity
 from src.services.toll_cost import add_marginal_cost
 from src.utils.poly_utils import avoidance_multipolygon
-from src.utils.route_utils import format_route_result
 
 class BudgetRouteOptimizer:
     """
