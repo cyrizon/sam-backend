@@ -8,9 +8,11 @@ Intègre le système de mesure des performances pour optimiser les appels.
 
 from benchmark.performance_tracker import performance_tracker
 from src.services.budget.zero_budget_strategy import ZeroBudgetStrategy
+from src.services.budget.percentage_budget_strategy import PercentageBudgetStrategy
+from src.services.budget.absolute_budget_strategy import AbsoluteBudgetStrategy
 from src.services.budget.constants import BudgetOptimizationConfig as Config
 from src.services.budget.error_handler import BudgetErrorHandler
-from src.services.toll.result_formatter import ResultFormatter  # Utiliser le formatter toll
+from src.services.toll.result_formatter import ResultFormatter
 from itertools import combinations
 from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity
 from src.services.toll_cost import add_marginal_cost
@@ -32,6 +34,8 @@ class BudgetRouteOptimizer:
         """
         self.ors = ors_service
         self.zero_budget_strategy = ZeroBudgetStrategy(ors_service)
+        self.percentage_budget_strategy = PercentageBudgetStrategy(ors_service)
+        self.absolute_budget_strategy = AbsoluteBudgetStrategy(ors_service)
     
     def compute_route_with_budget_limit(
         self,
@@ -108,22 +112,12 @@ class BudgetRouteOptimizer:
         return self.zero_budget_strategy.handle_zero_budget_route(coordinates, veh_class)
     
     def _handle_percentage_budget_route(self, coordinates, max_price_percent, veh_class, max_comb_size):
-        """
-        Gère les contraintes de budget en pourcentage.
-        À implémenter dans la prochaine stratégie.
-        """
-        print(f"Contrainte de budget en pourcentage: {max_price_percent*100}%")
-        # Pour l'instant, on utilise l'ancienne logique
-        return self._compute_budget_with_legacy_logic(coordinates, None, max_price_percent, veh_class, max_comb_size)
+        """Délègue à la stratégie spécialisée pour budget en pourcentage"""
+        return self.percentage_budget_strategy.handle_percentage_budget_route(coordinates, max_price_percent, veh_class, max_comb_size)
     
     def _handle_absolute_budget_route(self, coordinates, max_price, veh_class, max_comb_size):
-        """
-        Gère les contraintes de budget absolu en euros.
-        À implémenter dans la prochaine stratégie.
-        """
-        print(f"Contrainte de budget absolu: {max_price}€")
-        # Pour l'instant, on utilise l'ancienne logique
-        return self._compute_budget_with_legacy_logic(coordinates, max_price, None, veh_class, max_comb_size)
+        """Délègue à la stratégie spécialisée pour budget absolu"""
+        return self.absolute_budget_strategy.handle_absolute_budget_route(coordinates, max_price, veh_class, max_comb_size)
     
     def _handle_no_budget_constraint(self, coordinates, veh_class):
         """
@@ -473,7 +467,7 @@ class BudgetRouteOptimizer:
                     # Si c'est une route qui a le même coût que la moins chère et est plus rapide
                     if abs(cost - min_cost) < 0.01 and duration < fastest_of_cheapest["duration"]:
                         print(f"Trouvé un itinéraire plus rapide avec le même coût minimal: {duration/60:.1f}min vs {fastest_of_cheapest['duration']/60:.1f}min")
-                        fastest_of_cheapest = format_route_result(
+                        fastest_of_cheapest = ResultFormatter.format_route_result(
                             alt_route,
                             cost,
                             duration,
@@ -519,7 +513,7 @@ class BudgetRouteOptimizer:
                         # Si c'est une route qui a le même coût que la moins chère et est plus rapide
                         if abs(cost - min_cost) < 0.01 and duration < fastest_of_cheapest["duration"]:
                             print(f"Trouvé un itinéraire plus rapide avec le même coût minimal: {duration/60:.1f}min vs {fastest_of_cheapest['duration']/60:.1f}min")
-                            fastest_of_cheapest = format_route_result(
+                            fastest_of_cheapest = ResultFormatter.format_route_result(
                                 alt_route,
                                 cost,
                                 duration,
@@ -541,8 +535,9 @@ class BudgetRouteOptimizer:
                   f"durée={best_fast_within_budget['duration']/60:.1f}min, tolls={best_fast_within_budget['toll_count']}")
             status = "BUDGET_SATISFIED"
         
-        return {
-            "fastest": best_fast_within_budget or best_cheap,
-            "cheapest": best_cheap,
-            "status": "BUDGET_SATISFIED" if best_fast_within_budget else "NO_ROUTE_WITHIN_BUDGET"
-        }
+        return ResultFormatter.format_optimization_results(
+            fastest=best_fast_within_budget or best_cheap,
+            cheapest=best_cheap,
+            min_tolls=best_cheap,  # Pour l'instant, même que cheapest
+            status=status if 'status' in locals() else ("BUDGET_SATISFIED" if best_fast_within_budget else "NO_ROUTE_WITHIN_BUDGET")
+        )

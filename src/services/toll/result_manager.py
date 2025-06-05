@@ -78,16 +78,13 @@ class RouteResultManager:
         if cost < self.best_cheap["cost"]:
             self.best_cheap = route_data.copy()
             updated = True
-            
-            # Si best_fast n'est pas encore défini ou si cet itinéraire est plus rapide
-            if self.best_fast["route"] is None or duration < self.best_fast["duration"]:
-                self.best_fast = route_data.copy()
         
-        # Mise à jour du plus rapide (seulement si le coût <= coût de base)
-        if cost <= base_cost:
-            if self.best_fast["route"] is None or duration < self.best_fast["duration"]:
-                self.best_fast = route_data.copy()
-                updated = True
+        # Mise à jour du plus rapide (priorité aux coûts plus faibles, puis à la durée)
+        if (cost < self.best_fast["cost"] or 
+            (cost == self.best_fast["cost"] and duration < self.best_fast["duration"]) or
+            self.best_fast["route"] is None):
+            self.best_fast = route_data.copy()
+            updated = True
         
         return updated
     
@@ -121,10 +118,11 @@ class RouteResultManager:
         Returns:
             dict: Dictionnaire avec fastest, cheapest, min_tolls
         """
+        # CORRECTION: Retourner des copies pour éviter les modifications accidentelles
         return {
-            "fastest": self.best_fast,
-            "cheapest": self.best_cheap,
-            "min_tolls": self.best_min_tolls
+            "fastest": self.best_fast.copy() if self.best_fast["route"] is not None else None,
+            "cheapest": self.best_cheap.copy() if self.best_cheap["route"] is not None else None,
+            "min_tolls": self.best_min_tolls.copy() if self.best_min_tolls["route"] is not None else None
         }
     
     def has_valid_results(self):

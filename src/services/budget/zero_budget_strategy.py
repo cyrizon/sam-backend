@@ -14,7 +14,6 @@ from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.error_handler import ErrorHandler
 from src.services.ors_config_manager import ORSConfigManager
 
-
 class ZeroBudgetStrategy:
     """
     Stratégie pour calculer des itinéraires avec budget zéro.
