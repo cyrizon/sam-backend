@@ -138,6 +138,11 @@ class TollOptimizationConfig:
         
         ATTENTION_TOLLS_PRESENT = "Attention: l'itinéraire sans péage contient quand même {count} péages"
         
+        # Coordinate validation errors
+        COORDINATE_VALIDATION_ERROR = "Erreur de validation des coordonnées: {error}"
+        INVALID_COORDINATE_FORMAT = "Format de coordonnée invalide: attendu [longitude, latitude]"
+        COORDINATE_OUT_OF_BOUNDS = "Coordonnée hors limites géographiques"
+        
     @staticmethod
     def get_barriers_csv_path():
         """

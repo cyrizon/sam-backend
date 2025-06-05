@@ -15,6 +15,7 @@ from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.route_validator import RouteValidator
 from src.services.toll.error_handler import ErrorHandler
+from src.services.ors_config_manager import ORSConfigManager
 
 
 class ManyTollsStrategy:
@@ -46,6 +47,12 @@ class ManyTollsStrategy:
         Returns:
             dict: Les meilleures routes trouvées (fastest, cheapest, min_tolls)
         """
+        # Validation précoce des coordonnées
+        try:
+            ORSConfigManager.validate_coordinates(coordinates)
+        except ValueError as e:
+            return ErrorHandler.handle_ors_error(e, "validation_coordinates")
+        
         with performance_tracker.measure_operation(Config.Operations.COMPUTE_ROUTE_MANY_TOLLS, {
             "max_tolls": max_tolls,
             "max_comb_size": max_comb_size

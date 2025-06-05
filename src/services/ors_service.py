@@ -7,6 +7,9 @@ Service pour les appels à l'API OpenRouteService.
 import os
 import requests
 import copy
+from src.services.ors_payload_builder import ORSPayloadBuilder
+from src.services.ors_config_manager import ORSConfigManager
+from benchmark.performance_tracker import performance_tracker
 
 class ORSService:
     def __init__(self):
@@ -55,17 +58,25 @@ class ORSService:
         Raises:
             requests.HTTPError: Si ORS retourne une erreur HTTP
         """
-        headers = {
-            "Content-Type": "application/json; charset=utf-8",
-            "Accept": "application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8",
-        }
-        
         if not self.directions_url:
             raise ValueError("ORS_BASE_URL n'est pas défini dans les variables d'environnement")
+        
+        # Calculer le timeout optimal
+        timeout = ORSConfigManager.calculate_timeout(payload)
+        
+        # Tracking et métadonnées
+        operation_name = ORSConfigManager.get_operation_name(payload)
+        with performance_tracker.measure_operation(operation_name):
+            performance_tracker.count_api_call(operation_name)
             
-        r = requests.post(self.directions_url, json=payload, headers=headers, timeout=20)
-        r.raise_for_status()
-        return r.json()
+            r = requests.post(
+                self.directions_url, 
+                json=payload, 
+                headers=ORSConfigManager.STANDARD_HEADERS, 
+                timeout=timeout
+            )
+            r.raise_for_status()
+            return r.json()
     
     def get_base_route(self, coordinates, include_tollways=True):
         """
@@ -78,13 +89,7 @@ class ORSService:
         Returns:
             dict: Résultat GeoJSON de l'itinéraire
         """
-        payload = {
-            "coordinates": coordinates,
-        }
-        
-        if include_tollways:
-            payload["extra_info"] = ["tollways"]
-            
+        payload = ORSPayloadBuilder.build_base_payload(coordinates, include_tollways)
         return self.call_ors(payload)
     
     def get_route_avoiding_polygons(self, coordinates, polygons, include_tollways=True):
@@ -99,14 +104,7 @@ class ORSService:
         Returns:
             dict: Résultat GeoJSON de l'itinéraire
         """
-        payload = {
-            "coordinates": coordinates,
-            "options": {"avoid_polygons": polygons}
-        }
-        
-        if include_tollways:
-            payload["extra_info"] = ["tollways"]
-            
+        payload = ORSPayloadBuilder.build_avoid_polygons_payload(coordinates, polygons, include_tollways)
         return self.call_ors(payload)
     
     def get_route_avoid_tollways(self, coordinates):
@@ -119,10 +117,5 @@ class ORSService:
         Returns:
             dict: Résultat GeoJSON de l'itinéraire
         """
-        payload = {
-            "coordinates": coordinates,
-            "options": {"avoid_features": ["tollways"]},
-            "extra_info": ["tollways"]
-        }
-        
+        payload = ORSPayloadBuilder.build_avoid_tollways_payload(coordinates)
         return self.call_ors(payload)

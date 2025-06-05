@@ -14,6 +14,7 @@ from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.route_validator import RouteValidator
 from src.services.toll.exceptions import ORSConnectionError, RouteCalculationError
 from src.services.toll.error_handler import ErrorHandler
+from src.services.ors_payload_builder import ORSPayloadBuilder
 
 
 class RouteCalculator:
@@ -40,18 +41,17 @@ class RouteCalculator:
         Returns:
             dict: {"route": route_data, "tolls": tolls_list} ou None si échec
         """
-        payload = {"coordinates": coordinates, "extra_info": ["tollways"]}
-        
         try:
-            # Premier appel sans restrictions
-            route = self._call_ors_with_tracking(payload, f"ORS_{part_name}_route")
+            # Premier appel avec payload optimisé
+            base_payload = ORSPayloadBuilder.build_base_payload(coordinates, include_tollways=True)
+            route = self._call_ors_with_tracking(base_payload, f"ORS_{part_name}_route")
             tolls = self._locate_tolls_with_tracking(route, part_name)
             
             # Éviter les péages indésirables s'il y en a
             unwanted_tolls = [t for t in tolls if t["id"] != target_toll_id]
             
             if unwanted_tolls:
-                route = self._avoid_tolls_and_recalculate(payload, unwanted_tolls, part_name)
+                route = self._avoid_tolls_and_recalculate(coordinates, unwanted_tolls, part_name)
                 tolls = self._locate_tolls_with_tracking(route, f"{part_name}_verify")
                 
                 # Vérification finale
@@ -65,28 +65,28 @@ class RouteCalculator:
     
     def _call_ors_with_tracking(self, payload, operation_name):
         """Appel ORS avec tracking des performances."""
-        with performance_tracker.measure_operation(operation_name):
-            # Adapter le nom de l'API selon l'opération
-            if "base_route" in operation_name:
-                performance_tracker.count_api_call("ORS_base_route")
-            elif "avoid_tollways" in operation_name:
-                performance_tracker.count_api_call("ORS_avoid_tollways")
-            else:
-                performance_tracker.count_api_call("ORS_alternative_route")
-            return self.ors.call_ors(payload)
+        # Enrichir le payload avec les métadonnées de tracking
+        enhanced_payload, metadata = ORSPayloadBuilder.enhance_payload_for_tracking(
+            payload, operation_context=operation_name
+        )
+        
+        with performance_tracker.measure_operation(metadata["operation_name"]):
+            performance_tracker.count_api_call(metadata["operation_name"])
+            return self.ors.call_ors(enhanced_payload)
     
     def _locate_tolls_with_tracking(self, route, operation_suffix):
         """Localise les péages avec tracking des performances."""
         with performance_tracker.measure_operation(f"{Config.Operations.LOCATE_TOLLS}_{operation_suffix}"):
             return locate_tolls(route, Config.get_barriers_csv_path())["on_route"]
     
-    def _avoid_tolls_and_recalculate(self, payload, unwanted_tolls, part_name):
+    def _avoid_tolls_and_recalculate(self, coordinates, unwanted_tolls, part_name):
         """Évite les péages indésirables et recalcule la route."""
         with performance_tracker.measure_operation("create_avoidance_polygon"):
             avoid_poly = avoidance_multipolygon(unwanted_tolls)
         
-        payload["options"] = {"avoid_polygons": avoid_poly}
-        return self._call_ors_with_tracking(payload, f"ORS_{part_name}_route_avoid")
+        # Utiliser le builder pour créer le payload d'évitement
+        avoid_payload = ORSPayloadBuilder.build_avoid_polygons_payload(coordinates, avoid_poly)
+        return self._call_ors_with_tracking(avoid_payload, f"ORS_{part_name}_route_avoid")
     
     def _has_unwanted_tolls(self, tolls, target_toll_id, part_name):
         """Vérifie s'il reste des péages indésirables après évitement."""

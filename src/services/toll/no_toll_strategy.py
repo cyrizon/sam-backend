@@ -12,6 +12,7 @@ from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.exceptions import NoTollRouteError
 from src.services.toll.error_handler import ErrorHandler
 from src.services.toll.result_formatter import ResultFormatter
+from src.services.ors_config_manager import ORSConfigManager
 
 
 class NoTollStrategy:
@@ -33,6 +34,12 @@ class NoTollStrategy:
         """
         Calcule un itinéraire sans péage en utilisant l'option avoid_features.
         """
+        # Validation précoce des coordonnées
+        try:
+            ORSConfigManager.validate_coordinates(coordinates)
+        except ValueError as e:
+            return ErrorHandler.handle_ors_error(e, "validation_coordinates")
+        
         with performance_tracker.measure_operation(Config.Operations.COMPUTE_ROUTE_NO_TOLL):
             print(Config.Messages.SEARCH_NO_TOLL)
             
