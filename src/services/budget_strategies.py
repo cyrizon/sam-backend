@@ -3,18 +3,24 @@ budget_strategies.py
 ------------------
 
 Stratégies pour calculer des itinéraires avec des contraintes budgétaires.
+Intègre le système de mesure des performances pour optimiser les appels.
 """
 
-import copy
-import requests
+from benchmark.performance_tracker import performance_tracker
+from src.services.budget.zero_budget_strategy import ZeroBudgetStrategy
+from src.services.budget.constants import BudgetOptimizationConfig as Config
+from src.services.budget.error_handler import BudgetErrorHandler
+from src.services.toll.result_formatter import ResultFormatter  # Utiliser le formatter toll
 from itertools import combinations
 from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity
 from src.services.toll_cost import add_marginal_cost
 from src.utils.poly_utils import avoidance_multipolygon
 
+
 class BudgetRouteOptimizer:
     """
     Optimiseur d'itinéraires avec contraintes budgétaires.
+    Intègre le tracking des performances pour analyser et optimiser les appels.
     """
     
     def __init__(self, ors_service):
@@ -25,37 +31,112 @@ class BudgetRouteOptimizer:
             ors_service: Instance de ORSService pour les appels API
         """
         self.ors = ors_service
+        self.zero_budget_strategy = ZeroBudgetStrategy(ors_service)
     
     def compute_route_with_budget_limit(
         self,
         coordinates,
-        max_price=None,  # en euros
-        max_price_percent=None,  # en pourcentage du coût de base (ex: 0.8 pour 80%)
-        veh_class="c1",
-        max_comb_size=2
+        max_price=None,
+        max_price_percent=None,
+        veh_class=Config.DEFAULT_VEH_CLASS,
+        max_comb_size=Config.DEFAULT_MAX_COMB_SIZE
     ):
         """
-        Calcule des itinéraires qui respectent une contrainte de budget.
-        
-        Stratégie:
-        1. D'abord, tester l'évitement des péages les plus coûteux individuellement
-        2. Ensuite, tester des combinaisons de péages à éviter
-        3. Si aucune solution ne respecte le budget, retourner l'option la moins chère
-           et le plus rapide parmi les options les moins chères
+        Calcule un itinéraire avec une contrainte de budget maximum.
         
         Args:
             coordinates: Liste de coordonnées [départ, arrivée]
             max_price: Prix maximum en euros (absolu)
             max_price_percent: Pourcentage du coût de base (0.8 = 80%)
-            veh_class: Classe de véhicule
-            max_comb_size: Taille maximale des combinaisons de péages à tester
+            veh_class: Classe de véhicule pour le calcul des coûts
+            max_comb_size: Limite pour les combinaisons de péages à éviter
             
         Returns:
-            dict: Contient les itinéraires optimisés et le statut
-                - fastest: Itinéraire le plus rapide respectant le budget 
-                  (ou le plus rapide parmi les moins chers si aucun ne respecte le budget)
-                - cheapest: Itinéraire le moins cher trouvé
-                - status: Code d'état indiquant le résultat
+            dict: Résultats optimisés (fastest, cheapest, min_tolls, status)
+        """
+        
+        # Log du début de l'opération
+        BudgetErrorHandler.log_operation_start(
+            "compute_route_with_budget_limit",
+            max_price=max_price,
+            max_price_percent=max_price_percent,
+            veh_class=veh_class,
+            max_comb_size=max_comb_size
+        )
+        
+        with performance_tracker.measure_operation(Config.Operations.COMPUTE_ROUTE_WITH_BUDGET_LIMIT, {
+            "max_price": max_price,
+            "max_price_percent": max_price_percent,
+            "veh_class": veh_class,
+            "max_comb_size": max_comb_size
+        }):
+            print(f"=== Calcul d'itinéraire avec contrainte de budget ===")
+            
+            try:
+                # Cas spécial 1: Budget zéro ou pourcentage zéro
+                if max_price == 0 or max_price_percent == 0:
+                    result = self._handle_zero_budget_route(coordinates, veh_class)
+                
+                # Cas spécial 2: Contrainte en pourcentage
+                elif max_price_percent is not None:
+                    result = self._handle_percentage_budget_route(coordinates, max_price_percent, veh_class, max_comb_size)
+                
+                # Cas spécial 3: Contrainte absolue en euros
+                elif max_price is not None:
+                    result = self._handle_absolute_budget_route(coordinates, max_price, veh_class, max_comb_size)
+                
+                # Cas par défaut: aucune contrainte
+                else:
+                    result = self._handle_no_budget_constraint(coordinates, veh_class)
+                
+                # Log du succès
+                if result and result.get("status"):
+                    BudgetErrorHandler.log_operation_success(
+                        "compute_route_with_budget_limit",
+                        f"Status: {result['status']}"
+                    )
+                
+                return result
+                
+            except Exception as e:
+                BudgetErrorHandler.log_operation_failure("compute_route_with_budget_limit", str(e))
+                # Re-lever l'exception pour qu'elle soit gérée au niveau supérieur
+                raise
+    
+    def _handle_zero_budget_route(self, coordinates, veh_class):
+        """Délègue à la stratégie spécialisée pour budget zéro"""
+        return self.zero_budget_strategy.handle_zero_budget_route(coordinates, veh_class)
+    
+    def _handle_percentage_budget_route(self, coordinates, max_price_percent, veh_class, max_comb_size):
+        """
+        Gère les contraintes de budget en pourcentage.
+        À implémenter dans la prochaine stratégie.
+        """
+        print(f"Contrainte de budget en pourcentage: {max_price_percent*100}%")
+        # Pour l'instant, on utilise l'ancienne logique
+        return self._compute_budget_with_legacy_logic(coordinates, None, max_price_percent, veh_class, max_comb_size)
+    
+    def _handle_absolute_budget_route(self, coordinates, max_price, veh_class, max_comb_size):
+        """
+        Gère les contraintes de budget absolu en euros.
+        À implémenter dans la prochaine stratégie.
+        """
+        print(f"Contrainte de budget absolu: {max_price}€")
+        # Pour l'instant, on utilise l'ancienne logique
+        return self._compute_budget_with_legacy_logic(coordinates, max_price, None, veh_class, max_comb_size)
+    
+    def _handle_no_budget_constraint(self, coordinates, veh_class):
+        """
+        Gère le cas où aucune contrainte de budget n'est spécifiée.
+        À implémenter dans la prochaine stratégie.
+        """
+        print("Aucune contrainte de budget spécifiée")
+        # Pour l'instant, on utilise l'ancienne logique
+        return self._compute_budget_with_legacy_logic(coordinates, None, None, veh_class, Config.DEFAULT_MAX_COMB_SIZE)
+    
+    def _compute_budget_with_legacy_logic(self, coordinates, max_price, max_price_percent, veh_class, max_comb_size):
+        """
+        Logique héritée temporaire - sera remplacée par les stratégies spécialisées.
         """
         print("Recherche d'un itinéraire avec contrainte de budget...")
         
@@ -74,31 +155,33 @@ class BudgetRouteOptimizer:
                     add_marginal_cost(tolls_on_route, veh_class)
                     cost = sum(t.get("cost", 0) for t in tolls_on_route)
                     
-                    result = format_route_result(
+                    result = ResultFormatter.format_route_result(
                         toll_free_route,
                         cost,
                         toll_free_route["features"][0]["properties"]["summary"]["duration"],
                         len(tolls_on_route)
                     )
                     
-                    return {
-                        "fastest": result,
-                        "cheapest": result,
-                        "status": "BUDGET_ZERO_SOME_TOLLS_PRESENT"
-                    }
+                    return ResultFormatter.format_optimization_results(
+                        fastest=result,
+                        cheapest=result,
+                        min_tolls=result,
+                        status="BUDGET_ZERO_SOME_TOLLS_PRESENT"
+                    )
                 else:
-                    result = format_route_result(
+                    result = ResultFormatter.format_route_result(
                         toll_free_route,
                         0,
                         toll_free_route["features"][0]["properties"]["summary"]["duration"],
                         0
                     )
                     
-                    return {
-                        "fastest": result,
-                        "cheapest": result,
-                        "status": "BUDGET_ZERO_NO_TOLL_SUCCESS"
-                    }
+                    return ResultFormatter.format_optimization_results(
+                        fastest=result,
+                        cheapest=result,
+                        min_tolls=result,
+                        status="BUDGET_ZERO_NO_TOLL_SUCCESS"
+                    )
             
             except Exception as e:
                 print(f"Impossible de trouver un itinéraire sans péage: {e}")
@@ -109,11 +192,12 @@ class BudgetRouteOptimizer:
             base_route = self.ors.get_base_route(coordinates)
         except Exception as e:
             print(f"Erreur lors de l'appel initial à ORS: {e}")
-            return {
-                "fastest": None,
-                "cheapest": None,
-                "status": "ORS_CONNECTION_ERROR"
-            }
+            return ResultFormatter.format_optimization_results(
+                fastest=None,
+                cheapest=None,
+                min_tolls=None,
+                status="ORS_CONNECTION_ERROR"
+            )
 
         # 2) Localiser tous les péages sur et à proximité de la route
         tolls_dict = locate_tolls(base_route, "data/barriers.csv")
@@ -141,21 +225,22 @@ class BudgetRouteOptimizer:
         # 5) Si la route de base respecte déjà le budget, on la retourne directement
         if base_cost <= price_limit:
             print("La route de base respecte déjà la contrainte de budget.")
-            result = format_route_result(
+            result = ResultFormatter.format_route_result(
                 base_route,
                 base_cost,
                 base_duration,
                 base_toll_count
             )
             
-            return {
-                "fastest": result,
-                "cheapest": result,
-                "status": "BUDGET_ALREADY_SATISFIED"
-            }
+            return ResultFormatter.format_optimization_results(
+                fastest=result,
+                cheapest=result,
+                min_tolls=result,
+                status="BUDGET_ALREADY_SATISFIED"
+            )
         
         # 6) Rechercher des itinéraires alternatifs
-        best_cheap = format_route_result(
+        best_cheap = ResultFormatter.format_route_result(
             base_route,
             base_cost,
             base_duration,
@@ -179,18 +264,19 @@ class BudgetRouteOptimizer:
         # Si aucun péage n'a été trouvé, retourner la route de base
         if not all_tolls_sorted:
             print("Aucun péage trouvé, retour à la route de base.")
-            result = format_route_result(
+            result = ResultFormatter.format_route_result(
                 base_route,
                 base_cost,
                 base_duration,
                 base_toll_count
             )
             
-            return {
-                "fastest": result,
-                "cheapest": result,
-                "status": "NO_TOLLS_FOUND"
-            }
+            return ResultFormatter.format_optimization_results(
+                fastest=result,
+                cheapest=result,
+                min_tolls=result,
+                status="NO_TOLLS_FOUND"
+            )
         
         seen_polygons = set()
         tested_combinations = set()
@@ -233,7 +319,7 @@ class BudgetRouteOptimizer:
                 
             print(f"Route alternative: coût={cost}€, durée={duration/60:.1f}min")
             
-            route_data = format_route_result(
+            route_data = ResultFormatter.format_route_result(
                 alt_route, 
                 cost, 
                 duration,
@@ -309,7 +395,7 @@ class BudgetRouteOptimizer:
                         
                     print(f"Route alternative: coût={cost}€, durée={duration/60:.1f}min")
                     
-                    route_data = format_route_result(
+                    route_data = ResultFormatter.format_route_result(
                         alt_route, 
                         cost, 
                         duration,
@@ -456,7 +542,7 @@ class BudgetRouteOptimizer:
             status = "BUDGET_SATISFIED"
         
         return {
-            "fastest": best_fast_within_budget,
+            "fastest": best_fast_within_budget or best_cheap,
             "cheapest": best_cheap,
-            "status": status
+            "status": "BUDGET_SATISFIED" if best_fast_within_budget else "NO_ROUTE_WITHIN_BUDGET"
         }
