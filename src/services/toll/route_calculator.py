@@ -12,6 +12,8 @@ from src.utils.poly_utils import avoidance_multipolygon
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.route_validator import RouteValidator
+from src.services.toll.exceptions import ORSConnectionError, RouteCalculationError
+from src.services.toll.error_handler import ErrorHandler
 
 
 class RouteCalculator:
@@ -59,8 +61,7 @@ class RouteCalculator:
             return {"route": route, "tolls": tolls}
             
         except Exception as e:
-            performance_tracker.log_error(f"Erreur lors du calcul de {part_name}: {e}")
-            return None
+            return ErrorHandler.handle_route_calculation_error(e, part_name=part_name)
     
     def _call_ors_with_tracking(self, payload, operation_name):
         """Appel ORS avec tracking des performances."""

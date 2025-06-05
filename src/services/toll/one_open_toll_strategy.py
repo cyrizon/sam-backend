@@ -14,6 +14,8 @@ from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll_cost import add_marginal_cost
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.route_validator import RouteValidator
+from src.services.toll.exceptions import ORSConnectionError, NoOpenTollError
+from src.services.toll.error_handler import ErrorHandler
 
 
 class OneOpenTollStrategy:
@@ -49,9 +51,7 @@ class OneOpenTollStrategy:
             try:
                 base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
             except Exception as e:
-                performance_tracker.log_error(f"Erreur lors de l'appel initial à ORS: {e}")
-                print(f"Erreur lors de l'appel initial à ORS: {e}")
-                return None, Config.StatusCodes.ORS_CONNECTION_ERROR
+                return ErrorHandler.handle_ors_error(e, "appel initial à ORS")
             
             # 2) Localiser tous les péages sur et à proximité de la route
             with performance_tracker.measure_operation(Config.Operations.LOCATE_TOLLS_ONE_TOLL):
@@ -84,8 +84,7 @@ class OneOpenTollStrategy:
                     all_open_tolls = get_all_open_tolls_by_proximity(base_route, Config.get_barriers_csv_path(), max_distance_m)
                 
                 if not all_open_tolls:
-                    print(Config.Messages.NO_OPEN_TOLLS_IN_RADIUS.format(distance=max_distance_m/1000))
-                    return None, Config.StatusCodes.NO_OPEN_TOLL_FOUND
+                    return ErrorHandler.handle_no_open_toll_error(max_distance_m/1000)
                 
                 print(Config.Messages.FOUND_OPEN_TOLLS_NETWORK.format(count=len(all_open_tolls), distance=max_distance_m/1000))
                 
@@ -188,11 +187,9 @@ class OneOpenTollStrategy:
                 print(Config.Messages.SOLUTION_MULTIPLE_TOLLS.format(toll_count=toll_count, toll_id=toll['id'], cost=cost, duration=duration/60))
 
             return format_route_result(merged_route, cost, duration, toll_count, toll["id"])
-            
+    
         except Exception as e:
-            performance_tracker.log_error(f"Erreur lors du calcul de l'itinéraire via {toll['id']}: {e}")
-            print(f"Erreur lors du calcul de l'itinéraire via {toll['id']}: {e}")
-            return None
+            return ErrorHandler.handle_route_calculation_error(e, toll_id=toll['id'])
     
     def _calculate_route_part(self, coordinates, target_toll_id, veh_class, part_name):
         """

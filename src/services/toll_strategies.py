@@ -12,6 +12,7 @@ from src.services.toll.fallback_strategy import FallbackStrategy
 from src.services.toll.one_open_toll_strategy import OneOpenTollStrategy
 from src.services.toll.many_tolls_strategy import ManyTollsStrategy
 from src.services.toll.constants import TollOptimizationConfig as Config
+from src.services.toll.error_handler import ErrorHandler
 
 class TollRouteOptimizer:
     """
@@ -45,6 +46,15 @@ class TollRouteOptimizer:
         Returns:
             dict: Résultats optimisés (fastest, cheapest, min_tolls, status)
         """
+        
+        # Log du début de l'opération
+        ErrorHandler.log_operation_start(
+            "compute_route_with_toll_limit",
+            max_tolls=max_tolls,
+            veh_class=veh_class,
+            max_comb_size=max_comb_size
+        )
+        
         with performance_tracker.measure_operation(Config.Operations.COMPUTE_ROUTE_WITH_TOLL_LIMIT, {
             "max_tolls": max_tolls,
             "veh_class": veh_class,
@@ -52,25 +62,36 @@ class TollRouteOptimizer:
         }):
             print(f"=== Calcul d'itinéraire avec un maximum de {max_tolls} péages ===")
             
-            # Cas spécial 1: Aucun péage autorisé
-            if max_tolls == 0:
-                return self._handle_no_toll_route(coordinates, veh_class)
-                
-            # Cas spécial 2: Un seul péage autorisé
-            elif max_tolls == 1:
-                return self._handle_one_toll_route(coordinates, veh_class, max_comb_size)
-                
-            # Cas général: Plusieurs péages autorisés
-            else:
-                result = self.many_tolls_strategy.compute_route_with_many_tolls(
-                    coordinates, max_tolls, veh_class, max_comb_size
-                )
-                
-                if result:
-                    return result
+            try:
+                # Cas spécial 1: Aucun péage autorisé
+                if max_tolls == 0:
+                    result = self._handle_no_toll_route(coordinates, veh_class)
+                # Cas spécial 2: Un seul péage autorisé
+                elif max_tolls == 1:
+                    result = self._handle_one_toll_route(coordinates, veh_class, max_comb_size)
+                # Cas général: Plusieurs péages autorisés
                 else:
-                    # Fallback avec la route de base
-                    return self._get_fallback_route(coordinates, veh_class, Config.StatusCodes.NO_VALID_ROUTE_WITH_MAX_TOLLS)
+                    result = self.many_tolls_strategy.compute_route_with_many_tolls(
+                        coordinates, max_tolls, veh_class, max_comb_size
+                    )
+                    
+                    if not result:
+                        # Fallback avec la route de base
+                        result = self._get_fallback_route(coordinates, veh_class, Config.StatusCodes.NO_VALID_ROUTE_WITH_MAX_TOLLS)
+                
+                # Log du succès
+                if result and result.get("status"):
+                    ErrorHandler.log_operation_success(
+                        "compute_route_with_toll_limit",
+                        f"Status: {result['status']}"
+                    )
+                
+                return result
+                
+            except Exception as e:
+                ErrorHandler.log_operation_failure("compute_route_with_toll_limit", str(e))
+                # Re-lever l'exception pour qu'elle soit gérée au niveau supérieur
+                raise
     
     def _handle_no_toll_route(self, coordinates, veh_class):
         """Délègue à la stratégie spécialisée"""

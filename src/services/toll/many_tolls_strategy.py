@@ -14,6 +14,7 @@ from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.route_validator import RouteValidator
+from src.services.toll.error_handler import ErrorHandler
 
 
 class ManyTollsStrategy:
@@ -179,7 +180,11 @@ class ManyTollsStrategy:
             # Appel ORS pour l'itinéraire alternatif
             try:
                 alt_route = self.route_calculator.get_route_avoiding_polygons_with_tracking(coordinates, poly)
-            except Exception:
+            except Exception as e:
+                ErrorHandler.log_operation_failure(
+                    f"test_combination_{combination_count}", 
+                    f"Impossible de calculer une route alternative: {e}"
+                )
                 return None
 
             return self._analyze_alternative_route(alt_route, to_avoid, max_tolls, veh_class)

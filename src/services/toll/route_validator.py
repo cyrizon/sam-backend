@@ -7,6 +7,10 @@ Responsabilité unique : valider que les routes respectent les contraintes défi
 """
 
 from src.services.toll.constants import TollOptimizationConfig as Config
+from src.services.toll.exceptions import (
+    MaxTollsExceededError, AvoidedTollsStillPresentError, 
+    TargetTollMissingError, TollValidationError
+)
 
 
 class RouteValidator:
@@ -135,5 +139,56 @@ class RouteValidator:
         # Validation de la présence du péage cible
         if target_toll_id and not RouteValidator.validate_target_toll_present(route_tolls, target_toll_id, operation_name):
             return False
+        
+        return True
+    
+    @staticmethod
+    def validate_avoided_tolls_strict(route_tolls, avoided_tolls, operation_name=""):
+        """
+        Version stricte qui lève une exception si des péages évités sont présents.
+        """
+        if not avoided_tolls:
+            return True
+            
+        avoided_ids = set(str(t["id"]).strip().lower() for t in avoided_tolls)
+        present_ids = set(str(t["id"]).strip().lower() for t in route_tolls)
+        
+        unwanted_present = avoided_ids & present_ids
+        if unwanted_present:
+            raise AvoidedTollsStillPresentError(unwanted_present, operation_name)
+        return True
+
+    @staticmethod
+    def validate_max_tolls_strict(toll_count, max_tolls, operation_name=""):
+        """
+        Version stricte qui lève une exception si trop de péages.
+        """
+        if toll_count > max_tolls:
+            raise MaxTollsExceededError(toll_count, max_tolls, operation_name)
+        return True
+
+    @staticmethod
+    def validate_target_toll_present_strict(route_tolls, target_toll_id, operation_name=""):
+        """
+        Version stricte qui lève une exception si le péage cible est absent.
+        """
+        toll_ids = set(t["id"] for t in route_tolls)
+        if target_toll_id not in toll_ids:
+            raise TargetTollMissingError(target_toll_id, operation_name)
+        return True
+
+    @staticmethod
+    def validate_all_constraints_strict(route_tolls, toll_count, max_tolls, avoided_tolls=None, 
+                                       target_toll_id=None, operation_name=""):
+        """
+        Version stricte de validate_all_constraints qui lève des exceptions.
+        """
+        RouteValidator.validate_max_tolls_strict(toll_count, max_tolls, operation_name)
+        
+        if avoided_tolls:
+            RouteValidator.validate_avoided_tolls_strict(route_tolls, avoided_tolls, operation_name)
+        
+        if target_toll_id:
+            RouteValidator.validate_target_toll_present_strict(route_tolls, target_toll_id, operation_name)
         
         return True

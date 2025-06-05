@@ -10,6 +10,8 @@ from src.utils.route_utils import format_route_result
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.constants import TollOptimizationConfig as Config
+from src.services.toll.exceptions import NoTollRouteError
+from src.services.toll.error_handler import ErrorHandler
 
 
 class NoTollStrategy:
@@ -60,11 +62,9 @@ class NoTollStrategy:
                         toll_free_route["features"][0]["properties"]["summary"]["duration"],
                         0
                     ), Config.StatusCodes.NO_TOLL_SUCCESS
-        
+
             except Exception as e:
-                performance_tracker.log_error(f"Impossible de trouver un itinéraire sans péage: {e}")
-                print(f"Impossible de trouver un itinéraire sans péage: {e}")
-                return None, Config.StatusCodes.NO_TOLL_ROUTE_NOT_POSSIBLE
+                return ErrorHandler.handle_no_toll_route_error(e)
     
     def handle_no_toll_route(self, coordinates, veh_class=Config.DEFAULT_VEH_CLASS):
         """
