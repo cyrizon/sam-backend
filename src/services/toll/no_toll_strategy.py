@@ -10,8 +10,10 @@ from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.exceptions import NoTollRouteError
-from src.services.toll.error_handler import ErrorHandler
+from src.services.toll.error_handler import TollErrorHandler
 from src.services.common.result_formatter import ResultFormatter
+from src.services.common.toll_messages import TollMessages
+from src.services.common.common_messages import CommonMessages
 from src.services.ors_config_manager import ORSConfigManager
 
 
@@ -28,7 +30,7 @@ class NoTollStrategy:
             ors_service: Instance de ORSService pour les appels API
         """
         self.ors = ors_service
-        self.route_calculator = RouteCalculator(ors_service)  # Ajouter cette ligne
+        self.route_calculator = RouteCalculator(ors_service)
     
     def compute_route_no_toll(self, coordinates, veh_class=Config.DEFAULT_VEH_CLASS):
         """
@@ -38,10 +40,10 @@ class NoTollStrategy:
         try:
             ORSConfigManager.validate_coordinates(coordinates)
         except ValueError as e:
-            return ErrorHandler.handle_ors_error(e, "validation_coordinates")
+            return TollErrorHandler.handle_ors_error(e, "validation_coordinates")
         
         with performance_tracker.measure_operation(Config.Operations.COMPUTE_ROUTE_NO_TOLL):
-            print(Config.Messages.SEARCH_NO_TOLL)
+            print(TollMessages.SEARCH_NO_TOLL)
             
             try:
                 toll_free_route = self.route_calculator.get_route_avoid_tollways_with_tracking(coordinates)
@@ -53,7 +55,9 @@ class NoTollStrategy:
                 tolls_on_route = tolls_dict["on_route"]
                 
                 if tolls_on_route:
-                    print(Config.Messages.ATTENTION_TOLLS_PRESENT.format(count=len(tolls_on_route)))
+                    print(CommonMessages.TOLLS_ON_ROUTE)
+                    for toll in tolls_on_route:
+                        print(f"  - {toll}")
                     cost = sum(t.get("cost", 0) for t in tolls_on_route)
                     
                     return ResultFormatter.format_route_result(
@@ -63,6 +67,7 @@ class NoTollStrategy:
                         len(tolls_on_route)
                     ), Config.StatusCodes.SOME_TOLLS_PRESENT
                 else:
+                    print(CommonMessages.ROUTE_GRATUITE_TROUVEE)
                     return ResultFormatter.format_route_result(
                         toll_free_route,
                         0,
@@ -71,7 +76,7 @@ class NoTollStrategy:
                     ), Config.StatusCodes.NO_TOLL_SUCCESS
 
             except Exception as e:
-                return ErrorHandler.handle_no_toll_route_error(e)
+                return TollErrorHandler.handle_no_toll_route_error(e)
     
     def handle_no_toll_route(self, coordinates, veh_class=Config.DEFAULT_VEH_CLASS):
         """

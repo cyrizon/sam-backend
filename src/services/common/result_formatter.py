@@ -6,7 +6,7 @@ Formatage centralisé des résultats d'optimisation de routes.
 Responsabilité unique : transformer les données de route en formats de sortie standardisés.
 """
 
-from src.services.toll.constants import TollOptimizationConfig as Config
+from src.services.common.base_constants import BaseOptimizationConfig as Config
 
 
 class ResultFormatter:

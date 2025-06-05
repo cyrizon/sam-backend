@@ -5,7 +5,7 @@ fallback_strategy.py
 Stratégie de repli pour générer une route de base quand aucune solution n'est trouvée.
 """
 
-from src.services.toll.error_handler import ErrorHandler
+from src.services.toll.error_handler import TollErrorHandler
 from src.services.common.result_formatter import ResultFormatter
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
@@ -33,12 +33,11 @@ class FallbackStrategy:
             
         Returns:
             dict: Route de base formatée avec format uniforme
-        """
-        # Validation précoce des coordonnées
+        """        # Validation précoce des coordonnées
         try:
             ORSConfigManager.validate_coordinates(coordinates)
         except ValueError as e:
-            return ErrorHandler.handle_ors_error(e, "validation_coordinates")
+            return TollErrorHandler.handle_ors_error(e, "validation_coordinates")
         
         from src.services.toll.result_manager import RouteResultManager
         

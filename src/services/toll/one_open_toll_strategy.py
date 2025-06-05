@@ -15,8 +15,9 @@ from src.services.toll_cost import add_marginal_cost
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.route_validator import RouteValidator
 from src.services.toll.exceptions import ORSConnectionError, NoOpenTollError
-from src.services.toll.error_handler import ErrorHandler
+from src.services.toll.error_handler import TollErrorHandler
 from src.services.common.result_formatter import ResultFormatter
+from src.services.common.toll_messages import TollMessages
 from src.services.ors_config_manager import ORSConfigManager
 
 
@@ -42,24 +43,23 @@ class OneOpenTollStrategy:
         Args:
             coordinates: Liste de coordonnées [départ, arrivée]
             veh_class: Classe de véhicule pour le calcul des coûts
-            
-        Returns:
+              Returns:
             tuple: (route_data, status_code)
         """
         with performance_tracker.measure_operation(Config.Operations.COMPUTE_ROUTE_ONE_OPEN_TOLL):
-            print(Config.Messages.SEARCH_ONE_OPEN_TOLL)
+            print(TollMessages.SEARCH_ONE_OPEN_TOLL)
             
             # Validation précoce des coordonnées
             try:
                 ORSConfigManager.validate_coordinates(coordinates)
             except ValueError as e:
-                return ErrorHandler.handle_ors_error(e, "validation_coordinates")
+                return TollErrorHandler.handle_ors_error(e, "validation_coordinates")
             
             # 1) Obtenir la route de base pour identifier les péages à proximité
             try:
                 base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
             except Exception as e:
-                return ErrorHandler.handle_ors_error(e, "appel initial à ORS")
+                return TollErrorHandler.handle_ors_error(e, "appel initial à ORS")
             
             # 2) Localiser tous les péages sur et à proximité de la route
             with performance_tracker.measure_operation(Config.Operations.LOCATE_TOLLS_ONE_TOLL):
@@ -75,7 +75,7 @@ class OneOpenTollStrategy:
             # 4) Initialiser le gestionnaire de résultats
             result_manager = RouteResultManager()
             
-            print(Config.Messages.FOUND_OPEN_TOLLS_NEARBY.format(count=len(nearby_open_tolls)))
+            print(TollMessages.FOUND_OPEN_TOLLS_NEARBY.format(count=len(nearby_open_tolls)))
             
             # 5) Première étape: test avec les péages ouverts à proximité
             if nearby_open_tolls:
@@ -84,7 +84,7 @@ class OneOpenTollStrategy:
             
             # 6) Si aucun résultat avec les péages proches, tester avec tous les péages ouverts du réseau
             if not result_manager.has_valid_results():
-                print(Config.Messages.NO_OPEN_TOLLS_NEARBY)
+                print(TollMessages.NO_OPEN_TOLLS_NEARBY)
                 
                 # 6.1) Récupérer tous les péages ouverts
                 max_distance_m = Config.MAX_DISTANCE_SEARCH_M
@@ -92,9 +92,9 @@ class OneOpenTollStrategy:
                     all_open_tolls = get_all_open_tolls_by_proximity(base_route, Config.get_barriers_csv_path(), max_distance_m)
                 
                 if not all_open_tolls:
-                    return ErrorHandler.handle_no_open_toll_error(max_distance_m/1000)
+                    return TollErrorHandler.handle_no_open_toll_error(max_distance_m/1000)
                 
-                print(Config.Messages.FOUND_OPEN_TOLLS_NETWORK.format(count=len(all_open_tolls), distance=max_distance_m/1000))
+                print(TollMessages.FOUND_OPEN_TOLLS_NETWORK.format(count=len(all_open_tolls), distance=max_distance_m/1000))
                 
                 # 6.2) Les tester dans l'ordre de proximité (limité aux 10 plus proches)
                 max_test = Config.MAX_NEARBY_TOLLS_TO_TEST
@@ -190,14 +190,14 @@ class OneOpenTollStrategy:
             
             # 6) Log de la solution trouvée
             if toll_count == 1:
-                print(Config.Messages.SOLUTION_ONE_TOLL.format(toll_id=toll['id'], cost=cost, duration=duration/60))
+                print(TollMessages.SOLUTION_ONE_TOLL.format(toll_id=toll['id'], cost=cost, duration=duration/60))
             else:
-                print(Config.Messages.SOLUTION_MULTIPLE_TOLLS.format(toll_count=toll_count, toll_id=toll['id'], cost=cost, duration=duration/60))
+                print(TollMessages.SOLUTION_MULTIPLE_TOLLS.format(toll_count=toll_count, toll_id=toll['id'], cost=cost, duration=duration/60))
 
             return ResultFormatter.format_route_result(merged_route, cost, duration, toll_count, toll["id"])
     
         except Exception as e:
-            return ErrorHandler.handle_route_calculation_error(e, toll_id=toll['id'])
+            return TollErrorHandler.handle_route_calculation_error(e, toll_id=toll['id'])
     
     def _calculate_route_part(self, coordinates, target_toll_id, veh_class, part_name):
         """
@@ -232,7 +232,7 @@ class OneOpenTollStrategy:
         # Si aucune solution avec exactement 1 péage, prendre celle avec le minimum de péages
         min_tolls_result = results["min_tolls"]
         if min_tolls_result["route"]:
-            print(Config.Messages.NO_EXACT_ONE_TOLL.format(toll_count=min_tolls_result['toll_count']))
+            print(TollMessages.NO_EXACT_ONE_TOLL.format(toll_count=min_tolls_result['toll_count']))
             return min_tolls_result, Config.StatusCodes.MINIMUM_TOLLS_SOLUTION
         
         return None, Config.StatusCodes.NO_VALID_OPEN_TOLL_ROUTE

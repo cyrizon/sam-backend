@@ -6,19 +6,13 @@ Configuration constants for budget optimization strategies.
 Centralise toutes les valeurs magiques pour faciliter la maintenance.
 """
 
-class BudgetOptimizationConfig:
+from src.services.common.base_constants import BaseOptimizationConfig
+
+class BudgetOptimizationConfig(BaseOptimizationConfig):
     """Configuration constants for budget route optimization."""
     
-    # === Distance and proximity limits ===
-    MAX_DISTANCE_SEARCH_M = 100000  # 100km pour la recherche de péages à proximité
+    # === Budget-specific limits ===
     MAX_FALLBACK_COMBINATIONS = 50  # Limite pour éviter trop de calculs en fallback
-    
-    # === File paths ===
-    BARRIERS_CSV_PATH = "data/barriers.csv"  # Chemin vers les données de péages
-    
-    # === Route calculation defaults ===
-    DEFAULT_VEH_CLASS = "c1"
-    DEFAULT_MAX_COMB_SIZE = 2
     
     # === Budget validation limits ===
     MIN_BUDGET_PERCENT = 0.0    # 0%
@@ -77,80 +71,6 @@ class BudgetOptimizationConfig:
         
         # Error handling
         GET_BASE_ROUTE_FALLBACK = "get_base_route_fallback"
-    
-    # === Status codes ===
-    class StatusCodes:
-        # Success codes
-        BUDGET_ZERO_NO_TOLL_SUCCESS = "BUDGET_ZERO_NO_TOLL_SUCCESS"
-        BUDGET_ALREADY_SATISFIED = "BUDGET_ALREADY_SATISFIED"
-        BUDGET_SATISFIED = "BUDGET_SATISFIED"
-        FREE_ALTERNATIVE_FOUND = "FREE_ALTERNATIVE_FOUND"
-        FASTEST_AMONG_CHEAPEST_FOUND = "FASTEST_AMONG_CHEAPEST_FOUND"
-        CLOSEST_TO_BUDGET_FOUND = "CLOSEST_TO_BUDGET_FOUND"
-        EXPANDED_BUDGET_SATISFIED = "EXPANDED_BUDGET_SATISFIED"
-        
-        # Warning codes
-        BUDGET_ZERO_SOME_TOLLS_PRESENT = "BUDGET_ZERO_SOME_TOLLS_PRESENT"
-        ONLY_CHEAPEST_FOUND = "ONLY_CHEAPEST_FOUND"
-        
-        # Error codes
-        NO_ROUTE_WITHIN_BUDGET = "NO_ROUTE_WITHIN_BUDGET"
-        NO_ROUTE_WITHIN_BUDGET_RETURNING_FASTEST_AMONG_CHEAPEST = "NO_ROUTE_WITHIN_BUDGET_RETURNING_FASTEST_AMONG_CHEAPEST"
-        NO_TOLLS_FOUND = "NO_TOLLS_FOUND"
-        NO_ALTERNATIVE_FOUND = "NO_ALTERNATIVE_FOUND"
-        FALLBACK_BASE_ROUTE_USED = "FALLBACK_BASE_ROUTE_USED"
-        CRITICAL_ERROR = "CRITICAL_ERROR"
-        ORS_CONNECTION_ERROR = "ORS_CONNECTION_ERROR"
-        INVALID_MAX_PRICE = "INVALID_MAX_PRICE"
-        INVALID_MAX_PRICE_PERCENT = "INVALID_MAX_PRICE_PERCENT"
-    
-    # === Messages ===
-    class Messages:
-        # Search messages
-        SEARCH_ZERO_BUDGET = "Recherche d'un itinéraire avec budget zéro..."
-        SEARCH_PERCENTAGE_BUDGET = "Recherche d'un itinéraire avec budget à {percent}% du coût de base..."
-        SEARCH_ABSOLUTE_BUDGET = "Recherche d'un itinéraire avec budget maximum de {budget}€..."
-        
-        # Progress messages
-        PROGRESS_COMBINATIONS = "Progression: {count} combinaisons testées"
-        FOUND_SOLUTION_WITHIN_BUDGET = "Solution trouvée dans le budget: {cost}€ ≤ {limit}€"
-        NO_SOLUTION_WITHIN_BUDGET = "Aucune solution dans le budget. Meilleure solution: {cost}€ > {limit}€"
-        
-        # Base route messages
-        BASE_ROUTE_COST = "Coût de base: {cost}€"
-        BUDGET_LIMIT = "Limite budgétaire: {limit}€"
-        BUDGET_GAP = "Écart budgétaire à combler: {gap}€"
-        
-        # Toll testing messages
-        TEST_INDIVIDUAL_TOLLS = "Test de l'évitement des péages individuels..."
-        TEST_COMBINATIONS = "Test des combinaisons de péages..."
-        TEST_PROMISING_TOLLS = "Test prioritaire des péages les plus prometteurs..."
-        
-        # Results messages
-        ROUTE_ALTERNATIVE = "Route alternative: coût={cost}€, durée={duration:.1f}min"
-        ROUTE_GRATUITE_TROUVEE = "Route gratuite trouvée !"
-        SOLUTION_PROMETTEUSE = "Solution prometteuse trouvée dans le budget: {cost}€ ≤ {limit}€"
-        
-        # Validation errors
-        ATTENTION_TOLLS_PRESENT = "Attention: l'itinéraire sans péage contient quand même {count} péages"
-        IMPOSSIBLE_NO_TOLL_ROUTE = "Impossible de trouver un itinéraire sans péage: {error}"
-        
-        # Fallback messages
-        FALLBACK_ZERO_BUDGET = "Fallback budget zéro : recherche d'alternatives gratuites ou peu chères..."
-        FALLBACK_ABSOLUTE_BUDGET = "Fallback budget absolu : recherche d'alternatives proches de {budget}€..."
-        FALLBACK_PERCENTAGE_BUDGET = "Fallback budget pourcentage : recherche d'alternatives pour {percent}%..."
-        FALLBACK_GENERAL = "Fallback général : recherche de la meilleure solution globale..."
-        
-        # Strategy delegation messages
-        STRATEGY_ZERO_SELECTED = "Stratégie budget zéro sélectionnée"
-        STRATEGY_PERCENTAGE_SELECTED = "Stratégie budget pourcentage sélectionnée ({percent}%)"
-        STRATEGY_ABSOLUTE_SELECTED = "Stratégie budget absolu sélectionnée ({budget}€)"
-        STRATEGY_FALLBACK_SELECTED = "Stratégie de fallback sélectionnée"
-        
-        # Error handling messages
-        VALIDATION_FAILED = "Échec de la validation des paramètres"
-        STRATEGY_FAILED = "Échec de la stratégie principale, activation du fallback"
-        CRITICAL_ERROR_OCCURRED = "Erreur critique détectée: {error}"
     
     @staticmethod
     def get_barriers_csv_path():

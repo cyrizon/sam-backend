@@ -14,6 +14,8 @@ from src.services.budget.constants import BudgetOptimizationConfig as Config
 from src.services.budget.route_validator import BudgetRouteValidator
 from src.services.budget.exceptions import BudgetOptimizationError, BudgetExceededError
 from src.services.budget.error_handler import BudgetErrorHandler
+from src.services.common.common_messages import CommonMessages
+from src.services.common.budget_messages import BudgetMessages
 from src.services.ors_payload_builder import ORSPayloadBuilder
 
 
@@ -144,7 +146,7 @@ class BudgetRouteCalculator:
                 present_ids = set(t["id"] for t in tolls_dict["on_route"])
                 
                 if avoided_ids & present_ids:
-                    print(f"⚠️ Certains péages n'ont pas pu être évités: {avoided_ids & present_ids}")
+                    print(CommonMessages.TOLLS_NOT_AVOIDED.format(tolls=list(avoided_ids & present_ids)))
                 
                 return {
                     "route": alt_route,

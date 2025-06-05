@@ -9,6 +9,8 @@ Responsabilité unique : gérer les critères d'optimisation avec contraintes bu
 from src.services.common.result_formatter import ResultFormatter
 from src.services.budget.constants import BudgetOptimizationConfig as Config
 from src.services.budget.route_validator import BudgetRouteValidator
+from src.services.common.common_messages import CommonMessages
+from src.services.common.budget_messages import BudgetMessages
 
 
 class BudgetRouteResultManager:
@@ -227,29 +229,52 @@ class BudgetRouteResultManager:
             base_cost: Coût de la route de base
             base_duration: Durée de la route de base
         """
-        print(f"Route de base: {base_toll_count} péages, {base_cost}€, {base_duration/60:.1f}min")
+        print(BudgetMessages.BASE_ROUTE_SUMMARY.format(
+            toll_count=base_toll_count, 
+            cost=base_cost, 
+            duration=base_duration/60
+        ))
         
         # Statistiques budgétaires
         stats = self.get_budget_statistics()
-        print(f"Budget: {stats['routes_tested']} routes testées, {stats['routes_within_budget']} dans le budget ({stats['budget_compliance_rate']:.1f}%)")
+        print(BudgetMessages.BUDGET_STATISTICS.format(
+            routes_tested=stats['routes_tested'],
+            routes_within_budget=stats['routes_within_budget'],
+            compliance_rate=stats['budget_compliance_rate']
+        ))
         
         if self.best_cheap["route"]:
             within_budget = self._is_within_budget(self.best_cheap["cost"])
             status = "✅ DANS LE BUDGET" if within_budget else "❌ HORS BUDGET"
-            print(f"Route la moins chère: {self.best_cheap['toll_count']} péages, {self.best_cheap['cost']}€, {self.best_cheap['duration']/60:.1f}min {status}")
+            print(BudgetMessages.BEST_CHEAP_ROUTE.format(
+                toll_count=self.best_cheap['toll_count'],
+                cost=self.best_cheap['cost'],
+                duration=self.best_cheap['duration']/60,
+                status=status
+            ))
         else:
-            print("Aucune route économique trouvée")
+            print(CommonMessages.NO_ECONOMIC_ROUTE)
             
         if self.best_fast["route"]:
             within_budget = self._is_within_budget(self.best_fast["cost"])
             status = "✅ DANS LE BUDGET" if within_budget else "❌ HORS BUDGET"
-            print(f"Route la plus rapide: {self.best_fast['toll_count']} péages, {self.best_fast['cost']}€, {self.best_fast['duration']/60:.1f}min {status}")
+            print(BudgetMessages.BEST_FAST_ROUTE.format(
+                toll_count=self.best_fast['toll_count'],
+                cost=self.best_fast['cost'],
+                duration=self.best_fast['duration']/60,
+                status=status
+            ))
         else:
-            print("Aucune route rapide trouvée")
+            print(CommonMessages.NO_FAST_ROUTE)
             
         if self.best_min_tolls["route"]:
             within_budget = self._is_within_budget(self.best_min_tolls["cost"])
             status = "✅ DANS LE BUDGET" if within_budget else "❌ HORS BUDGET"
-            print(f"Route avec moins de péages: {self.best_min_tolls['toll_count']} péages, {self.best_min_tolls['cost']}€, {self.best_min_tolls['duration']/60:.1f}min {status}")
+            print(BudgetMessages.BEST_MIN_TOLLS_ROUTE.format(
+                toll_count=self.best_min_tolls['toll_count'],
+                cost=self.best_min_tolls['cost'],
+                duration=self.best_min_tolls['duration']/60,
+                status=status
+            ))
         else:
-            print("Aucune route avec moins de péages trouvée")
+            print(CommonMessages.NO_MIN_TOLLS_ROUTE)

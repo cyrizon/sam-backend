@@ -1,4 +1,3 @@
-# filepath: c:\Users\pecni\Desktop\SAM\sam-backend\src\services\toll\route_validator.py
 """
 route_validator.py
 -----------------

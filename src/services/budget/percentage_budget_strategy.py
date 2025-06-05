@@ -10,9 +10,11 @@ from benchmark.performance_tracker import performance_tracker
 from src.services.budget.constants import BudgetOptimizationConfig as Config
 from src.services.common.result_formatter import ResultFormatter
 from src.services.budget.result_manager import BudgetRouteResultManager as RouteResultManager
-from src.services.toll.route_calculator import RouteCalculator
-from src.services.toll.error_handler import ErrorHandler
+from src.services.budget.route_calculator import BudgetRouteCalculator
+from src.services.budget.error_handler import BudgetErrorHandler
 from src.services.ors_config_manager import ORSConfigManager
+from src.services.common.budget_messages import BudgetMessages
+from src.services.common.common_messages import CommonMessages
 from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity
 from src.services.toll_cost import add_marginal_cost
 from src.utils.poly_utils import avoidance_multipolygon
@@ -29,10 +31,9 @@ class PercentageBudgetStrategy:
         Initialise la stratégie avec un service ORS.
         
         Args:
-            ors_service: Instance de ORSService pour les appels API
-        """
+            ors_service: Instance de ORSService pour les appels API        """
         self.ors = ors_service
-        self.route_calculator = RouteCalculator(ors_service)
+        self.route_calculator = BudgetRouteCalculator(ors_service)
     
     def compute_percentage_budget_route(self, coordinates, max_price_percent, veh_class=Config.DEFAULT_VEH_CLASS, max_comb_size=Config.DEFAULT_MAX_COMB_SIZE):
         """
@@ -51,17 +52,16 @@ class PercentageBudgetStrategy:
         try:
             ORSConfigManager.validate_coordinates(coordinates)
         except ValueError as e:
-            return ErrorHandler.handle_ors_error(e, "validation_coordinates")
-        
-        # Validation du pourcentage
+            return BudgetErrorHandler.handle_ors_error(e, "validation_coordinates")
+          # Validation du pourcentage
         if max_price_percent < 0 or max_price_percent > 1:
-            return ErrorHandler.handle_ors_error(
+            return BudgetErrorHandler.handle_ors_error(
                 ValueError(f"Le pourcentage doit être entre 0 et 1: {max_price_percent}"),
                 "validation_percentage"
             )
         
         with performance_tracker.measure_operation(Config.Operations.HANDLE_PERCENTAGE_BUDGET_ROUTE):
-            print(f"Recherche d'un itinéraire avec budget à {max_price_percent*100}% du coût de base...")
+            print(BudgetMessages.SEARCH_PERCENTAGE_BUDGET.format(percent=max_price_percent*100))
             
             try:
                 # 1) Obtenir la route de base pour calculer le coût de référence
@@ -71,12 +71,11 @@ class PercentageBudgetStrategy:
                 base_cost, base_duration, base_toll_count = self._get_base_metrics(base_route, veh_class)
                 price_limit = base_cost * max_price_percent
                 
-                print(f"Coût de base: {base_cost}€")
-                print(f"Limite budgétaire ({max_price_percent*100}%): {price_limit}€")
-                
-                # 3) Vérifier si la route de base respecte déjà la contrainte
+                print(BudgetMessages.BASE_ROUTE_COST.format(cost=base_cost))
+                print(BudgetMessages.BUDGET_LIMIT.format(limit=price_limit))
+                  # 3) Vérifier si la route de base respecte déjà la contrainte
                 if base_cost <= price_limit:
-                    print("La route de base respecte déjà la contrainte budgétaire.")
+                    print(CommonMessages.BUDGET_SATISFIED)
                     route_result = ResultFormatter.format_route_result(
                         base_route, base_cost, base_duration, base_toll_count
                     )
@@ -93,7 +92,7 @@ class PercentageBudgetStrategy:
                 
             except Exception as e:
                 print(f"Erreur lors du calcul avec contrainte de pourcentage: {e}")
-                return ErrorHandler.handle_ors_error(e, Config.Operations.HANDLE_PERCENTAGE_BUDGET_ROUTE)
+                return BudgetErrorHandler.handle_ors_error(e, Config.Operations.HANDLE_PERCENTAGE_BUDGET_ROUTE)
     
     def _get_base_metrics(self, base_route, veh_class):
         """Calcule les métriques de la route de base."""

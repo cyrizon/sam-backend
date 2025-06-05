@@ -14,7 +14,8 @@ from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.route_validator import RouteValidator
-from src.services.toll.error_handler import ErrorHandler
+from src.services.toll.error_handler import TollErrorHandler
+from src.services.common.toll_messages import TollMessages
 from src.services.ors_config_manager import ORSConfigManager
 
 
@@ -51,13 +52,13 @@ class ManyTollsStrategy:
         try:
             ORSConfigManager.validate_coordinates(coordinates)
         except ValueError as e:
-            return ErrorHandler.handle_ors_error(e, "validation_coordinates")
+            return TollErrorHandler.handle_ors_error(e, "validation_coordinates")
         
         with performance_tracker.measure_operation(Config.Operations.COMPUTE_ROUTE_MANY_TOLLS, {
             "max_tolls": max_tolls,
             "max_comb_size": max_comb_size
         }):
-            print(Config.Messages.SEARCH_MANY_TOLLS.format(max_tolls=max_tolls))
+            print(TollMessages.SEARCH_MANY_TOLLS.format(max_tolls=max_tolls))
             
             # 1) Premier appel pour obtenir la route de base
             base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
@@ -66,8 +67,8 @@ class ManyTollsStrategy:
             tolls_dict = self.route_calculator.locate_and_cost_tolls(base_route, veh_class, Config.Operations.LOCATE_TOLLS_MANY_TOLLS)
             tolls_on_route = tolls_dict["on_route"]
             tolls_nearby = tolls_dict["nearby"]
-            print(Config.Messages.TOLLS_ON_ROUTE, tolls_on_route)
-            print(Config.Messages.TOLLS_NEARBY, tolls_nearby)
+            print(TollMessages.TOLLS_ON_ROUTE, tolls_on_route)
+            print(TollMessages.TOLLS_NEARBY, tolls_nearby)
 
             # 3) Préparation des péages (coûts déjà calculés)
             with performance_tracker.measure_operation(Config.Operations.PREPARE_TOLL_COMBINATIONS):
@@ -105,7 +106,7 @@ class ManyTollsStrategy:
 
             # 8) Vérification finale et retour des résultats
             if not result_manager.has_valid_results():
-                print(Config.Messages.NO_ROUTE_FOUND_MAX_TOLLS)
+                print(TollMessages.NO_ROUTE_FOUND_MAX_TOLLS)
                 return None
                 
             results = result_manager.get_results()
@@ -158,7 +159,7 @@ class ManyTollsStrategy:
                     # Affichage périodique des stats
                     if combination_count % Config.COMBINATION_PROGRESS_INTERVAL == 0:
                         stats = performance_tracker.get_current_stats()
-                        print(Config.Messages.PROGRESS_COMBINATIONS.format(count=combination_count))
+                        print(TollMessages.PROGRESS_COMBINATIONS.format(count=combination_count))
                     
                     route_data = self._test_single_combination(
                         coordinates, to_avoid, max_tolls, veh_class, combination_count, k,
@@ -194,12 +195,11 @@ class ManyTollsStrategy:
             # Création du polygone d'évitement
             with performance_tracker.measure_operation(Config.Operations.CREATE_AVOIDANCE_POLYGON):
                 poly = avoidance_multipolygon(to_avoid)
-            
-            # Appel ORS pour l'itinéraire alternatif
+              # Appel ORS pour l'itinéraire alternatif
             try:
                 alt_route = self.route_calculator.get_route_avoiding_polygons_with_tracking(coordinates, poly)
             except Exception as e:
-                ErrorHandler.log_operation_failure(
+                TollErrorHandler.log_operation_failure(
                     f"test_combination_{combination_count}", 
                     f"Impossible de calculer une route alternative: {e}"
                 )

@@ -12,7 +12,7 @@ from src.services.toll.fallback_strategy import FallbackStrategy
 from src.services.toll.one_open_toll_strategy import OneOpenTollStrategy
 from src.services.toll.many_tolls_strategy import ManyTollsStrategy
 from src.services.toll.constants import TollOptimizationConfig as Config
-from src.services.toll.error_handler import ErrorHandler
+from src.services.toll.error_handler import TollErrorHandler
 
 class TollRouteOptimizer:
     """
@@ -48,7 +48,7 @@ class TollRouteOptimizer:
         """
         
         # Log du début de l'opération
-        ErrorHandler.log_operation_start(
+        TollErrorHandler.log_operation_start(
             "compute_route_with_toll_limit",
             max_tolls=max_tolls,
             veh_class=veh_class,
@@ -81,7 +81,7 @@ class TollRouteOptimizer:
                 
                 # Log du succès
                 if result and result.get("status"):
-                    ErrorHandler.log_operation_success(
+                    TollErrorHandler.log_operation_success(
                         "compute_route_with_toll_limit",
                         f"Status: {result['status']}"
                     )
@@ -89,7 +89,7 @@ class TollRouteOptimizer:
                 return result
                 
             except Exception as e:
-                ErrorHandler.log_operation_failure("compute_route_with_toll_limit", str(e))
+                TollErrorHandler.log_operation_failure("compute_route_with_toll_limit", str(e))
                 # Re-lever l'exception pour qu'elle soit gérée au niveau supérieur
                 raise
     

@@ -8,6 +8,7 @@ Responsabilité unique : gérer les critères d'optimisation (coût, durée, nom
 
 from src.services.common.result_formatter import ResultFormatter
 from src.services.toll.constants import TollOptimizationConfig as Config
+from src.services.common.toll_messages import TollMessages
 
 
 class RouteResultManager:
@@ -78,10 +79,9 @@ class RouteResultManager:
         if cost < self.best_cheap["cost"]:
             self.best_cheap = route_data.copy()
             updated = True
-        
-        # Mise à jour du plus rapide (priorité aux coûts plus faibles, puis à la durée)
-        if (cost < self.best_fast["cost"] or 
-            (cost == self.best_fast["cost"] and duration < self.best_fast["duration"]) or
+          # Mise à jour du plus rapide (priorité à la durée plus faible, puis au coût)
+        if (duration < self.best_fast["duration"] or 
+            (duration == self.best_fast["duration"] and cost < self.best_fast["cost"]) or
             self.best_fast["route"] is None):
             self.best_fast = route_data.copy()
             updated = True
@@ -143,40 +143,36 @@ class RouteResultManager:
         Args:
             base_toll_count: Nombre de péages de la route de base
             base_cost: Coût de la route de base
-            base_duration: Durée de la route de base
-        """
-        print(Config.Messages.RESULT_BASE.format(
+            base_duration: Durée de la route de base        """
+        print(TollMessages.RESULT_BASE.format(
             toll_count=base_toll_count, 
             cost=base_cost, 
             duration=base_duration/60
         ))
         
-        if self.best_cheap["route"]:
-            print(Config.Messages.RESULT_CHEAPEST.format(
+        if self.best_cheap["route"]:            print(TollMessages.RESULT_CHEAPEST.format(
                 toll_count=self.best_cheap['toll_count'], 
                 cost=self.best_cheap['cost'], 
                 duration=self.best_cheap['duration']/60
             ))
         else:
-            print(Config.Messages.NO_ECONOMIC_ROUTE)
+            print(TollMessages.NO_ECONOMIC_ROUTE)
             
-        if self.best_fast["route"]:
-            print(Config.Messages.RESULT_FASTEST.format(
+        if self.best_fast["route"]:            print(TollMessages.RESULT_FASTEST.format(
                 toll_count=self.best_fast['toll_count'], 
                 cost=self.best_fast['cost'], 
                 duration=self.best_fast['duration']/60
             ))
         else:
-            print(Config.Messages.NO_FAST_ROUTE)
+            print(TollMessages.NO_FAST_ROUTE)
             
-        if self.best_min_tolls["route"]:
-            print(Config.Messages.RESULT_MIN_TOLLS.format(
+        if self.best_min_tolls["route"]:            print(TollMessages.RESULT_MIN_TOLLS.format(
                 toll_count=self.best_min_tolls['toll_count'], 
                 cost=self.best_min_tolls['cost'], 
                 duration=self.best_min_tolls['duration']/60
             ))
         else:
-            print(Config.Messages.NO_MIN_TOLLS_ROUTE)
+            print(TollMessages.NO_MIN_TOLLS_ROUTE)
     
     @classmethod
     def create_uniform_result(cls, route_result, status):

@@ -11,7 +11,7 @@ from src.services.budget.constants import BudgetOptimizationConfig as Config
 from src.services.common.result_formatter import ResultFormatter
 from src.services.budget.result_manager import BudgetRouteResultManager as RouteResultManager
 from src.services.budget.route_calculator import BudgetRouteCalculator as RouteCalculator
-from src.services.toll.error_handler import ErrorHandler
+from src.services.budget.error_handler import BudgetErrorHandler
 from src.services.ors_config_manager import ORSConfigManager
 from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity
 from src.services.toll_cost import add_marginal_cost
@@ -53,7 +53,7 @@ class BudgetFallbackStrategy:
         try:
             ORSConfigManager.validate_coordinates(coordinates)
         except ValueError as e:
-            return ErrorHandler.handle_ors_error(e, "validation_coordinates")
+            return BudgetErrorHandler.handle_ors_error(e, "validation_coordinates")
         
         with performance_tracker.measure_operation(Config.Operations.HANDLE_BUDGET_FAILURE):
             print(f"=== Stratégie de fallback pour budget {budget_type} ===")
@@ -71,7 +71,7 @@ class BudgetFallbackStrategy:
                     
             except Exception as e:
                 print(f"Erreur lors du fallback budgétaire: {e}")
-                return ErrorHandler.handle_ors_error(e, Config.Operations.HANDLE_BUDGET_FAILURE)
+                return BudgetErrorHandler.handle_ors_error(e, Config.Operations.HANDLE_BUDGET_FAILURE)
     
     def _handle_zero_budget_fallback(self, coordinates, veh_class, max_comb_size):
         """Fallback spécialisé pour les budgets zéro."""
@@ -306,7 +306,7 @@ class BudgetFallbackStrategy:
                 base_metrics, Config.StatusCodes.FALLBACK_BASE_ROUTE_USED
             )
         except Exception as e:
-            return ErrorHandler.handle_ors_error(e, Config.Operations.GET_BASE_ROUTE_FALLBACK)
+            return BudgetErrorHandler.handle_ors_error(e, Config.Operations.GET_BASE_ROUTE_FALLBACK)
     
     def _test_combination_avoidance_simple(self, coordinates, to_avoid, veh_class):
         """Version simplifiée du test d'évitement pour le fallback."""

@@ -3,15 +3,16 @@ response_builder.py
 ------------------
 
 Construction centralisée des réponses API pour l'optimisation budgétaire.
-Responsabilité unique : assembler les réponses finales pour l'API budget.
+Responsabilité unique : assembler les réponses finales spécifiques au budget.
 """
 
+from src.services.common.base_response_builder import BaseResponseBuilder
 from src.services.common.result_formatter import ResultFormatter
-from src.services.budget.constants import BudgetOptimizationConfig as Config
+from src.services.common.base_constants import BaseOptimizationConfig as Config
 from src.services.budget.route_validator import BudgetRouteValidator
 
 
-class BudgetResponseBuilder:
+class BudgetResponseBuilder(BaseResponseBuilder):
     """Constructeur centralisé pour les réponses API budgétaires."""
     
     @staticmethod

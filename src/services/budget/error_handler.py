@@ -6,31 +6,17 @@ Gestionnaire centralisé pour la gestion des erreurs budgétaires.
 Responsabilité unique : traiter et formatter les erreurs de manière uniforme.
 """
 
-from src.services.toll.error_handler import ErrorHandler as BaseErrorHandler
+from src.services.common.base_error_handler import BaseErrorHandler
 from src.services.common.result_formatter import ResultFormatter
+from src.services.common.common_messages import CommonMessages
+from src.services.common.budget_messages import BudgetMessages
+from src.services.common.operation_tracker import OperationTracker
 from benchmark.performance_tracker import performance_tracker
 from src.services.budget.constants import BudgetOptimizationConfig as Config
 
 
 class BudgetErrorHandler(BaseErrorHandler):
     """Gestionnaire d'erreurs spécialisé pour l'optimisation budgétaire."""
-    
-    @staticmethod
-    def log_operation_start(operation_name, **kwargs):
-        """Log le début d'une opération budgétaire."""
-        params_str = ", ".join(f"{k}={v}" for k, v in kwargs.items() if v is not None)
-        print(f"🚀 Début Budget: {operation_name} ({params_str})")
-    
-    @staticmethod
-    def log_operation_success(operation_name, details=""):
-        """Log le succès d'une opération budgétaire."""
-        print(f"✅ Succès Budget: {operation_name} - {details}")
-    
-    @staticmethod
-    def log_operation_failure(operation_name, error_message):
-        """Log l'échec d'une opération budgétaire."""
-        print(f"❌ Échec Budget: {operation_name} - {error_message}")
-        performance_tracker.log_error(f"Budget operation failed: {operation_name} - {error_message}")
     
     @staticmethod
     def handle_budget_validation_error(max_price, max_price_percent):
@@ -137,7 +123,7 @@ class BudgetErrorHandler(BaseErrorHandler):
         
         # Log additionnel pour le debugging
         if coordinates:
-            print(f"Coordonnées concernées: {coordinates}")
+            print(BudgetMessages.COORDINATES_INFO.format(coordinates=coordinates))
         
         return None
     
@@ -197,11 +183,15 @@ class BudgetErrorHandler(BaseErrorHandler):
             base_cost: Coût de base (optionnel)
         """
         if budget_type == "zero":
-            print("📊 Contrainte: Budget zéro (routes gratuites uniquement)")
+            print(BudgetMessages.CONSTRAINT_ZERO_BUDGET)
         elif budget_type == "percentage" and base_cost is not None:
             actual_limit = base_cost * budget_limit
-            print(f"📊 Contrainte: {budget_limit*100}% du coût de base ({base_cost}€) = {actual_limit}€")
+            print(BudgetMessages.CONSTRAINT_PERCENTAGE_BUDGET.format(
+                percent=budget_limit*100, 
+                base_cost=base_cost, 
+                actual_limit=actual_limit
+            ))
         elif budget_type == "absolute":
-            print(f"📊 Contrainte: Budget maximum {budget_limit}€")
+            print(BudgetMessages.CONSTRAINT_ABSOLUTE_BUDGET.format(budget_limit=budget_limit))
         else:
-            print(f"📊 Contrainte: {budget_type} = {budget_limit}")
+            print(BudgetMessages.CONSTRAINT_GENERIC.format(budget_type=budget_type, budget_limit=budget_limit))

@@ -10,9 +10,11 @@ from benchmark.performance_tracker import performance_tracker
 from src.services.budget.constants import BudgetOptimizationConfig as Config
 from src.services.common.result_formatter import ResultFormatter
 from src.services.budget.result_manager import BudgetRouteResultManager as RouteResultManager
-from src.services.toll.route_calculator import RouteCalculator
-from src.services.toll.error_handler import ErrorHandler
+from src.services.budget.route_calculator import BudgetRouteCalculator
+from src.services.budget.error_handler import BudgetErrorHandler
 from src.services.ors_config_manager import ORSConfigManager
+from src.services.common.budget_messages import BudgetMessages
+from src.services.common.common_messages import CommonMessages
 from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity
 from src.services.toll_cost import add_marginal_cost
 from src.utils.poly_utils import avoidance_multipolygon
@@ -29,10 +31,9 @@ class AbsoluteBudgetStrategy:
         Initialise la stratégie avec un service ORS.
         
         Args:
-            ors_service: Instance de ORSService pour les appels API
-        """
+            ors_service: Instance de ORSService pour les appels API        """
         self.ors = ors_service
-        self.route_calculator = RouteCalculator(ors_service)
+        self.route_calculator = BudgetRouteCalculator(ors_service)
     
     def compute_absolute_budget_route(self, coordinates, max_price, veh_class=Config.DEFAULT_VEH_CLASS, max_comb_size=Config.DEFAULT_MAX_COMB_SIZE):
         """
@@ -51,31 +52,28 @@ class AbsoluteBudgetStrategy:
         try:
             ORSConfigManager.validate_coordinates(coordinates)
         except ValueError as e:
-            return ErrorHandler.handle_ors_error(e, "validation_coordinates")
+            return BudgetErrorHandler.handle_ors_error(e, "validation_coordinates")
         
         # Validation du budget
-        if max_price < 0:
-            return ErrorHandler.handle_ors_error(
+        if max_price < 0:            return BudgetErrorHandler.handle_ors_error(
                 ValueError(f"Le budget ne peut pas être négatif: {max_price}€"),
                 "validation_absolute_budget"
             )
         
         with performance_tracker.measure_operation(Config.Operations.HANDLE_ABSOLUTE_BUDGET_ROUTE):
-            print(f"Recherche d'un itinéraire avec budget maximum de {max_price}€...")
+            print(BudgetMessages.SEARCH_ABSOLUTE_BUDGET.format(budget=max_price))
             
             try:
                 # 1) Obtenir la route de base pour évaluation
                 base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
-                
-                # 2) Calculer le coût de base
+                  # 2) Calculer le coût de base
                 base_cost, base_duration, base_toll_count = self._get_base_metrics(base_route, veh_class)
-                
-                print(f"Coût de base: {base_cost}€")
-                print(f"Budget maximum: {max_price}€")
+                print(BudgetMessages.BASE_ROUTE_COST.format(cost=base_cost))
+                print(BudgetMessages.BUDGET_LIMIT.format(limit=max_price))
                 
                 # 3) Vérifier si la route de base respecte déjà la contrainte
                 if base_cost <= max_price:
-                    print("La route de base respecte déjà la contrainte budgétaire.")
+                    print(CommonMessages.BUDGET_SATISFIED)
                     route_result = ResultFormatter.format_route_result(
                         base_route, base_cost, base_duration, base_toll_count
                     )
@@ -91,8 +89,8 @@ class AbsoluteBudgetStrategy:
                 return optimization_result
                 
             except Exception as e:
-                print(f"Erreur lors du calcul avec contrainte de budget absolu: {e}")
-                return ErrorHandler.handle_ors_error(e, Config.Operations.HANDLE_ABSOLUTE_BUDGET_ROUTE)
+                print(CommonMessages.COMPUTATION_ERROR.format(error=str(e)))
+                return BudgetErrorHandler.handle_ors_error(e, Config.Operations.HANDLE_ABSOLUTE_BUDGET_ROUTE)
     
     def _get_base_metrics(self, base_route, veh_class):
         """Calcule les métriques de la route de base."""
@@ -140,21 +138,21 @@ class AbsoluteBudgetStrategy:
             all_tolls_sorted = sorted(all_tolls, key=lambda t: t.get("cost", 0), reverse=True)
             
             if not all_tolls_sorted:
-                print("Aucun péage trouvé pour l'optimisation.")
+                print(CommonMessages.NO_TOLLS_FOR_OPTIMIZATION)
                 return ResultFormatter.format_uniform_result(
                     base_route_data, Config.StatusCodes.NO_TOLLS_FOUND
                 )
             
-            print(f"Péages disponibles pour optimisation: {len(all_tolls_sorted)}")
+            print(BudgetMessages.TOLLS_AVAILABLE.format(count=len(all_tolls_sorted)))
             
             # Calculer l'écart budgétaire à combler
             budget_gap = base_cost - max_price
-            print(f"Écart budgétaire à combler: {budget_gap}€")
+            print(BudgetMessages.BUDGET_GAP.format(gap=budget_gap))
             
             # Optimisation intelligente : d'abord cibler les péages qui peuvent combler l'écart
             promising_tolls = [t for t in all_tolls_sorted if t.get("cost", 0) >= budget_gap * 0.5]
             if promising_tolls:
-                print(f"Péages prometteurs pour combler l'écart: {len(promising_tolls)}")
+                print(BudgetMessages.PROMISING_TOLLS.format(count=len(promising_tolls)))
                 # Tester d'abord les péages les plus prometteurs
                 self._test_promising_toll_avoidance(
                     coordinates, promising_tolls, max_price, veh_class, result_manager
@@ -178,13 +176,13 @@ class AbsoluteBudgetStrategy:
     def _test_promising_toll_avoidance(self, coordinates, promising_tolls, max_price, veh_class, result_manager):
         """Teste en priorité l'évitement des péages les plus prometteurs."""
         with performance_tracker.measure_operation(Config.Operations.TEST_PROMISING_TOLLS_ABSOLUTE):
-            print("Test prioritaire des péages les plus prometteurs...")
+            print(CommonMessages.TESTING_PROMISING_TOLLS)
             
             for toll in promising_tolls:
                 if toll.get("cost", 0) <= 0:
                     continue
                 
-                print(f"Test prioritaire du péage: {toll['id']} (coût: {toll.get('cost', 0)}€)")
+                print(CommonMessages.TESTING_TOLL.format(toll_id=toll['id'], cost=toll.get('cost', 0)))
                 
                 route_data = self._test_single_toll_avoidance(coordinates, toll, veh_class)
                 if route_data:
@@ -192,23 +190,23 @@ class AbsoluteBudgetStrategy:
                     
                     # Arrêt anticipé si on trouve une solution dans le budget
                     if updated and route_data["cost"] <= max_price:
-                        print(f"Solution prometteuse trouvée dans le budget: {route_data['cost']}€ ≤ {max_price}€")
+                        print(BudgetMessages.SOLUTION_WITHIN_BUDGET.format(cost=route_data['cost'], budget=max_price))
                         
                         # Si c'est gratuit, on peut s'arrêter immédiatement
                         if route_data["cost"] == 0:
-                            print("Route gratuite trouvée !")
+                            print(CommonMessages.FREE_ROUTE_FOUND)
                             break
     
     def _test_individual_toll_avoidance(self, coordinates, all_tolls_sorted, max_price, veh_class, result_manager):
         """Teste l'évitement des péages individuellement."""
         with performance_tracker.measure_operation(Config.Operations.TEST_INDIVIDUAL_TOLLS_ABSOLUTE):
-            print("Test de l'évitement des péages individuels...")
+            print(CommonMessages.TESTING_INDIVIDUAL_TOLLS)
             
             for toll in all_tolls_sorted:
                 if toll.get("cost", 0) <= 0:
                     continue
                 
-                print(f"Test d'évitement du péage: {toll['id']} (coût: {toll.get('cost', 0)}€)")
+                print(CommonMessages.TESTING_TOLL_AVOIDANCE.format(toll_id=toll['id'], cost=toll.get('cost', 0)))
                 
                 route_data = self._test_single_toll_avoidance(coordinates, toll, veh_class)
                 if route_data:
@@ -216,12 +214,12 @@ class AbsoluteBudgetStrategy:
                     
                     # Arrêt anticipé si on trouve une solution optimale
                     if updated and route_data["cost"] == 0:
-                        print("Route gratuite trouvée !")
+                        print(CommonMessages.FREE_ROUTE_FOUND)
                         break
                     
                     # Arrêt anticipé si on a une bonne solution dans le budget
                     if route_data["cost"] <= max_price:
-                        print(f"Solution dans le budget trouvée: {route_data['cost']}€ ≤ {max_price}€")
+                        print(BudgetMessages.SOLUTION_WITHIN_BUDGET.format(cost=route_data['cost'], budget=max_price))
     
     def _test_single_toll_avoidance(self, coordinates, toll, veh_class):
         """Teste l'évitement d'un péage spécifique."""
@@ -248,15 +246,15 @@ class AbsoluteBudgetStrategy:
             present_ids = set(str(t["id"]).strip().lower() for t in alt_tolls_on_route)
             
             if avoided_id in present_ids:
-                print(f"Le péage {avoided_id} n'a pas pu être évité.")
+                print(CommonMessages.TOLL_NOT_AVOIDED.format(toll_id=avoided_id))
                 return None
             
-            print(f"Route alternative: coût={cost}€, durée={duration/60:.1f}min")
+            print(CommonMessages.ROUTE_ALTERNATIVE_INFO.format(cost=cost, duration=duration/60))
             
             return ResultFormatter.format_route_result(alt_route, cost, duration, toll_count)
             
         except Exception as e:
-            print(f"Erreur lors de l'évitement du péage {toll['id']}: {e}")
+            print(CommonMessages.TOLL_AVOIDANCE_ERROR.format(toll_id=toll['id'], error=str(e)))
             return None
     
     def _test_toll_combinations(self, coordinates, all_tolls_sorted, max_price, veh_class, max_comb_size, result_manager):

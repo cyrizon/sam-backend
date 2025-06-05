@@ -7,6 +7,10 @@ Responsabilité unique : traiter et formatter les erreurs de manière uniforme.
 """
 
 from benchmark.performance_tracker import performance_tracker
+from src.services.common.base_error_handler import BaseErrorHandler
+from src.services.common.common_messages import CommonMessages
+from src.services.common.toll_messages import TollMessages
+from src.services.common.operation_tracker import OperationTracker
 from src.services.toll.exceptions import (
     TollOptimizationError, ORSConnectionError, NoTollRouteError,
     NoOpenTollError, NoValidOpenTollRouteError, RouteCalculationError
@@ -14,7 +18,7 @@ from src.services.toll.exceptions import (
 from src.services.toll.constants import TollOptimizationConfig as Config
 
 
-class ErrorHandler:
+class TollErrorHandler(BaseErrorHandler):
     """Gestionnaire centralisé pour les erreurs d'optimisation."""
     
     @staticmethod
@@ -29,8 +33,8 @@ class ErrorHandler:
         Returns:
             tuple: (None, status_code)
         """
-        error_msg = f"Erreur lors de {operation_name}: {exception}"
-        performance_tracker.log_error(error_msg)
+        error_msg = CommonMessages.ORS_API_ERROR.format(error=exception)
+        OperationTracker.log_operation_failure(operation_name, str(exception))
         print(error_msg)
         
         ors_error = ORSConnectionError(error_msg, original_exception=exception)
@@ -90,7 +94,7 @@ class ErrorHandler:
         Returns:
             tuple: (None, status_code)
         """
-        print(Config.Messages.NO_OPEN_TOLLS_IN_RADIUS.format(distance=search_radius_km))
+        print(TollMessages.NO_OPEN_TOLLS_IN_RADIUS.format(distance=search_radius_km))
         return None, Config.StatusCodes.NO_OPEN_TOLL_FOUND
     
     @staticmethod

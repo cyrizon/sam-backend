@@ -10,9 +10,11 @@ from benchmark.performance_tracker import performance_tracker
 from src.services.budget.constants import BudgetOptimizationConfig as Config
 from src.services.common.result_formatter import ResultFormatter
 from src.services.budget.result_manager import BudgetRouteResultManager as RouteResultManager
-from src.services.toll.route_calculator import RouteCalculator
-from src.services.toll.error_handler import ErrorHandler
+from src.services.budget.route_calculator import BudgetRouteCalculator
+from src.services.budget.error_handler import BudgetErrorHandler
 from src.services.ors_config_manager import ORSConfigManager
+from src.services.common.budget_messages import BudgetMessages
+from src.services.common.common_messages import CommonMessages
 
 class ZeroBudgetStrategy:
     """
@@ -27,7 +29,7 @@ class ZeroBudgetStrategy:
             ors_service: Instance de ORSService pour les appels API
         """
         self.ors = ors_service
-        self.route_calculator = RouteCalculator(ors_service)
+        self.route_calculator = BudgetRouteCalculator(ors_service)
     
     def compute_zero_budget_route(self, coordinates, veh_class=Config.DEFAULT_VEH_CLASS):
         """
@@ -44,10 +46,10 @@ class ZeroBudgetStrategy:
         try:
             ORSConfigManager.validate_coordinates(coordinates)
         except ValueError as e:
-            return ErrorHandler.handle_ors_error(e, "validation_coordinates")
+            return BudgetErrorHandler.handle_ors_error(e, "validation_coordinates")
         
         with performance_tracker.measure_operation(Config.Operations.HANDLE_ZERO_BUDGET_ROUTE):
-            print(Config.Messages.SEARCH_ZERO_BUDGET)
+            print(BudgetMessages.SEARCH_ZERO_BUDGET)
             
             try:
                 # Tenter d'obtenir une route sans péage
@@ -82,7 +84,7 @@ class ZeroBudgetStrategy:
                 
             except Exception as e:
                 print(Config.Messages.IMPOSSIBLE_NO_TOLL_ROUTE.format(error=str(e)))
-                return ErrorHandler.handle_ors_error(e, Config.Operations.HANDLE_ZERO_BUDGET_ROUTE)
+                return BudgetErrorHandler.handle_ors_error(e, Config.Operations.HANDLE_ZERO_BUDGET_ROUTE)
     
     def handle_zero_budget_route(self, coordinates, veh_class=Config.DEFAULT_VEH_CLASS):
         """
