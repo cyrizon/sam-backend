@@ -6,7 +6,7 @@ Construction centralisée des réponses API.
 Responsabilité unique : assembler les réponses finales pour l'API.
 """
 
-from src.services.toll.result_formatter import ResultFormatter
+from src.services.common.result_formatter import ResultFormatter
 from src.services.toll.constants import TollOptimizationConfig as Config
 
 

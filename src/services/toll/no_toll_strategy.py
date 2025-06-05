@@ -11,7 +11,7 @@ from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.exceptions import NoTollRouteError
 from src.services.toll.error_handler import ErrorHandler
-from src.services.toll.result_formatter import ResultFormatter
+from src.services.common.result_formatter import ResultFormatter
 from src.services.ors_config_manager import ORSConfigManager
 
 

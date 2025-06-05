@@ -8,9 +8,9 @@ Responsabilité unique : fournir des alternatives intelligentes quand les contra
 
 from benchmark.performance_tracker import performance_tracker
 from src.services.budget.constants import BudgetOptimizationConfig as Config
-from src.services.toll.result_formatter import ResultFormatter
-from src.services.toll.result_manager import RouteResultManager
-from src.services.toll.route_calculator import RouteCalculator
+from src.services.common.result_formatter import ResultFormatter
+from src.services.budget.result_manager import BudgetRouteResultManager as RouteResultManager
+from src.services.budget.route_calculator import BudgetRouteCalculator as RouteCalculator
 from src.services.toll.error_handler import ErrorHandler
 from src.services.ors_config_manager import ORSConfigManager
 from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity

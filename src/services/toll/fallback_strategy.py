@@ -6,7 +6,7 @@ Stratégie de repli pour générer une route de base quand aucune solution n'est
 """
 
 from src.services.toll.error_handler import ErrorHandler
-from src.services.toll.result_formatter import ResultFormatter
+from src.services.common.result_formatter import ResultFormatter
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.constants import TollOptimizationConfig as Config

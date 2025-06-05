@@ -8,8 +8,8 @@ Responsabilité unique : optimiser les routes selon un pourcentage du coût de b
 
 from benchmark.performance_tracker import performance_tracker
 from src.services.budget.constants import BudgetOptimizationConfig as Config
-from src.services.toll.result_formatter import ResultFormatter
-from src.services.toll.result_manager import RouteResultManager
+from src.services.common.result_formatter import ResultFormatter
+from src.services.budget.result_manager import BudgetRouteResultManager as RouteResultManager
 from src.services.toll.route_calculator import RouteCalculator
 from src.services.toll.error_handler import ErrorHandler
 from src.services.ors_config_manager import ORSConfigManager

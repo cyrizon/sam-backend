@@ -2,7 +2,7 @@
 Tests pour ResultFormatter - Formatage centralisé des résultats.
 """
 import pytest
-from src.services.toll.result_formatter import ResultFormatter
+from src.services.common.result_formatter import ResultFormatter
 from src.services.toll.constants import TollOptimizationConfig as Config
 
 

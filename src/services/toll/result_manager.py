@@ -6,7 +6,7 @@ Gestionnaire pour comparer et sélectionner les meilleurs itinéraires.
 Responsabilité unique : gérer les critères d'optimisation (coût, durée, nombre de péages).
 """
 
-from src.services.toll.result_formatter import ResultFormatter
+from src.services.common.result_formatter import ResultFormatter
 from src.services.toll.constants import TollOptimizationConfig as Config
 
 

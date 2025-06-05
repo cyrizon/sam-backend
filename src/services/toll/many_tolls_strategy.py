@@ -8,7 +8,7 @@ Responsabilité unique : optimiser les routes en testant des combinaisons de pé
 
 from itertools import combinations
 from src.utils.poly_utils import avoidance_multipolygon
-from src.services.toll.result_formatter import ResultFormatter
+from src.services.common.result_formatter import ResultFormatter
 from src.services.toll.result_manager import RouteResultManager
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.route_calculator import RouteCalculator
