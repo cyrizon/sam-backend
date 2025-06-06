@@ -4,3 +4,6 @@ flask-cors
 python-dotenv
 requests
 pytest
+shapely
+pandas
+pyproj
