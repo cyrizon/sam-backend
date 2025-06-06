@@ -16,7 +16,7 @@ from src.services.ors_config_manager import ORSConfigManager
 from src.services.common.budget_messages import BudgetMessages
 from src.services.common.common_messages import CommonMessages
 from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity
-from src.services.toll_cost import add_marginal_cost
+from src.services.toll_cost import add_marginal_cost, add_marginal_cost_cached
 from src.utils.poly_utils import avoidance_multipolygon
 from itertools import combinations
 
@@ -129,10 +129,9 @@ class AbsoluteBudgetStrategy:
             all_tolls_nearby = get_all_open_tolls_by_proximity(base_route, Config.get_barriers_csv_path(), max_distance_m)
             if not all_tolls_nearby:
                 all_tolls_nearby = []
-            
-            # Combiner tous les péages et calculer leurs coûts
+              # Combiner tous les péages et calculer leurs coûts avec cache
             all_tolls = tolls_on_route + tolls_nearby + all_tolls_nearby
-            add_marginal_cost(all_tolls, veh_class)
+            add_marginal_cost_cached(all_tolls, veh_class)
             
             # Trier par coût décroissant pour prioriser l'évitement des péages les plus chers
             all_tolls_sorted = sorted(all_tolls, key=lambda t: t.get("cost", 0), reverse=True)
@@ -264,17 +263,21 @@ class AbsoluteBudgetStrategy:
             
             seen_combinations = set()
             
-            for k in range(2, min(len(all_tolls_sorted), max_comb_size) + 1):
+            for k in range(2, min(len(all_tolls_sorted), max_comb_size, 5) + 1):
                 for to_avoid in combinations(all_tolls_sorted, k):
                     # Éviter les doublons
                     sig = tuple(sorted(t["id"] for t in to_avoid))
                     if sig in seen_combinations:
                         continue
                     seen_combinations.add(sig)
-                    
-                    # Heuristique d'optimisation : calculer l'économie potentielle
+                      # Heuristique d'optimisation : calculer l'économie potentielle
                     potential_saving = sum(t.get("cost", 0) for t in to_avoid)
                     if potential_saving <= 0:
+                        continue
+                    
+                    # Pré-filtrage rentabilité : ignorer les économies négligeables (< 5% du budget)
+                    min_worthwhile_saving = max_price * 0.05
+                    if potential_saving < min_worthwhile_saving:
                         continue
                     
                     # Prioriser les combinaisons qui peuvent potentiellement résoudre le problème budgétaire
