@@ -3,4 +3,4 @@ class DevConfig:
         self.ENV = "dev"
         self.DEBUG = True
         self.PORT = 5000
-        self.HOST = "localhost"
+        self.HOST = "0.0.0.0"

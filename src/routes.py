@@ -260,3 +260,7 @@ def register_routes(app):
         except requests.RequestException as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/health", methods=["GET"])
+    def health():
+        return "OK", 200
+
