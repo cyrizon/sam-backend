@@ -125,6 +125,9 @@ class ORSConfigManager:
             dict: Payload optimisé
         """
         optimized = payload.copy()
+
+        # Désactiver l'élévation pour optimiser la performance
+        optimized["elevation"] = False
         
         # Assurer que extra_info est présent pour les péages
         if "extra_info" not in optimized:

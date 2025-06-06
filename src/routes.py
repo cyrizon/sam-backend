@@ -221,7 +221,7 @@ def register_routes(app):
             return jsonify({"error": str(e)}), 500
 
     @app.route('/api/geocode/search', methods=['GET'])
-    @limiter.limit("3 per minute")
+    @limiter.limit("6 per minute")
     def geocode_search():
         api_key = os.environ.get("ORS_API_KEY")
         text = request.args.get('text')
@@ -241,7 +241,7 @@ def register_routes(app):
             return jsonify({"error": str(e)}), 500
 
     @app.route('/api/geocode/autocomplete', methods=['GET'])
-    @limiter.limit("3 per minute")
+    @limiter.limit("6 per minute")
     def geocode_autocomplete():
         api_key = os.environ.get("ORS_API_KEY")
         text = request.args.get('text')
