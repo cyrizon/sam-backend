@@ -68,7 +68,7 @@ class SmartRouteService:
                 veh_class,
                 max_comb_size
             )
-            return result
+            return result        
         finally:
             # TERMINER LA SESSION - Le résumé sera automatiquement loggé
             performance_tracker.end_optimization_session(result if 'result' in locals() else {})
@@ -94,13 +94,26 @@ class SmartRouteService:
         Returns:
             dict: Résultats optimisés (fastest, cheapest, status)
         """
-        return self.budget_optimizer.compute_route_with_budget_limit(
-            coordinates,
-            max_price,
-            max_price_percent,
-            veh_class,
-            max_comb_size
+        # DÉMARRER LA SESSION pour le tracking budgétaire
+        from benchmark.performance_tracker import performance_tracker
+        session_id = performance_tracker.start_optimization_session(
+            origin=f"{coordinates[0][1]:.3f},{coordinates[0][0]:.3f}",
+            destination=f"{coordinates[1][1]:.3f},{coordinates[1][0]:.3f}",
+            route_distance_km=0
         )
+        
+        try:
+            result = self.budget_optimizer.compute_route_with_budget_limit(
+                coordinates,
+                max_price,
+                max_price_percent,
+                veh_class,
+                max_comb_size
+            )
+            return result
+        finally:
+            # TERMINER LA SESSION - Le résumé sera automatiquement loggé
+            performance_tracker.end_optimization_session(locals().get('result', {}))
 
 # Les fonctions wrapper ont été supprimées car elles ne sont plus nécessaires
 # Le code utilisateur importe maintenant directement la classe SmartRouteService
