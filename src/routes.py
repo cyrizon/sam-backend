@@ -76,27 +76,56 @@ def register_routes(app):
     @app.route('/api/route/', methods=['POST'])
     def api_route_post():
         ors_base_url = os.environ.get("ORS_BASE_URL")
-        url = f"{ors_base_url}/v2/directions/driving-car"
         data = request.get_json()
         print("Received data:", data)
         if not data or 'coordinates' not in data:
             return jsonify({"error": "Missing coordinates"}), 400
 
-        # Utilise le builder pour inclure "language": "fr"
+        # Utilise le builder pour inclure "language": "fr" et demander GeoJSON
         payload = ORSPayloadBuilder.build_custom_payload(
             data['coordinates'],
             options=data.get('options')
         )
-
+        # Demande explicitement GeoJSON
         headers = {
             "Content-Type": "application/json; charset=utf-8",
-            "Accept": "application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8",
+            "Accept": "application/geo+json, application/json, application/gpx+xml, img/png; charset=utf-8",
         }
-
+        # Utilise l'endpoint geojson d'ORS
+        url = f"{ors_base_url}/v2/directions/driving-car/geojson"
         try:
             response = requests.post(url, json=payload, headers=headers)
             response.raise_for_status()
-            return jsonify(response.json())
+            ors_result = response.json()
+
+            # --- Ajout du calcul de péages et coût ---
+            # 1. Utilise directement la géométrie GeoJSON de la route principale
+            route_geojson = None
+            if (
+                "features" in ors_result and
+                isinstance(ors_result["features"], list) and
+                len(ors_result["features"]) > 0 and
+                "geometry" in ors_result["features"][0]
+            ):
+                route_geojson = {
+                    "type": "FeatureCollection",
+                    "features": [ors_result["features"][0]]
+                }
+            cost = None
+            toll_count = None
+            if route_geojson:
+                csv_path = os.path.join(os.path.dirname(__file__), "../data/barriers.csv")
+                tolls_dict = locate_tolls(route_geojson, csv_path, buffer_m=120)
+                from src.services.toll_cost import add_marginal_cost
+                tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
+                cost = sum(t.get("cost", 0) for t in tolls)
+                toll_count = len(tolls)
+            # Réponse enrichie
+            return jsonify({
+                **ors_result,
+                "cost": cost,
+                "toll_count": toll_count
+            })
         except requests.RequestException as e:
             return jsonify({"error": str(e)}), 500   
         
