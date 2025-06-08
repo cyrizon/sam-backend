@@ -27,7 +27,8 @@ class ORSPayloadBuilder:
         ORSConfigManager.validate_coordinates(coordinates)
         
         payload = {
-            "coordinates": coordinates
+            "coordinates": coordinates,
+            "language": "fr"
         }
         
         if include_tollways:
@@ -51,7 +52,8 @@ class ORSPayloadBuilder:
         payload = {
             "coordinates": coordinates,
             "options": {"avoid_features": ["tollways"]},
-            "extra_info": ["tollways"]
+            "extra_info": ["tollways"],
+            "language": "fr"
         }
         
         return ORSConfigManager.optimize_payload(payload)
@@ -76,7 +78,8 @@ class ORSPayloadBuilder:
         
         payload = {
             "coordinates": coordinates,
-            "options": {"avoid_polygons": polygons}
+            "options": {"avoid_polygons": polygons},
+            "language": "fr"
         }
         
         if include_tollways:
@@ -99,7 +102,10 @@ class ORSPayloadBuilder:
         """
         ORSConfigManager.validate_coordinates(coordinates)
         
-        payload = {"coordinates": coordinates}
+        payload = {
+            "coordinates": coordinates,
+            "language": "fr"
+        }
         
         if options:
             payload["options"] = options
