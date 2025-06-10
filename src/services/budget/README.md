@@ -159,24 +159,17 @@ Fournir des **alternatives intelligentes** quand aucune solution ne respecte le 
             └─────────────────┘    └─────────────────┘
 ```
 
-### ⚡ Stratégies spécialisées
+### ⚡ Stratégie simplifiée
 
-#### 🆓 Zero Budget Fallback
-1. **Recherche route 100% gratuite** (exhaustive)
-2. **Sinon** → Route la moins chère possible
-3. **Dernier recours** → Route de base
+La stratégie de fallback propose **2 alternatives simples** quand aucune solution ne respecte le budget :
 
-#### 💰 Absolute Budget Fallback
-1. **Route la plus proche** du budget (±20%)
-2. **Sinon** → Route la moins chère globale
-3. **Dernier recours** → Route de base
+#### 1. **Route sans péage** (si pas déjà testée)
+- Calcul d'une route évitant tous les péages
+- Retourne cette alternative même si elle dépasse le budget initial
 
-#### 📈 Percentage Budget Fallback
-1. **Élargissement progressif** : 110% → 125% → 150%
-2. **Sinon** → Route la moins chère globale
-
-#### 🔄 General Fallback
-- **Fastest Among Cheapest** : Route la plus rapide parmi les moins chères
+#### 2. **Route de base** (dernier recours)
+- Utilise la route standard calculée initialement
+- Réutilise les données déjà calculées pour éviter les recalculs
 
 ---
 
@@ -379,6 +372,8 @@ result = optimizer.compute_route_with_budget_limit(
 - `FREE_ALTERNATIVE_FOUND` : Route gratuite trouvée
 - `CLOSEST_TO_BUDGET_FOUND` : Route la plus proche du budget
 - `FALLBACK_BASE_ROUTE_USED` : Route de base utilisée en dernier recours
+- `LIMITED_ALTERNATIVES_FOUND` : Alternatives limitées disponibles (fallback)
+- `ONLY_BASE_ROUTE_AVAILABLE` : Seule la route de base est disponible
 
 ---
 
