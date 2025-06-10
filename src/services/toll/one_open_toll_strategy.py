@@ -287,8 +287,7 @@ class OneOpenTollStrategy:
                     status=status
                 )
             
-            # Aucune solution trouvée
-            else:
-                from src.services.toll.fallback_strategy import FallbackStrategy
-                fallback = FallbackStrategy(self.ors)
-                return fallback.get_fallback_route(coordinates, veh_class, Config.StatusCodes.NO_VALID_ROUTE_WITH_MAX_ONE_TOLL)
+            # Aucune solution trouvée            else:
+                from src.services.toll.fallback_strategy import TollFallbackStrategy
+                fallback = TollFallbackStrategy(self.ors)
+                return fallback.handle_toll_failure(coordinates, max_tolls=1, veh_class=veh_class)

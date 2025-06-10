@@ -52,6 +52,7 @@ class TollOptimizationConfig(BaseOptimizationConfig):
         HANDLE_NO_TOLL_ROUTE = "handle_no_toll_route"
         HANDLE_ONE_TOLL_ROUTE = "handle_one_toll_route"
         GET_FALLBACK_ROUTE = "get_fallback_route"
+        HANDLE_TOLL_FAILURE = "handle_toll_failure"
         
         # Utility operations
         FILTER_OPEN_TOLLS = "filter_open_tolls"

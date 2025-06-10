@@ -108,9 +108,8 @@ class TollErrorHandler(BaseErrorHandler):
             status_code: Code de statut d'erreur
             
         Returns:
-            dict: Réponse de fallback
-        """
-        from src.services.toll.fallback_strategy import FallbackStrategy
+            dict: Réponse de fallback        """
+        from src.services.toll.fallback_strategy import TollFallbackStrategy
         
         # Import tardif pour éviter les dépendances circulaires
         # Ici on aurait besoin du service ORS, mais on ne peut pas l'injecter facilement

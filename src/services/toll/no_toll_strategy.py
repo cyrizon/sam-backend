@@ -84,8 +84,7 @@ class NoTollStrategy:
         Point d'entrée principal pour les routes sans péage.
         
         Returns:
-            dict: Résultat formaté avec fastest, cheapest, min_tolls, status
-        """
+            dict: Résultat formaté avec fastest, cheapest, min_tolls, status        """
         from src.services.toll.result_manager import RouteResultManager
         
         with performance_tracker.measure_operation(Config.Operations.HANDLE_NO_TOLL_ROUTE):
@@ -95,6 +94,6 @@ class NoTollStrategy:
                 return RouteResultManager.create_uniform_result(no_toll_result, status)
             else:
                 # Import ici pour éviter les imports circulaires
-                from src.services.toll.fallback_strategy import FallbackStrategy
-                fallback = FallbackStrategy(self.ors)
-                return fallback.get_fallback_route(coordinates, veh_class, status)
+                from src.services.toll.fallback_strategy import TollFallbackStrategy
+                fallback = TollFallbackStrategy(self.ors)
+                return fallback.handle_toll_failure(coordinates, max_tolls=0, veh_class=veh_class)
