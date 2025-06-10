@@ -129,7 +129,7 @@ class AbsoluteBudgetStrategy:
             all_tolls_nearby = get_all_open_tolls_by_proximity(base_route, Config.get_barriers_csv_path(), max_distance_m)
             if not all_tolls_nearby:
                 all_tolls_nearby = []
-              # Combiner tous les péages et calculer leurs coûts avec cache
+            # Combiner tous les péages et calculer leurs coûts avec cache
             all_tolls = tolls_on_route + tolls_nearby + all_tolls_nearby
             add_marginal_cost_cached(all_tolls, veh_class)
             

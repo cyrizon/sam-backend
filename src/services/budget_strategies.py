@@ -64,14 +64,21 @@ class BudgetRouteOptimizer:
         )
         
         with performance_tracker.measure_operation(Config.Operations.COMPUTE_ROUTE_WITH_BUDGET_LIMIT):
-            try:                
-                # Validation précoce
+            try:                  # Validation précoce
                 validation_error = BudgetErrorHandler.handle_budget_validation_error(max_price, max_price_percent)
                 if validation_error:
                     BudgetErrorHandler.log_operation_failure("compute_route_with_budget_limit", "Validation failed")
                     return validation_error
                 
-                # Délégation pure - aucune logique métier
+                # Vérification précoce de faisabilité budgétaire AVANT les calculs coûteux
+                if self._should_check_budget_feasibility(max_price, max_price_percent):
+                    early_fallback_needed = self._check_budget_feasibility_early(coordinates, max_price, max_price_percent, veh_class)
+                    if early_fallback_needed:
+                        print("🚫 Budget manifestement trop bas - Fallback immédiat (économie de calculs)")
+                        return self._handle_strategy_failure_with_base_data(
+                            coordinates, max_price, max_price_percent, veh_class, max_comb_size, None
+                        )
+                  # Délégation pure - aucune logique métier (seulement si budget potentiellement faisable)
                 result = self._delegate_to_strategy(coordinates, max_price, max_price_percent, veh_class, max_comb_size)
                 
                 # Fallback automatique si échec ou si statut indique que le fallback est nécessaire
@@ -106,12 +113,115 @@ class BudgetRouteOptimizer:
         elif max_price is not None:
             return self.absolute_budget_strategy.handle_absolute_budget_route(
                 coordinates, max_price, veh_class, max_comb_size
-            )
-        # Aucune contrainte - meilleure solution globale
+            )        # Aucune contrainte - meilleure solution globale
         else:
             return self.fallback_strategy.handle_budget_failure(
                 coordinates, None, "none", veh_class=veh_class
             )
+    
+    def _should_trigger_early_fallback(self, result, coordinates, max_price, max_price_percent, veh_class):
+        """
+        Vérifie si le budget demandé est trop bas par rapport aux coûts minimaux possibles.
+        
+        Logique : Si le budget est inférieur au péage le moins cher ou à la combinaison
+        la moins chère possible, on déclenche directement le fallback.
+        """
+        # Ne faire cette vérification que pour les budgets avec contraintes
+        if max_price is None and max_price_percent is None:
+            return False
+        
+        # Ne faire cette vérification que si on a un résultat qui indique un échec budgétaire
+        if not result or result.get("status") not in [
+            Config.StatusCodes.NO_ROUTE_WITHIN_BUDGET_RETURNING_FASTEST_AMONG_CHEAPEST,
+            Config.StatusCodes.NO_ROUTE_WITHIN_BUDGET
+        ]:
+            return False
+        
+        try:
+            print("🔍 Vérification de faisabilité budgétaire...")
+            
+            # Utiliser la route de base du résultat ou la calculer
+            base_route = None
+            if result:
+                # Essayer d'extraire la route de base du résultat
+                for route_type in ["fastest", "cheapest", "min_tolls"]:
+                    route_data = result.get(route_type)
+                    if route_data and route_data.get("route"):
+                        base_route = route_data.get("route")
+                        break
+            
+            # Si pas de route de base dans le résultat, la calculer
+            if not base_route:
+                from src.services.budget.route_calculator import BudgetRouteCalculator
+                route_calculator = BudgetRouteCalculator(self.ors)
+                base_route = route_calculator.get_base_route_with_tracking(coordinates)
+            
+            if not base_route:
+                return False
+            
+            # Localiser et coûter tous les péages sur et autour de la route
+            from src.services.budget.route_calculator import BudgetRouteCalculator
+            route_calculator = BudgetRouteCalculator(self.ors)
+            tolls_dict = route_calculator.locate_and_cost_tolls(base_route, veh_class)
+            
+            all_tolls = tolls_dict["on_route"] + tolls_dict["nearby"]
+            if not all_tolls:
+                print("📍 Aucun péage trouvé, pas de problème de faisabilité")
+                return False  # Pas de péages, pas de problème de faisabilité
+            
+            # Calculer le coût minimal possible
+            min_cost = self._calculate_minimum_possible_cost(all_tolls)
+            
+            # Déterminer le budget effectif
+            if max_price is not None:
+                budget_limit = max_price
+                budget_type = "absolu"
+            else:
+                # Pour le pourcentage, calculer le coût de base pour déterminer le budget effectif
+                base_cost = sum(t.get("cost", 0) for t in tolls_dict["on_route"])
+                budget_limit = base_cost * (max_price_percent / 100)
+                budget_type = "pourcentage"
+            
+            # Vérifier si le budget est inférieur au coût minimal possible
+            if budget_limit < min_cost:
+                print(f"🚫 Budget {budget_type} ({budget_limit:.2f}€) < Coût minimal possible ({min_cost:.2f}€)")
+                print("→ Impossible de respecter ce budget, déclenchement du fallback précoce")
+                return True
+            else:
+                print(f"✅ Budget {budget_type} ({budget_limit:.2f}€) >= Coût minimal possible ({min_cost:.2f}€)")
+                print("→ Budget potentiellement réalisable, mais autres contraintes non satisfaites")
+                return False
+                
+        except Exception as e:
+            print(f"⚠️  Erreur lors de la vérification précoce de faisabilité: {e}")
+            return False  # En cas d'erreur, ne pas déclencher le fallback précoce
+    
+    def _calculate_minimum_possible_cost(self, all_tolls):
+        """
+        Calcule le coût minimal possible parmi tous les péages disponibles.
+        
+        Returns:
+            float: Le coût du péage ouvert le moins cher ou 0 si route sans péage possible
+        """
+        from src.utils.route_utils import is_toll_open_system
+        
+        if not all_tolls:
+            return 0
+        
+        # Filtrer les péages ouverts (coût fixe)
+        open_tolls = [toll for toll in all_tolls if is_toll_open_system(toll["id"])]
+        
+        if open_tolls:
+            # Trouver le péage ouvert le moins cher
+            min_open_cost = min(toll.get("cost", float('inf')) for toll in open_tolls)
+            print(f"💰 Péage ouvert le moins cher: {min_open_cost:.2f}€")
+            return min_open_cost
+        else:
+            # Si pas de péages ouverts, prendre le péage fermé le moins cher
+            min_closed_cost = min(toll.get("cost", float('inf')) for toll in all_tolls)
+            print(f"💰 Péage fermé le moins cher: {min_closed_cost:.2f}€")
+            return min_closed_cost
+        
     def _should_trigger_fallback(self, result):
         """Détermine si le fallback doit être déclenché selon le statut du résultat."""
         if not result:
@@ -249,3 +359,62 @@ class BudgetRouteOptimizer:
             return "absolute"
         else:
             return "none"
+    
+    def _should_check_budget_feasibility(self, max_price, max_price_percent):
+        """Détermine si on doit faire une vérification de faisabilité budgétaire."""
+        # Faire la vérification seulement pour les contraintes budgétaires strictes
+        return (max_price is not None and max_price > 0) or (max_price_percent is not None and max_price_percent > 0)
+    
+    def _check_budget_feasibility_early(self, coordinates, max_price, max_price_percent, veh_class):
+        """
+        Vérification précoce : le budget demandé est-il réalisable par rapport aux péages disponibles ?
+        
+        Returns:
+            bool: True si fallback nécessaire (budget impossible), False sinon
+        """
+        try:
+            print("🔍 Vérification précoce de faisabilité budgétaire...")
+            
+            # Calculer la route de base pour analyser les péages
+            from src.services.budget.route_calculator import BudgetRouteCalculator
+            route_calculator = BudgetRouteCalculator(self.ors)
+            base_route = route_calculator.get_base_route_with_tracking(coordinates)
+            
+            if not base_route:
+                print("⚠️  Impossible de calculer la route de base pour la vérification")
+                return False  # En cas d'échec, ne pas déclencher le fallback précoce
+            
+            # Localiser et coûter tous les péages sur et autour de la route
+            tolls_dict = route_calculator.locate_and_cost_tolls(base_route, veh_class)
+            all_tolls = tolls_dict["on_route"] + tolls_dict["nearby"]
+            
+            if not all_tolls:
+                print("📍 Aucun péage trouvé - Budget probablement réalisable")
+                return False  # Pas de péages, budget potentiellement réalisable
+            
+            # Calculer le coût minimal possible
+            min_cost = self._calculate_minimum_possible_cost(all_tolls)
+            
+            # Déterminer le budget effectif selon le type de contrainte
+            if max_price is not None:
+                budget_limit = max_price
+                budget_type = "absolu"
+            else:
+                # Pour le pourcentage, calculer le coût de base
+                base_cost = sum(t.get("cost", 0) for t in tolls_dict["on_route"])
+                budget_limit = base_cost * (max_price_percent / 100)
+                budget_type = "pourcentage"
+            
+            # Comparaison budget vs coût minimal
+            if budget_limit < min_cost:
+                print(f"🚫 Budget {budget_type} ({budget_limit:.2f}€) < Coût minimal possible ({min_cost:.2f}€)")
+                print("→ Budget impossible à respecter - Fallback immédiat justifié")
+                return True  # Déclencher le fallback précoce
+            else:
+                print(f"✅ Budget {budget_type} ({budget_limit:.2f}€) >= Coût minimal possible ({min_cost:.2f}€)")
+                print("→ Budget potentiellement réalisable - Poursuite avec les stratégies")
+                return False  # Continuer avec les stratégies normales
+                
+        except Exception as e:
+            print(f"⚠️  Erreur lors de la vérification précoce: {e}")
+            return False  # En cas d'erreur, ne pas déclencher le fallback précoce
