@@ -49,7 +49,6 @@ class BaseOptimizationConfig:
         CRITICAL_ERROR = "CRITICAL_ERROR"
         INVALID_MAX_PRICE = "INVALID_MAX_PRICE"
         INVALID_MAX_PRICE_PERCENT = "INVALID_MAX_PRICE_PERCENT"
-        
         # Budget-specific codes
         BUDGET_ZERO_NO_TOLL_SUCCESS = "BUDGET_ZERO_NO_TOLL_SUCCESS"
         BUDGET_ALREADY_SATISFIED = "BUDGET_ALREADY_SATISFIED"
@@ -65,6 +64,10 @@ class BaseOptimizationConfig:
         NO_TOLLS_FOUND = "NO_TOLLS_FOUND"
         NO_ALTERNATIVE_FOUND = "NO_ALTERNATIVE_FOUND"
         FALLBACK_BASE_ROUTE_USED = "FALLBACK_BASE_ROUTE_USED"
+        
+        # Nouveaux codes pour fallback simplifié
+        LIMITED_ALTERNATIVES_FOUND = "LIMITED_ALTERNATIVES_FOUND"
+        ONLY_BASE_ROUTE_AVAILABLE = "ONLY_BASE_ROUTE_AVAILABLE"
     
     # === Common Messages ===
     class Messages:
