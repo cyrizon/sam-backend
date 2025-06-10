@@ -17,9 +17,9 @@ class BudgetFeasibilityChecker:
         self.ors = ors_service
     def should_check_feasibility(self, max_price, max_price_percent):
         """Détermine si on doit faire une vérification de faisabilité budgétaire."""
-        # Faire la vérification seulement pour les budgets absolus très bas
+        # Faire la vérification pour TOUS les budgets absolus
         # Ne PAS faire pour les budgets en pourcentage car on ne connaît pas encore le coût de base
-        return (max_price is not None and max_price > 0 and max_price < Config.EARLY_FEASIBILITY_THRESHOLD)
+        return (max_price is not None and max_price > 0)
     
     def check_budget_feasibility_early(self, coordinates, max_price, max_price_percent, veh_class):
         """
