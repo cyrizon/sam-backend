@@ -20,12 +20,13 @@ class BudgetFailureHandler:
         """Détermine si le fallback doit être déclenché selon le statut du résultat."""
         if not result:
             return True
-        
         # Statuts qui indiquent un échec nécessitant un fallback
         failure_statuses = {
             Config.StatusCodes.NO_ROUTE_WITHIN_BUDGET,
             Config.StatusCodes.NO_TOLLS_FOUND,
-            Config.StatusCodes.NO_ALTERNATIVE_FOUND
+            Config.StatusCodes.NO_ALTERNATIVE_FOUND,
+            Config.StatusCodes.PERCENTAGE_BUDGET_IMPOSSIBLE,  # Nouveau statut
+            Config.StatusCodes.NO_ROUTE_WITHIN_BUDGET_RETURNING_FASTEST_AMONG_CHEAPEST
         }
         
         return result.get("status") in failure_statuses

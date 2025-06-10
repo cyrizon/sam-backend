@@ -66,14 +66,34 @@ class PercentageBudgetStrategy:
             try:
                 # 1) Obtenir la route de base pour calculer le coût de référence
                 base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
-                
                 # 2) Calculer le coût de base et définir la limite budgétaire
                 base_cost, base_duration, base_toll_count = self._get_base_metrics(base_route, veh_class)
                 price_limit = base_cost * max_price_percent
                 
                 print(BudgetMessages.BASE_ROUTE_COST.format(cost=base_cost))
                 print(BudgetMessages.BUDGET_LIMIT.format(limit=price_limit))
-                  # 3) Vérifier si la route de base respecte déjà la contrainte
+                
+                # 2.5) Vérification de faisabilité pour budget pourcentage
+                from src.services.budget.feasibility_checker import BudgetFeasibilityChecker
+                feasibility_checker = BudgetFeasibilityChecker(self.route_calculator.ors)
+                
+                # Obtenir les péages pour la vérification de faisabilité
+                tolls_dict = self.route_calculator.locate_and_cost_tolls(base_route, veh_class)
+                
+                if feasibility_checker.check_percentage_budget_feasibility(base_cost, max_price_percent, tolls_dict):
+                    print("🚫 Budget pourcentage impossible - Retour statut spécial")
+                    return {
+                        "fastest": None,
+                        "cheapest": None, 
+                        "min_tolls": None,
+                        "status": Config.StatusCodes.PERCENTAGE_BUDGET_IMPOSSIBLE,
+                        "base_route": base_route,
+                        "base_cost": base_cost,
+                        "base_duration": base_duration,
+                        "base_toll_count": base_toll_count
+                    }
+                
+                # 3) Vérifier si la route de base respecte déjà la contrainte
                 if base_cost <= price_limit:
                     print(CommonMessages.BUDGET_SATISFIED)
                     route_result = ResultFormatter.format_route_result(

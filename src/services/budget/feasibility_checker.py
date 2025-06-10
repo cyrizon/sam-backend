@@ -15,11 +15,11 @@ class BudgetFeasibilityChecker:
     
     def __init__(self, ors_service):
         self.ors = ors_service
-    
     def should_check_feasibility(self, max_price, max_price_percent):
         """Détermine si on doit faire une vérification de faisabilité budgétaire."""
-        # Faire la vérification seulement pour les contraintes budgétaires strictes
-        return (max_price is not None and max_price > 0) or (max_price_percent is not None and max_price_percent > 0)
+        # Faire la vérification seulement pour les budgets absolus très bas
+        # Ne PAS faire pour les budgets en pourcentage car on ne connaît pas encore le coût de base
+        return (max_price is not None and max_price > 0 and max_price < Config.EARLY_FEASIBILITY_THRESHOLD)
     
     def check_budget_feasibility_early(self, coordinates, max_price, max_price_percent, veh_class):
         """
@@ -49,7 +49,6 @@ class BudgetFeasibilityChecker:
             
             # Calculer le coût minimal possible
             min_cost = self._calculate_minimum_possible_cost(all_tolls)
-            
             # Déterminer le budget effectif selon le type de contrainte
             if max_price is not None:
                 budget_limit = max_price
@@ -57,7 +56,7 @@ class BudgetFeasibilityChecker:
             else:
                 # Pour le pourcentage, calculer le coût de base
                 base_cost = sum(t.get("cost", 0) for t in tolls_dict["on_route"])
-                budget_limit = base_cost * (max_price_percent / 100)
+                budget_limit = base_cost * max_price_percent
                 budget_type = "pourcentage"
             
             # Comparaison budget vs coût minimal
@@ -74,6 +73,51 @@ class BudgetFeasibilityChecker:
             print(f"⚠️  Erreur lors de la vérification précoce: {e}")
             return False  # En cas d'erreur, ne pas déclencher le fallback précoce
     
+    def check_percentage_budget_feasibility(self, base_cost, max_price_percent, tolls_dict):
+        """
+        Vérification de faisabilité spécifique aux budgets en pourcentage.
+        Appelée APRÈS le calcul de la route de base.
+        
+        Args:
+            base_cost: Coût de la route de base en euros
+            max_price_percent: Pourcentage de budget demandé (0.4 = 40%)
+            tolls_dict: Dictionnaire des péages trouvés {"on_route": [...], "nearby": [...]}
+            
+        Returns:
+            bool: True si budget impossible (déclencher fallback), False sinon
+        """
+        try:
+            print("🔍 Vérification de faisabilité pour budget pourcentage...")
+            
+            # Calculer le budget effectif en euros
+            budget_limit = base_cost * max_price_percent
+            print(f"💰 Budget effectif: {budget_limit:.2f}€ ({max_price_percent*100:.1f}% de {base_cost:.2f}€)")
+            
+            # Récupérer tous les péages (sur route + proximité)
+            all_tolls = tolls_dict["on_route"] + tolls_dict["nearby"]
+            
+            if not all_tolls:
+                print("📍 Aucun péage trouvé - Budget probablement réalisable")
+                return False
+            
+            # Calculer le coût minimal possible
+            min_cost = self._calculate_minimum_possible_cost(all_tolls)
+            print(f"💡 Coût minimal possible: {min_cost:.2f}€")
+            
+            # Vérification de faisabilité
+            if budget_limit < min_cost:
+                print(f"🚫 Budget pourcentage ({budget_limit:.2f}€) < Coût minimal possible ({min_cost:.2f}€)")
+                print("→ Budget impossible à respecter - Fallback justifié")
+                return True  # Budget impossible, déclencher fallback
+            else:
+                print(f"✅ Budget pourcentage ({budget_limit:.2f}€) >= Coût minimal possible ({min_cost:.2f}€)")
+                print("→ Budget potentiellement réalisable, optimisation justifiée")
+                return False  # Budget possible, continuer optimisation
+                
+        except Exception as e:
+            print(f"⚠️  Erreur lors de la vérification de faisabilité pourcentage: {e}")
+            return False  # En cas d'erreur, ne pas déclencher fallback précoce
+
     def _calculate_minimum_possible_cost(self, all_tolls):
         """
         Calcule le coût minimal possible parmi tous les péages disponibles.

@@ -10,9 +10,9 @@ from src.services.common.base_constants import BaseOptimizationConfig
 
 class BudgetOptimizationConfig(BaseOptimizationConfig):
     """Configuration constants for budget route optimization."""
-    
-    # === Budget-specific limits ===
+      # === Budget-specific limits ===
     MAX_FALLBACK_COMBINATIONS = 50  # Limite pour éviter trop de calculs en fallback
+    EARLY_FEASIBILITY_THRESHOLD = 2.0  # Seuil en € pour déclencher vérification précoce
     
     # === Budget validation limits ===
     MIN_BUDGET_PERCENT = 0.0    # 0%
