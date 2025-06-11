@@ -16,7 +16,7 @@ from src.services.ors_config_manager import ORSConfigManager
 from src.services.common.budget_messages import BudgetMessages
 from src.services.common.common_messages import CommonMessages
 from src.services.toll_locator import locate_tolls, get_all_open_tolls_by_proximity
-from src.services.toll_cost import add_marginal_cost, add_marginal_cost_cached
+from src.services.budget.cached_toll_cost import add_marginal_cost_cached, log_toll_cost_cache_stats
 from src.utils.poly_utils import avoidance_multipolygon
 from itertools import combinations
 
@@ -270,7 +270,7 @@ class AbsoluteBudgetStrategy:
                     if sig in seen_combinations:
                         continue
                     seen_combinations.add(sig)
-                      # Heuristique d'optimisation : calculer l'économie potentielle
+                    # Heuristique d'optimisation : calculer l'économie potentielle
                     potential_saving = sum(t.get("cost", 0) for t in to_avoid)
                     if potential_saving <= 0:
                         continue
