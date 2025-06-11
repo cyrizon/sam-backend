@@ -8,6 +8,7 @@ Responsabilité unique : gérer la logique de calcul et d'évitement des péages
 
 from src.services.toll_locator import locate_tolls
 from src.services.toll_cost import add_marginal_cost
+from src.services.budget.cached_toll_cost import add_marginal_cost_cached  # Cache optimisé
 from src.utils.poly_utils import avoidance_multipolygon
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.constants import TollOptimizationConfig as Config
@@ -109,11 +110,12 @@ class RouteCalculator:
         with performance_tracker.measure_operation(Config.Operations.ORS_ALTERNATIVE_ROUTE):
             performance_tracker.count_api_call("ORS_alternative_route")
             return self.ors.get_route_avoiding_polygons(coordinates, avoid_poly)
-
+    
     def locate_and_cost_tolls(self, route, veh_class, operation_name=Config.Operations.LOCATE_TOLLS):
-        """Localise les péages et calcule leurs coûts avec tracking."""
+        """Localise les péages et calcule leurs coûts avec tracking et cache optimisé."""
         with performance_tracker.measure_operation(operation_name):
             tolls_dict = locate_tolls(route, Config.get_barriers_csv_path())
             tolls_on_route = tolls_dict["on_route"]
-            add_marginal_cost(tolls_on_route, veh_class)
+            # Utiliser la version cachée pour éviter les recalculs coûteux
+            add_marginal_cost_cached(tolls_on_route, veh_class)
             return tolls_dict
