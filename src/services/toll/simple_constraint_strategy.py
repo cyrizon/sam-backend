@@ -32,12 +32,13 @@ class SimpleConstraintStrategy:
     
     def find_route_respecting_constraint(self, coordinates, max_tolls, veh_class=Config.DEFAULT_VEH_CLASS):
         """
-        Trouve une route respectant la contrainte de péages avec backup.
+        Trouve une route respectant la contrainte de péages avec priorisation intelligente.
         
-        Logique :
-        1. Chercher route avec ≤ max_tolls péages
-        2. Si pas trouvé, chercher route avec max_tolls + 1 péages (backup)
-        3. Retourner la meilleure option trouvée
+        Nouvelle logique de priorité :
+        1. Route avec exactement max_tolls péages (priorité 1)
+        2. Route avec max_tolls + 1 péages (priorité 2) 
+        3. Route avec max_tolls - 1 péages (priorité 3)
+        4. Route sans péage (priorité 4)
         
         Args:
             coordinates: Liste de coordonnées [départ, arrivée]
@@ -46,9 +47,9 @@ class SimpleConstraintStrategy:
             
         Returns:
             dict: {
-                "primary_route": route_respectant_contrainte ou None,
-                "backup_route": route_max_tolls_plus_1 ou None,
-                "found_solution": "primary" | "backup" | "none"
+                "primary_route": meilleure_route_trouvée,
+                "backup_route": route_alternative ou None,
+                "found_solution": "exact" | "plus_one" | "minus_one" | "no_toll" | "none"
             }
         """
         # Validation précoce des coordonnées
@@ -60,20 +61,42 @@ class SimpleConstraintStrategy:
         with performance_tracker.measure_operation("simple_constraint_strategy", {
             "max_tolls": max_tolls
         }):
-            print(f"=== Recherche route contrainte {max_tolls} péages (+ backup {max_tolls + 1}) ===")
+            print(f"=== Recherche route optimale pour {max_tolls} péages (priorité exacte) ===")
             
             # Cas spécial : aucun péage autorisé
             if max_tolls == 0:
                 return self._handle_no_toll_case(coordinates, veh_class)
             
-            # 1. Chercher route respectant la contrainte exacte
-            primary_route = self._find_route_within_limit(coordinates, max_tolls, veh_class)
+            # Chercher dans l'ordre de priorité
+            candidates = {}
             
-            # 2. Chercher route backup (max_tolls + 1)
-            backup_route = self._find_route_within_limit(coordinates, max_tolls + 1, veh_class)
+            # 1. Priorité 1: Exactement max_tolls péages
+            exact_route = self._find_route_with_exact_tolls(coordinates, max_tolls, veh_class)
+            if exact_route:
+                candidates["exact"] = exact_route
+                print(f"✅ Route EXACTE trouvée: {exact_route['toll_count']} péages (= {max_tolls})")
             
-            # 3. Déterminer la meilleure solution
-            return self._select_best_solution(primary_route, backup_route, max_tolls)
+            # 2. Priorité 2: max_tolls + 1 péages
+            plus_one_route = self._find_route_with_exact_tolls(coordinates, max_tolls + 1, veh_class)
+            if plus_one_route:
+                candidates["plus_one"] = plus_one_route
+                print(f"✅ Route +1 trouvée: {plus_one_route['toll_count']} péages (= {max_tolls + 1})")
+            
+            # 3. Priorité 3: max_tolls - 1 péages (sauf si max_tolls = 1)
+            if max_tolls > 1:
+                minus_one_route = self._find_route_with_exact_tolls(coordinates, max_tolls - 1, veh_class)
+                if minus_one_route:
+                    candidates["minus_one"] = minus_one_route
+                    print(f"✅ Route -1 trouvée: {minus_one_route['toll_count']} péages (= {max_tolls - 1})")
+            
+            # 4. Priorité 4: Route sans péage (dernier recours)
+            no_toll_route = self._find_route_with_exact_tolls(coordinates, 0, veh_class)
+            if no_toll_route:
+                candidates["no_toll"] = no_toll_route
+                print(f"✅ Route sans péage trouvée: {no_toll_route['toll_count']} péages")
+            
+            # Sélectionner la meilleure solution selon la priorité
+            return self._select_best_candidate(candidates, max_tolls)
     
     def _handle_no_toll_case(self, coordinates, veh_class):
         """Gère le cas spécial max_tolls = 0."""
@@ -81,7 +104,6 @@ class SimpleConstraintStrategy:
         
         try:
             toll_free_route = self.route_calculator.get_route_avoid_tollways_with_tracking(coordinates)
-            
             # Vérifier s'il reste des péages
             tolls_dict = self.route_calculator.locate_and_cost_tolls(
                 toll_free_route, veh_class, "locate_tolls_no_toll"
@@ -98,7 +120,7 @@ class SimpleConstraintStrategy:
                 return {
                     "primary_route": route_result,
                     "backup_route": None,
-                    "found_solution": "primary"
+                    "found_solution": "no_toll"
                 }
             else:
                 print(f"⚠️ Route 'sans péage' contient {toll_count} péage(s) - sera utilisée comme backup")
@@ -108,15 +130,277 @@ class SimpleConstraintStrategy:
                     toll_free_route, cost, duration, toll_count
                 )
                 return {
-                    "primary_route": None,
-                    "backup_route": backup_result,
-                    "found_solution": "backup"
+                    "primary_route": backup_result,
+                    "backup_route": None,
+                    "found_solution": "plus_one"  # Si on demandait 0 et qu'on a > 0, c'est un dépassement
                 }
                 
         except Exception as e:
             return TollErrorHandler.handle_ors_error(e, "route_sans_peage")
     
-    def _find_route_within_limit(self, coordinates, max_tolls_limit, veh_class):
+    def _find_route_with_exact_tolls(self, coordinates, target_tolls, veh_class):
+        """
+        Trouve une route avec exactement target_tolls péages.
+        
+        Stratégie :
+        1. Si target_tolls = 0, utiliser évitement complet des péages
+        2. Sinon, tester différentes stratégies d'évitement intelligent
+        """
+        print(f"🔍 Recherche route avec exactement {target_tolls} péages...")
+        
+        if target_tolls == 0:
+            # Cas spécial : route sans péage
+            return self._try_avoiding_route_for_exact(coordinates, 0, veh_class)
+        
+        # Pour les autres cas, utiliser l'évitement intelligent mais viser l'exactitude
+        return self._find_route_targeting_exact_count(coordinates, target_tolls, veh_class)
+    
+    def _find_route_targeting_exact_count(self, coordinates, target_tolls, veh_class):
+        """
+        Trouve une route visant exactement target_tolls péages.
+        """
+        try:
+            # 1. Essayer route directe d'abord
+            base_route_result = self._try_base_route_for_exact(coordinates, target_tolls, veh_class)
+            if base_route_result:
+                return base_route_result
+            
+            # 2. Utiliser l'évitement intelligent pour viser le nombre exact
+            smart_route_result = self._try_smart_toll_avoidance_for_exact(coordinates, target_tolls, veh_class)
+            if smart_route_result:
+                return smart_route_result
+            
+            # 3. En dernier recours, essayer route avec évitement total (pour target_tolls = 0 seulement)
+            if target_tolls == 0:
+                avoiding_route_result = self._try_avoiding_route_for_exact(coordinates, target_tolls, veh_class)
+                if avoiding_route_result:
+                    return avoiding_route_result
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Erreur recherche route exacte {target_tolls} péages: {e}")
+            return None
+    
+    def _try_base_route_for_exact(self, coordinates, target_tolls, veh_class):
+        """Teste si la route directe a exactement target_tolls péages."""
+        try:
+            base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
+            
+            # Analyser les péages
+            tolls_dict = self.route_calculator.locate_and_cost_tolls(
+                base_route, veh_class, f"locate_tolls_base_exact_{target_tolls}"
+            )
+            tolls_on_route = tolls_dict["on_route"]
+            toll_count = len(tolls_on_route)
+            
+            print(f"Route directe: {toll_count} péages (cible: {target_tolls})")
+            
+            # Vérifier si elle a exactement le nombre voulu
+            if toll_count == target_tolls:
+                cost = sum(t.get("cost", 0) for t in tolls_on_route)
+                duration = base_route["features"][0]["properties"]["summary"]["duration"]
+                
+                return ResultFormatter.format_route_result(
+                    base_route, cost, duration, toll_count
+                )
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Erreur route directe exacte: {e}")
+            return None
+    
+    def _try_avoiding_route_for_exact(self, coordinates, target_tolls, veh_class):
+        """Teste la route avec évitement pour exactement target_tolls péages."""
+        try:
+            avoiding_route = self.route_calculator.get_route_avoid_tollways_with_tracking(coordinates)
+            
+            # Analyser les péages
+            tolls_dict = self.route_calculator.locate_and_cost_tolls(
+                avoiding_route, veh_class, f"locate_tolls_avoiding_exact_{target_tolls}"
+            )
+            tolls_on_route = tolls_dict["on_route"]
+            toll_count = len(tolls_on_route)
+            
+            print(f"Route évitement: {toll_count} péages (cible: {target_tolls})")
+            
+            # Vérifier si elle a exactement le nombre voulu
+            if toll_count == target_tolls:
+                cost = sum(t.get("cost", 0) for t in tolls_on_route)
+                duration = avoiding_route["features"][0]["properties"]["summary"]["duration"]
+                
+                return ResultFormatter.format_route_result(
+                    avoiding_route, cost, duration, toll_count
+                )
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Erreur route évitement exacte: {e}")
+            return None
+    
+    def _try_smart_toll_avoidance_for_exact(self, coordinates, target_tolls, veh_class):
+        """
+        Évitement intelligent pour viser exactement target_tolls péages.
+        """
+        try:
+            # Calculer route de base pour analyser les péages
+            base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
+            tolls_dict = self.route_calculator.locate_and_cost_tolls(
+                base_route, veh_class, f"locate_tolls_smart_exact_{target_tolls}"
+            )
+            tolls_on_route = tolls_dict["on_route"]
+            total_tolls = len(tolls_on_route)
+            
+            print(f"Route de base: {total_tolls} péages, cible exacte: {target_tolls}")
+            
+            # Si route de base a exactement le bon nombre, la retourner
+            if total_tolls == target_tolls:
+                cost = sum(t.get("cost", 0) for t in tolls_on_route)
+                duration = base_route["features"][0]["properties"]["summary"]["duration"]
+                return ResultFormatter.format_route_result(
+                    base_route, cost, duration, total_tolls
+                )
+            
+            # Si on a trop de péages, essayer d'en éviter quelques-uns
+            if total_tolls > target_tolls:
+                tolls_to_avoid = total_tolls - target_tolls
+                print(f"Besoin d'éviter exactement {tolls_to_avoid} péages")
+                
+                # Tester l'évitement intelligent avec différentes stratégies
+                result = self._test_exact_avoidance_strategies(tolls_on_route, tolls_to_avoid, coordinates, target_tolls, veh_class)
+                if result:
+                    return result
+            
+            # Si on a pas assez de péages, on ne peut pas en ajouter facilement
+            # Retourner None pour laisser les autres priorités s'exprimer
+            return None
+            
+        except Exception as e:
+            print(f"❌ Erreur évitement intelligent exact: {e}")
+            return None
+    
+    def _test_exact_avoidance_strategies(self, tolls_on_route, tolls_to_avoid, coordinates, target_tolls, veh_class):
+        """Teste différentes stratégies pour éviter exactement tolls_to_avoid péages."""
+        
+        # Stratégie 1: Éviter les péages les plus coûteux
+        result = self._test_exact_avoidance_by_cost(tolls_on_route, tolls_to_avoid, coordinates, target_tolls, veh_class)
+        if result:
+            return result
+        
+        # Stratégie 2: Éviter par position géographique
+        result = self._test_exact_avoidance_by_position(tolls_on_route, tolls_to_avoid, coordinates, target_tolls, veh_class)
+        if result:
+            return result
+        
+        # Stratégie 3: Évitement avec différents rayons
+        result = self._test_exact_avoidance_variable_radius(tolls_on_route, tolls_to_avoid, coordinates, target_tolls, veh_class)
+        if result:
+            return result
+        
+        return None
+    
+    def _test_exact_avoidance_by_cost(self, tolls_on_route, tolls_to_avoid, coordinates, target_tolls, veh_class):
+        """Teste l'évitement des péages les plus coûteux pour atteindre exactement target_tolls."""
+        sorted_tolls = sorted(tolls_on_route, key=lambda t: t.get("cost", 0), reverse=True)
+        
+        tolls_to_avoid_list = sorted_tolls[:tolls_to_avoid]
+        
+        for radius in [400, 700, 1000]:
+            result = self._test_toll_avoidance_exact(tolls_to_avoid_list, coordinates, target_tolls, veh_class, radius)
+            if result and result['toll_count'] == target_tolls:
+                print(f"✅ Évitement par coût réussi (rayon {radius}m)")
+                return result
+        
+        return None
+    
+    def _test_exact_avoidance_by_position(self, tolls_on_route, tolls_to_avoid, coordinates, target_tolls, veh_class):
+        """Teste l'évitement par position géographique."""
+        if len(tolls_on_route) < 3:
+            return None
+        
+        # Diviser en groupes et tester
+        third = len(tolls_on_route) // 3
+        groups = [
+            tolls_on_route[:third],           # Début
+            tolls_on_route[-third:],          # Fin  
+            tolls_on_route[third:-third] if third > 0 else []  # Milieu
+        ]
+        
+        for i, group in enumerate(groups):
+            if len(group) >= tolls_to_avoid:
+                tolls_to_avoid_list = group[:tolls_to_avoid]
+                
+                for radius in [600, 900]:
+                    result = self._test_toll_avoidance_exact(tolls_to_avoid_list, coordinates, target_tolls, veh_class, radius)
+                    if result and result['toll_count'] == target_tolls:
+                        print(f"✅ Évitement par position réussi (groupe {['début', 'fin', 'milieu'][i]}, rayon {radius}m)")
+                        return result
+        
+        return None
+    
+    def _test_exact_avoidance_variable_radius(self, tolls_on_route, tolls_to_avoid, coordinates, target_tolls, veh_class):
+        """Teste avec différents rayons et combinaisons."""
+        sorted_tolls = sorted(tolls_on_route, key=lambda t: t.get("cost", 0), reverse=True)
+        
+        # Tester avec différents nombres de péages à éviter autour de la cible
+        for avoid_variation in range(max(1, tolls_to_avoid - 1), min(len(sorted_tolls), tolls_to_avoid + 2) + 1):
+            tolls_to_avoid_list = sorted_tolls[:avoid_variation]
+            
+            for radius in [250, 500, 800, 1200]:
+                result = self._test_toll_avoidance_exact(tolls_to_avoid_list, coordinates, target_tolls, veh_class, radius)
+                if result and result['toll_count'] == target_tolls:
+                    print(f"✅ Évitement variable réussi ({avoid_variation} péages évités, rayon {radius}m)")
+                    return result
+        
+        return None
+    
+    def _test_toll_avoidance_exact(self, tolls_to_avoid_list, coordinates, target_tolls, veh_class, radius_m):
+        """Teste l'évitement d'une liste de péages pour atteindre exactement target_tolls."""
+        try:
+            # Préparer les données pour poly_utils
+            tolls_for_avoidance = []
+            for toll in tolls_to_avoid_list:
+                tolls_for_avoidance.append({
+                    "longitude": toll.get("lon", toll.get("longitude")),
+                    "latitude": toll.get("lat", toll.get("latitude"))
+                })
+            
+            if not tolls_for_avoidance:
+                return None
+            
+            # Créer le multipolygon d'évitement
+            from src.utils.poly_utils import avoidance_multipolygon
+            avoid_poly = avoidance_multipolygon(tolls_for_avoidance, radius_m=radius_m)
+            
+            # Calculer route alternative
+            alternative_route = self.route_calculator.get_route_avoiding_polygons_with_tracking(
+                coordinates, avoid_poly
+            )
+            
+            if alternative_route:
+                # Analyser les péages de la route alternative
+                alt_tolls_dict = self.route_calculator.locate_and_cost_tolls(
+                    alternative_route, veh_class, f"locate_tolls_exact_test_{target_tolls}"
+                )
+                alt_tolls_on_route = alt_tolls_dict["on_route"]
+                alt_toll_count = len(alt_tolls_on_route)
+                
+                # Retourner le résultat même s'il n'est pas exact (pour comparaison)
+                if alt_toll_count <= target_tolls + 2:  # Accepter une marge
+                    cost = sum(t.get("cost", 0) for t in alt_tolls_on_route)
+                    duration = alternative_route["features"][0]["properties"]["summary"]["duration"]
+                    
+                    return ResultFormatter.format_route_result(
+                        alternative_route, cost, duration, alt_toll_count
+                    )
+            
+            return None
+            
+        except Exception as e:
+            print(f"   ⚠️ Erreur test évitement exact: {e}")
+            return None
         """
         Trouve une route avec au maximum max_tolls_limit péages.
         
@@ -376,33 +660,60 @@ class SimpleConstraintStrategy:
             print(f"   ⚠️ Erreur test évitement: {e}")
             return None
     
-    def _select_best_solution(self, primary_route, backup_route, max_tolls):
+    def _select_best_candidate(self, candidates, max_tolls):
         """
-        Sélectionne la meilleure solution selon la priorité.
+        Sélectionne la meilleure solution selon la nouvelle priorité.
         
         Priorité :
-        1. primary_route (≤ max_tolls)
-        2. backup_route (max_tolls + 1)
-        3. aucune solution
+        1. Route exacte (= max_tolls) 
+        2. Route +1 (= max_tolls + 1)
+        3. Route -1 (= max_tolls - 1)
+        4. Route sans péage (= 0)
         """
-        if primary_route:
-            print(f"🎯 Solution PRIMAIRE trouvée : {primary_route['toll_count']} péages (≤ {max_tolls})")
+        # Priorité 1: Route exacte
+        if "exact" in candidates:
+            route = candidates["exact"]
+            print(f"🎯 Solution EXACTE sélectionnée: {route['toll_count']} péages (= {max_tolls})")
             return {
-                "primary_route": primary_route,
-                "backup_route": backup_route,
-                "found_solution": "primary"
+                "primary_route": route,
+                "backup_route": candidates.get("plus_one"),
+                "found_solution": "exact"
             }
-        elif backup_route:
-            print(f"🔄 Solution BACKUP trouvée : {backup_route['toll_count']} péages (= {max_tolls + 1})")
+        
+        # Priorité 2: Route +1
+        if "plus_one" in candidates:
+            route = candidates["plus_one"]
+            print(f"📈 Solution +1 sélectionnée: {route['toll_count']} péages (= {max_tolls + 1})")
             return {
-                "primary_route": None,
-                "backup_route": backup_route,
-                "found_solution": "backup"
+                "primary_route": route,
+                "backup_route": candidates.get("minus_one") or candidates.get("no_toll"),
+                "found_solution": "plus_one"
             }
-        else:
-            print("❌ Aucune solution trouvée (ni primaire ni backup)")
+        
+        # Priorité 3: Route -1
+        if "minus_one" in candidates:
+            route = candidates["minus_one"]
+            print(f"📉 Solution -1 sélectionnée: {route['toll_count']} péages (= {max_tolls - 1})")
             return {
-                "primary_route": None,
+                "primary_route": route,
+                "backup_route": candidates.get("no_toll"),
+                "found_solution": "minus_one"
+            }
+        
+        # Priorité 4: Route sans péage
+        if "no_toll" in candidates:
+            route = candidates["no_toll"]
+            print(f"🚫 Solution sans péage sélectionnée: {route['toll_count']} péages (dernier recours)")
+            return {
+                "primary_route": route,
                 "backup_route": None,
-                "found_solution": "none"
+                "found_solution": "no_toll"
             }
+        
+        # Aucune solution trouvée
+        print("❌ Aucune solution trouvée")
+        return {
+            "primary_route": None,
+            "backup_route": None,
+            "found_solution": "none"
+        }

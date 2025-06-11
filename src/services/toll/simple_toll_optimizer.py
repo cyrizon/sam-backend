@@ -70,14 +70,14 @@ class SimpleTollOptimizer:
             try:
                 # Utiliser la stratégie de contrainte simplifiée
                 constraint_result = self.constraint_strategy.find_route_respecting_constraint(
-                    coordinates, max_tolls, veh_class
-                )
+                    coordinates, max_tolls, veh_class                )
                 
                 # Traiter les résultats selon la solution trouvée
-                if constraint_result["found_solution"] == "primary":
-                    result = self._format_primary_solution(constraint_result)
-                elif constraint_result["found_solution"] == "backup":
-                    result = self._format_backup_solution(constraint_result, max_tolls)
+                solution_type = constraint_result["found_solution"]
+                
+                if solution_type in ["exact", "plus_one", "minus_one", "no_toll"]:
+                    # Une solution a été trouvée
+                    result = self._format_constraint_solution(constraint_result, max_tolls, solution_type)
                 else:
                     # Aucune solution trouvée, utiliser fallback
                     result = self._handle_no_solution_fallback(coordinates, max_tolls, veh_class)
@@ -97,38 +97,35 @@ class SimpleTollOptimizer:
                 )
                 return self._handle_critical_failure(coordinates, max_tolls, veh_class, str(e))
     
-    def _format_primary_solution(self, constraint_result):
+    def _format_constraint_solution(self, constraint_result, max_tolls, solution_type):
         """
-        Formate la solution primaire (respecte la contrainte exacte).
+        Formate une solution trouvée par la stratégie de contrainte.
         """
         primary_route = constraint_result["primary_route"]
         
-        print(f"✅ Solution PRIMAIRE trouvée - {primary_route['toll_count']} péages")
+        # Déterminer le status code approprié
+        if solution_type == "exact":
+            status = Config.StatusCodes.CONSTRAINT_RESPECTED
+            print(f"✅ Solution EXACTE trouvée - {primary_route['toll_count']} péages (= {max_tolls})")
+        elif solution_type == "plus_one":
+            status = Config.StatusCodes.CONSTRAINT_EXCEEDED_BY_ONE  
+            print(f"🔄 Solution +1 trouvée - {primary_route['toll_count']} péages (max: {max_tolls})")
+        elif solution_type == "minus_one":
+            status = Config.StatusCodes.CONSTRAINT_RESPECTED
+            print(f"📉 Solution -1 trouvée - {primary_route['toll_count']} péages (< {max_tolls})")
+        elif solution_type == "no_toll":
+            status = Config.StatusCodes.NO_TOLL_SUCCESS
+            print(f"🚫 Solution sans péage trouvée - {primary_route['toll_count']} péages")
+        else:
+            status = Config.StatusCodes.SUCCESS
+            print(f"✅ Solution trouvée - {primary_route['toll_count']} péages")
         
         # Dans l'approche simplifiée, la route trouvée devient fastest, cheapest et min_tolls
         formatted_result = {
             "fastest": primary_route,
-            "cheapest": primary_route,
+            "cheapest": primary_route, 
             "min_tolls": primary_route,
-            "status": Config.StatusCodes.CONSTRAINT_RESPECTED
-        }
-        
-        return formatted_result
-    
-    def _format_backup_solution(self, constraint_result, max_tolls):
-        """
-        Formate la solution backup (max_tolls + 1).
-        """
-        backup_route = constraint_result["backup_route"]
-        
-        print(f"🔄 Solution BACKUP trouvée - {backup_route['toll_count']} péages (max autorisé: {max_tolls})")
-        
-        # La solution backup devient fastest, cheapest et min_tolls
-        formatted_result = {
-            "fastest": backup_route,
-            "cheapest": backup_route,
-            "min_tolls": backup_route,
-            "status": Config.StatusCodes.CONSTRAINT_EXCEEDED_BY_ONE
+            "status": status
         }
         
         return formatted_result
