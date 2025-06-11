@@ -11,6 +11,7 @@ from src.services.toll_cost import add_marginal_cost
 from src.utils.poly_utils import avoidance_multipolygon
 from benchmark.performance_tracker import performance_tracker
 from src.services.budget.constants import BudgetOptimizationConfig as Config
+from src.services.toll.constants import TollOptimizationConfig as TollConfig  # For buffer configuration
 from src.services.budget.route_validator import BudgetRouteValidator
 from src.services.budget.exceptions import BudgetOptimizationError, BudgetExceededError
 from src.services.budget.error_handler import BudgetErrorHandler
@@ -52,7 +53,7 @@ class BudgetRouteCalculator:
     def locate_and_cost_tolls(self, route, veh_class, operation_name="locate_tolls_budget"):
         """Localise les péages et calcule leurs coûts avec tracking budget."""
         with performance_tracker.measure_operation(operation_name):
-            tolls_dict = locate_tolls(route, Config.get_barriers_csv_path())
+            tolls_dict = locate_tolls(route, Config.get_barriers_csv_path(), buffer_m=TollConfig.TOLL_DETECTION_BUFFER_M)
             tolls_on_route = tolls_dict["on_route"]
             add_marginal_cost(tolls_on_route, veh_class)
             return tolls_dict

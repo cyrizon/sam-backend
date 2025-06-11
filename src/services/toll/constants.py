@@ -15,6 +15,9 @@ class TollOptimizationConfig(BaseOptimizationConfig):
     # === Cost optimization ===
     EARLY_STOP_ZERO_COST = True  # Arrêt anticipé si coût nul trouvé
     UNLIMITED_BASE_COST = float('inf')  # Coût de base illimité pour certains cas
+    
+    # === Toll detection configuration ===
+    TOLL_DETECTION_BUFFER_M = 80.0  # Buffer pour détecter les péages (50m au lieu de 120m)
       # === Performance tracking operation names ===
     class Operations:
         """Noms standardisés des opérations pour le tracking de performance."""

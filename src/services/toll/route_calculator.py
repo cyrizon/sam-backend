@@ -29,7 +29,6 @@ class RouteCalculator:
             ors_service: Instance de ORSService pour les appels API
         """
         self.ors = ors_service
-    
     def calculate_route_avoiding_unwanted_tolls(self, coordinates, target_toll_id, part_name):
         """
         Calcule une route en évitant tous les péages sauf le péage cible.
@@ -78,7 +77,7 @@ class RouteCalculator:
     def _locate_tolls_with_tracking(self, route, operation_suffix):
         """Localise les péages avec tracking des performances."""
         with performance_tracker.measure_operation(f"{Config.Operations.LOCATE_TOLLS}_{operation_suffix}"):
-            return locate_tolls(route, Config.get_barriers_csv_path())["on_route"]
+            return locate_tolls(route, Config.get_barriers_csv_path(), buffer_m=Config.TOLL_DETECTION_BUFFER_M)["on_route"]
     
     def _avoid_tolls_and_recalculate(self, coordinates, unwanted_tolls, part_name):
         """Évite les péages indésirables et recalcule la route."""
@@ -92,7 +91,6 @@ class RouteCalculator:
     def _has_unwanted_tolls(self, tolls, target_toll_id, part_name):
         """Vérifie s'il reste des péages indésirables après évitement."""
         return not RouteValidator.validate_unwanted_tolls_avoided(tolls, target_toll_id, part_name)
-    
     def get_route_avoid_tollways_with_tracking(self, coordinates):
         """Appel ORS pour éviter les péages avec tracking."""
         with performance_tracker.measure_operation(Config.Operations.ORS_AVOID_TOLLWAYS):
@@ -114,7 +112,7 @@ class RouteCalculator:
     def locate_and_cost_tolls(self, route, veh_class, operation_name=Config.Operations.LOCATE_TOLLS):
         """Localise les péages et calcule leurs coûts avec cache intelligent optimisé."""
         with performance_tracker.measure_operation(operation_name):
-            tolls_dict = locate_tolls(route, Config.get_barriers_csv_path())
+            tolls_dict = locate_tolls(route, Config.get_barriers_csv_path(), buffer_m=Config.TOLL_DETECTION_BUFFER_M)
             tolls_on_route = tolls_dict["on_route"]
             # Utiliser le cache intelligent qui respecte les séquences de péages fermés
             add_marginal_cost_smart_cached(tolls_on_route, veh_class)
