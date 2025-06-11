@@ -120,22 +120,30 @@ class SimpleConstraintStrategy:
         """
         Trouve une route avec au maximum max_tolls_limit péages.
         
-        Essaie :
-        1. Route directe
-        2. Route avec évitement si nécessaire
+        Nouvelle logique intelligente :
+        1. Route directe (si elle respecte la limite)
+        2. Évitement intelligent des péages les plus coûteux 
+        3. Route avec évitement total (en dernier recours)
         """
         print(f"🔍 Recherche route avec ≤ {max_tolls_limit} péages...")
         
-        # 1. Essayer route directe
+        # 1. Essayer route directe d'abord
         base_route_result = self._try_base_route(coordinates, max_tolls_limit, veh_class)
         if base_route_result:
             print(f"✅ Route directe trouvée avec {base_route_result['toll_count']} péages (≤ {max_tolls_limit})")
             return base_route_result
         
-        # 2. Essayer route avec évitement
+        # 2. Si route directe a trop de péages, essayer évitement intelligent
+        if max_tolls_limit > 0:
+            smart_route_result = self._try_smart_toll_avoidance(coordinates, max_tolls_limit, veh_class)
+            if smart_route_result:
+                print(f"✅ Route évitement intelligent trouvée avec {smart_route_result['toll_count']} péages (≤ {max_tolls_limit})")
+                return smart_route_result
+        
+        # 3. En dernier recours, essayer route avec évitement total
         avoiding_route_result = self._try_avoiding_route(coordinates, max_tolls_limit, veh_class)
         if avoiding_route_result:
-            print(f"✅ Route évitement trouvée avec {avoiding_route_result['toll_count']} péages (≤ {max_tolls_limit})")
+            print(f"✅ Route évitement total trouvée avec {avoiding_route_result['toll_count']} péages (≤ {max_tolls_limit})")
             return avoiding_route_result
         
         print(f"❌ Aucune route trouvée avec ≤ {max_tolls_limit} péages")
@@ -197,6 +205,175 @@ class SimpleConstraintStrategy:
             
         except Exception as e:
             print(f"❌ Erreur route évitement: {e}")
+            return None
+    
+    def _try_smart_toll_avoidance(self, coordinates, max_tolls_limit, veh_class):
+        """
+        Essaie un évitement intelligent des péages pour respecter la contrainte.
+        
+        Nouvelle logique améliorée :
+        1. Calculer route de base pour identifier tous les péages
+        2. Tester différentes stratégies d'évitement :
+           - Évitement des péages les plus éloignés du trajet principal
+           - Évitement par groupes géographiques 
+           - Évitement des péages les plus coûteux
+        """
+        try:
+            # Calculer route de base pour analyser les péages
+            base_route = self.route_calculator.get_base_route_with_tracking(coordinates)
+            tolls_dict = self.route_calculator.locate_and_cost_tolls(
+                base_route, veh_class, "locate_tolls_smart_avoidance"
+            )
+            tolls_on_route = tolls_dict["on_route"]
+            total_tolls = len(tolls_on_route)
+            
+            print(f"Route de base: {total_tolls} péages, limite: {max_tolls_limit}")
+            
+            # Si route de base respecte déjà la limite, la retourner
+            if total_tolls <= max_tolls_limit:
+                cost = sum(t.get("cost", 0) for t in tolls_on_route)
+                duration = base_route["features"][0]["properties"]["summary"]["duration"]
+                return ResultFormatter.format_route_result(
+                    base_route, cost, duration, total_tolls
+                )
+            
+            # Calculer combien de péages éviter
+            tolls_to_avoid = total_tolls - max_tolls_limit
+            print(f"Besoin d'éviter {tolls_to_avoid} péages sur {total_tolls}")
+            
+            # Stratégie 1: Éviter les péages les plus coûteux
+            result = self._try_avoid_most_expensive(tolls_on_route, tolls_to_avoid, coordinates, max_tolls_limit, veh_class)
+            if result:
+                return result
+            
+            # Stratégie 2: Éviter par groupes géographiques (début/fin de trajet)
+            result = self._try_avoid_geographical_groups(tolls_on_route, tolls_to_avoid, coordinates, max_tolls_limit, veh_class)
+            if result:
+                return result
+            
+            # Stratégie 3: Évitement progressif avec différents rayons
+            result = self._try_progressive_avoidance(tolls_on_route, tolls_to_avoid, coordinates, max_tolls_limit, veh_class)
+            if result:
+                return result
+            
+            print("❌ Toutes les stratégies d'évitement intelligent ont échoué")
+            return None
+            
+        except Exception as e:
+            print(f"❌ Erreur évitement intelligent: {e}")
+            return None
+    
+    def _try_avoid_most_expensive(self, tolls_on_route, tolls_to_avoid, coordinates, max_tolls_limit, veh_class):
+        """Tente d'éviter les péages les plus coûteux."""
+        print("🔄 Stratégie 1: Évitement des péages les plus coûteux")
+        
+        # Trier par coût décroissant
+        sorted_tolls = sorted(tolls_on_route, key=lambda t: t.get("cost", 0), reverse=True)
+        
+        for avoid_count in range(tolls_to_avoid, min(tolls_to_avoid + 3, len(sorted_tolls)) + 1):
+            tolls_to_avoid_list = sorted_tolls[:avoid_count]
+            result = self._test_toll_avoidance(tolls_to_avoid_list, coordinates, max_tolls_limit, veh_class, 500)  # 500m rayon
+            if result:
+                print(f"✅ Succès avec évitement des {avoid_count} péages les plus coûteux")
+                return result
+        
+        return None
+    
+    def _try_avoid_geographical_groups(self, tolls_on_route, tolls_to_avoid, coordinates, max_tolls_limit, veh_class):
+        """Tente d'éviter les péages par groupes géographiques."""
+        print("🔄 Stratégie 2: Évitement par groupes géographiques")
+        
+        if len(tolls_on_route) < 4:  # Pas assez de péages pour faire des groupes
+            return None
+        
+        # Diviser les péages en groupes (début, milieu, fin)
+        third = len(tolls_on_route) // 3
+        
+        groups = [
+            tolls_on_route[:third],           # Début
+            tolls_on_route[-third:],          # Fin  
+            tolls_on_route[third:-third] if third > 0 else []  # Milieu
+        ]
+        
+        # Tester l'évitement de chaque groupe
+        for i, group in enumerate(groups):
+            if len(group) >= tolls_to_avoid:
+                group_to_avoid = group[:tolls_to_avoid]
+                result = self._test_toll_avoidance(group_to_avoid, coordinates, max_tolls_limit, veh_class, 800)  # 800m rayon
+                if result:
+                    print(f"✅ Succès avec évitement du groupe {['début', 'fin', 'milieu'][i]}")
+                    return result
+        
+        return None
+    
+    def _try_progressive_avoidance(self, tolls_on_route, tolls_to_avoid, coordinates, max_tolls_limit, veh_class):
+        """Tente un évitement progressif avec différents rayons."""
+        print("🔄 Stratégie 3: Évitement progressif")
+        
+        # Trier par coût pour avoir une base de départ
+        sorted_tolls = sorted(tolls_on_route, key=lambda t: t.get("cost", 0), reverse=True)
+        
+        # Tester avec différents rayons et nombres de péages à éviter
+        radii = [300, 600, 1000, 1500]  # Rayons en mètres
+        
+        for radius in radii:
+            for avoid_count in range(tolls_to_avoid, min(tolls_to_avoid + 4, len(sorted_tolls)) + 1):
+                tolls_to_avoid_list = sorted_tolls[:avoid_count]
+                result = self._test_toll_avoidance(tolls_to_avoid_list, coordinates, max_tolls_limit, veh_class, radius)
+                if result:
+                    print(f"✅ Succès avec évitement de {avoid_count} péages (rayon {radius}m)")
+                    return result
+        
+        return None
+    
+    def _test_toll_avoidance(self, tolls_to_avoid_list, coordinates, max_tolls_limit, veh_class, radius_m):
+        """Teste l'évitement d'une liste de péages avec un rayon donné."""
+        try:
+            print(f"   Test évitement de {len(tolls_to_avoid_list)} péages (rayon {radius_m}m)")
+            
+            # Préparer les données pour poly_utils
+            tolls_for_avoidance = []
+            for toll in tolls_to_avoid_list:
+                tolls_for_avoidance.append({
+                    "longitude": toll.get("lon", toll.get("longitude")),
+                    "latitude": toll.get("lat", toll.get("latitude"))
+                })
+            
+            if not tolls_for_avoidance:
+                return None
+            
+            # Créer le multipolygon d'évitement avec le rayon spécifié
+            from src.utils.poly_utils import avoidance_multipolygon
+            avoid_poly = avoidance_multipolygon(tolls_for_avoidance, radius_m=radius_m)
+            
+            # Calculer route alternative
+            alternative_route = self.route_calculator.get_route_avoiding_polygons_with_tracking(
+                coordinates, avoid_poly
+            )
+            
+            if alternative_route:
+                # Analyser les péages de la route alternative
+                alt_tolls_dict = self.route_calculator.locate_and_cost_tolls(
+                    alternative_route, veh_class, f"locate_tolls_avoid_test"
+                )
+                alt_tolls_on_route = alt_tolls_dict["on_route"]
+                alt_toll_count = len(alt_tolls_on_route)
+                
+                print(f"   Route alternative: {alt_toll_count} péages")
+                
+                # Vérifier si cette route respecte la contrainte
+                if alt_toll_count <= max_tolls_limit:
+                    cost = sum(t.get("cost", 0) for t in alt_tolls_on_route)
+                    duration = alternative_route["features"][0]["properties"]["summary"]["duration"]
+                    
+                    return ResultFormatter.format_route_result(
+                        alternative_route, cost, duration, alt_toll_count
+                    )
+            
+            return None
+            
+        except Exception as e:
+            print(f"   ⚠️ Erreur test évitement: {e}")
             return None
     
     def _select_best_solution(self, primary_route, backup_route, max_tolls):
