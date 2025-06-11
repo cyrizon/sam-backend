@@ -27,7 +27,7 @@ class BaseOptimizationConfig:
     class StatusCodes:
         """Status codes standardisés pour les résultats."""
         
-        # Success codes
+        # Success codes        
         SUCCESS = "SUCCESS"
         NO_TOLL_SUCCESS = "NO_TOLL_SUCCESS"
         ONE_OPEN_TOLL_SUCCESS = "ONE_OPEN_TOLL_SUCCESS"
@@ -35,6 +35,10 @@ class BaseOptimizationConfig:
         GENERAL_STRATEGY = "GENERAL_STRATEGY"
         GENERAL_STRATEGY_WITH_MIN_TOLLS = "GENERAL_STRATEGY_WITH_MIN_TOLLS"
         MINIMUM_TOLLS_SOLUTION = "MINIMUM_TOLLS_SOLUTION"
+        
+        # Constraint-based codes (new simplified approach)
+        CONSTRAINT_RESPECTED = "CONSTRAINT_RESPECTED"
+        CONSTRAINT_EXCEEDED_BY_ONE = "CONSTRAINT_EXCEEDED_BY_ONE"
         
         # Warning codes
         SOME_TOLLS_PRESENT = "SOME_TOLLS_PRESENT"
