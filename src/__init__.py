@@ -15,6 +15,10 @@ def create_app():
     config = Config().dev_config if env == "dev" else Config().production_config
     app.config.from_object(config)
 
+    print("🚀 Initialisation du cache global des péages...")
+    from src.services.toll_data_cache import toll_data_cache
+    toll_data_cache.initialize()
+
     # Enregistrer les routes
     from src.routes import register_routes
     register_routes(app)

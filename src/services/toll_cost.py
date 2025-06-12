@@ -5,27 +5,18 @@ toll_cost.py
 Calcule le *surcoût marginal* (classe véhicule c1…c5) apporté par
 chaque péage de la séquence retournée par `locate_tolls`.
 
-Hypothèse : on paie
-  • les gares 'O' à coût fixe (ligne entree_id==sortie_id dans virtual_edges)
-  • les gares 'S' (sortie) – tarif (entrée précédente ➜ cette sortie)
-Les gares 'E' ne déclenchent pas de paiement.
-
-On retourne la séquence assortie du champ `cost`, puis un tri décroissant.
+VERSION OPTIMISÉE : Utilise le cache global au lieu de recharger 305KB systématiquement.
 """
 from __future__ import annotations
 from typing import List, Dict
-import os
 
-import pandas as pd
-
-def _load_edges():
-    """Load virtual edges data with toll costs"""
-    file_path = os.path.join(os.path.dirname(__file__), '../../data/virtual_edges.csv')
-    df = pd.read_csv(file_path)
-    price_cols = ['c1', 'c2', 'c3', 'c4', 'c5']
-    return df.set_index(["entree", "sortie"])[price_cols]
-
-_EDGES = _load_edges()
+def _get_edges_from_cache():
+    """
+    Récupère les données virtual_edges depuis le cache global.
+    RÉSOUT LE PROBLÈME : Plus de rechargement de 305KB à chaque import !
+    """
+    from src.services.toll_data_cache import toll_data_cache
+    return toll_data_cache.virtual_edges_df
 
 def add_marginal_cost(
     tolls: List[Dict],
@@ -39,13 +30,13 @@ def add_marginal_cost(
     prev_entry = None
     for t in tolls:
         rid = t["id"]
-        cost = 0.0
-        # Rôle déduit de l'id
+        cost = 0.0        # Rôle déduit de l'id
         print(f"Calcul du coût pour le péage {rid} ({veh_class})")
         if rid.startswith("APRR_O"):
             # Péage ouvert : coût fixe (entrée = sortie)
             try:
-                cost = _EDGES.loc[(rid, rid)][veh_class]
+                edges_df = _get_edges_from_cache()
+                cost = edges_df.loc[(rid, rid)][veh_class]
                 print(f"Coût fixe pour {rid} : {cost}")
             except KeyError:
                 cost = 0.0
@@ -54,7 +45,8 @@ def add_marginal_cost(
             # Péage fermé : on paie à la sortie, donc si on a une entrée précédente
             if prev_entry is not None:
                 try:
-                    cost = _EDGES.loc[(prev_entry, rid)][veh_class]
+                    edges_df = _get_edges_from_cache()
+                    cost = edges_df.loc[(prev_entry, rid)][veh_class]
                     print(f"Coût pour {prev_entry} ➜ {rid} : {cost}")
                 except KeyError:
                     cost = 0.0

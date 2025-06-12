@@ -41,6 +41,15 @@ def _ensure_barriers(csv_path):
         _BARRIERS_TREE = STRtree(_BARRIERS_DF["_geom3857"].tolist())
 
 # ────────────────────────────────────────────────────────────────────────────
+# Utilisation du cache global (VERSION OPTIMISÉE)
+# ────────────────────────────────────────────────────────────────────────────
+
+def _get_barriers_from_cache():
+    """Récupère les barrières depuis le cache global"""
+    from src.services.toll_data_cache import toll_data_cache
+    return toll_data_cache.barriers_df, toll_data_cache.spatial_index
+
+# ────────────────────────────────────────────────────────────────────────────
 # Fonction publique
 # ────────────────────────────────────────────────────────────────────────────
 def locate_tolls(
@@ -64,21 +73,19 @@ def locate_tolls(
     # 2) Buffer en Web Mercator
     wgs_to_3857 = Transformer.from_crs(_WGS84, _WEBM, always_xy=True).transform
     route_3857 = LineString([wgs_to_3857(*coord) for coord in route_line.coords])
-    buf = route_3857.buffer(buffer_m)
-
-    # 3) Barrières dans la zone
-    _ensure_barriers(csv_path)
-    hits = _BARRIERS_TREE.query(buf)
+    buf = route_3857.buffer(buffer_m)    # 3) Barrières dans la zone - VERSION OPTIMISÉE avec cache global
+    barriers_df, barriers_tree = _get_barriers_from_cache()
+    hits = barriers_tree.query(buf)
 
     # Filtrage précis : ne garder que les points vraiment dans le buffer
-    mask = [_BARRIERS_DF.loc[i, "_geom3857"].within(buf) for i in hits]
+    mask = [barriers_df.loc[i, "_geom3857"].within(buf) for i in hits]
     filtered_hits = [i for i, m in zip(hits, mask) if m]
 
     # Affichage des péages proches (dans un buffer plus large mais hors buffer principal)
     near_buf = route_3857.buffer(500)
-    near_hits = _BARRIERS_TREE.query(near_buf)
+    near_hits = barriers_tree.query(near_buf)
     near_mask = [
-        (_BARRIERS_DF.loc[i, "_geom3857"].within(near_buf) and not _BARRIERS_DF.loc[i, "_geom3857"].within(buf))
+        (barriers_df.loc[i, "_geom3857"].within(near_buf) and not barriers_df.loc[i, "_geom3857"].within(buf))
         for i in near_hits
     ]
     nearby = [i for i, m in zip(near_hits, near_mask) if m]
@@ -87,16 +94,16 @@ def locate_tolls(
         to_wgs84 = Transformer.from_crs(_WEBM, _WGS84, always_xy=True).transform
         coords = [
             to_wgs84(geom.x, geom.y)
-            for geom in _BARRIERS_DF.loc[nearby, "_geom3857"]
+            for geom in barriers_df.loc[nearby, "_geom3857"]
         ]
-        df_nearby = _BARRIERS_DF.loc[nearby].copy()
+        df_nearby = barriers_df.loc[nearby].copy()
         df_nearby["longitude"], df_nearby["latitude"] = zip(*coords)
 
     # 4) Tri selon l’avancement sur le tronçon
     project = route_3857.project
     sel = (
-        _BARRIERS_DF.loc[filtered_hits]
-        .assign(_proj=_BARRIERS_DF.loc[filtered_hits, "_geom3857"].apply(project))
+        barriers_df.loc[filtered_hits]
+        .assign(_proj=barriers_df.loc[filtered_hits, "_geom3857"].apply(project))
         .sort_values("_proj")
     )
 
@@ -109,12 +116,10 @@ def locate_tolls(
     if coords:
         sel["longitude"], sel["latitude"] = zip(*coords)
     else:
-        sel["longitude"], sel["latitude"] = [], []
-
-    # Pour les péages proches (déjà convertis plus haut)
+        sel["longitude"], sel["latitude"] = [], []    # Pour les péages proches (déjà convertis plus haut)
     nearby_list = []
     if nearby:
-        df_nearby = _BARRIERS_DF.loc[nearby].copy()
+        df_nearby = barriers_df.loc[nearby].copy()
         coords_nearby = [
             to_wgs84(geom.x, geom.y)
             for geom in df_nearby["_geom3857"]
@@ -148,10 +153,8 @@ def get_all_open_tolls_by_proximity(
         List[Dict]: Liste des péages ouverts triés par proximité, à moins de max_distance_m mètres
     """
     from shapely.geometry import shape  # import léger
-    import re
-
-    # Charger les données de péages
-    _ensure_barriers(csv_path)
+    import re    # Charger les données de péages - VERSION OPTIMISÉE avec cache global
+    barriers_df, barriers_tree = _get_barriers_from_cache()
     
     # 1) Géométrie ORS → LineString WGS84
     route_line = shape(ors_geojson["features"][0]["geometry"])
@@ -159,11 +162,10 @@ def get_all_open_tolls_by_proximity(
     # 2) Convertir en Web Mercator pour le calcul de distance
     wgs_to_3857 = Transformer.from_crs(_WGS84, _WEBM, always_xy=True).transform
     route_3857 = LineString([wgs_to_3857(*coord) for coord in route_line.coords])
-    
-    # 3) Filtrer tous les péages à système ouvert (à partir du nom)
+      # 3) Filtrer tous les péages à système ouvert (à partir du nom)
     # On utilise le critère "_o" dans l'ID pour identifier les systèmes ouverts
-    open_toll_mask = _BARRIERS_DF['id'].str.contains('_o', case=False, regex=True)
-    open_tolls_df = _BARRIERS_DF[open_toll_mask].copy()
+    open_toll_mask = barriers_df['id'].str.contains('_o', case=False, regex=True)
+    open_tolls_df = barriers_df[open_toll_mask].copy()
     
     if len(open_tolls_df) == 0:
         return []
