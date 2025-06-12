@@ -13,7 +13,6 @@ from src.services.common.base_constants import BaseOptimizationConfig as Config
 
 class TollResponseBuilder(BaseResponseBuilder):
     """Constructeur centralisé pour les réponses API de toll."""
-    
     @staticmethod
     def build_success_response(optimization_results, include_summary=True):
         """
@@ -22,7 +21,9 @@ class TollResponseBuilder(BaseResponseBuilder):
         return BaseResponseBuilder.build_success_response(
             optimization_results, 
             include_summary
-        )    @staticmethod
+        )
+    
+    @staticmethod
     def build_error_response(error_message, status_code, operation_name=None, details=None):
         """
         Construit une réponse d'erreur spécifique au toll.
