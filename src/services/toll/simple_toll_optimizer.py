@@ -14,6 +14,7 @@ Stratégie :
 
 from benchmark.performance_tracker import performance_tracker
 from src.services.toll.simple_constraint_strategy import SimpleConstraintStrategy
+from src.services.toll.enhanced_constraint_strategy import EnhancedConstraintStrategy
 from src.services.toll.fallback_strategy import TollFallbackStrategy
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.error_handler import TollErrorHandler
@@ -26,18 +27,27 @@ class SimpleTollOptimizer:
     Focus : respect des contraintes plutôt qu'optimisation de coût.
     """
     
-    def __init__(self, ors_service):
+    def __init__(self, ors_service, use_segmentation=False):
         """
         Initialise l'optimiseur simplifié avec un service ORS.
         
         Args:
             ors_service: Instance de ORSService pour les appels API
+            use_segmentation: Si True, utilise la stratégie de segmentation améliorée
         """
         self.ors = ors_service
-        self.constraint_strategy = SimpleConstraintStrategy(ors_service)
+        self.use_segmentation = use_segmentation
+        
+        if use_segmentation:
+            # Utiliser la stratégie améliorée avec segmentation ET évitement progressif
+            self.constraint_strategy = EnhancedConstraintStrategy(ors_service)
+        else:
+            # Utiliser la stratégie classique
+            self.constraint_strategy = SimpleConstraintStrategy(ors_service)
+            
         self.fallback_strategy = TollFallbackStrategy(ors_service)
-    
-    def compute_route_with_toll_limit(self, coordinates, max_tolls, veh_class=Config.DEFAULT_VEH_CLASS):
+
+    def compute_route_with_toll_limit(self, coordinates, max_tolls, veh_class=Config.DEFAULT_VEH_CLASS, force_segmentation=False, use_progressive=True):
         """
         Calcule un itinéraire en respectant les contraintes de péages.
         
@@ -50,6 +60,8 @@ class SimpleTollOptimizer:
             coordinates: Liste de coordonnées [départ, arrivée]
             max_tolls: Nombre maximum de péages autorisés
             veh_class: Classe de véhicule pour le calcul des coûts
+            force_segmentation: Si True, force l'utilisation de la segmentation même si use_segmentation=False
+            use_progressive: Si True, permet l'utilisation de l'évitement progressif
             
         Returns:
             dict: Résultats formatés (fastest, cheapest, min_tolls, status)
@@ -59,21 +71,30 @@ class SimpleTollOptimizer:
             "compute_route_with_toll_limit_simplified",
             max_tolls=max_tolls,
             veh_class=veh_class
-        )
-        
+        )        
         with performance_tracker.measure_operation("simple_toll_optimizer", {
             "max_tolls": max_tolls,
-            "veh_class": veh_class
+            "veh_class": veh_class,
+            "use_segmentation": self.use_segmentation or force_segmentation
         }):
             print(f"=== Optimiseur Simplifié : max {max_tolls} péages ===")
             
-            try:
-                # Utiliser la stratégie de contrainte simplifiée
-                constraint_result = self.constraint_strategy.find_route_respecting_constraint(
-                    coordinates, max_tolls, veh_class)                # Traiter les résultats selon la solution trouvée
-                solution_type = constraint_result.get("found_solution", "none")
+            try:                
+                # Choisir la stratégie appropriée
+                if self.use_segmentation or force_segmentation:
+                    print("🧩 Utilisation de la stratégie de segmentation (évitement progressif en premier)")
+                    constraint_result = self.constraint_strategy.find_route_respecting_constraint(
+                        coordinates, max_tolls, veh_class, use_segmentation=True, use_progressive=use_progressive, start_with_progressive=True)
+                else:
+                    print("⚡ Utilisation de la stratégie classique")
+                    constraint_result = self.constraint_strategy.find_route_respecting_constraint(
+                        coordinates, max_tolls, veh_class)
                 
-                if solution_type in ["within_limit", "backup_plus_one", "backup_minus_one", "no_toll_fallback"]:
+                # Traiter les résultats selon la solution trouvée
+                solution_type = constraint_result.get("found_solution", "none")
+                if solution_type in ["within_limit", "backup_plus_one", "backup_minus_one", "no_toll_fallback", 
+                                     "within_limit_segmentation", "backup_segmentation",
+                                     "within_limit_progressive", "backup_progressive"]:
                     # Une solution a été trouvée
                     result = self._format_constraint_solution(constraint_result, max_tolls, solution_type)
                 elif solution_type == "none":

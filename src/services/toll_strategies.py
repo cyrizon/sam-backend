@@ -17,18 +17,18 @@ class TollRouteOptimizer:
     Optimiseur d'itinéraires simplifié avec contraintes sur le nombre de péages.
     Nouvelle approche : respect des contraintes plutôt qu'optimisation complexe de coût.
     """
-    
-    def __init__(self, ors_service):
+    def __init__(self, ors_service, use_segmentation=False):
         """
         Initialise l'optimiseur avec un service ORS.
         
         Args:
             ors_service: Instance de ORSService pour les appels API
+            use_segmentation: Si True, utilise la stratégie de segmentation améliorée
         """
         self.ors = ors_service
-        self.simple_optimizer = SimpleTollOptimizer(ors_service)
+        self.simple_optimizer = SimpleTollOptimizer(ors_service, use_segmentation=use_segmentation)
     
-    def compute_route_with_toll_limit(self, coordinates, max_tolls, veh_class=Config.DEFAULT_VEH_CLASS, max_comb_size=Config.DEFAULT_MAX_COMB_SIZE):
+    def compute_route_with_toll_limit(self, coordinates, max_tolls, veh_class=Config.DEFAULT_VEH_CLASS, max_comb_size=Config.DEFAULT_MAX_COMB_SIZE, force_segmentation=False):
         """
         Calcule un itinéraire avec une limite sur le nombre de péages.
         
@@ -42,12 +42,12 @@ class TollRouteOptimizer:
             max_tolls: Nombre maximum de péages autorisés
             veh_class: Classe de véhicule pour le calcul des coûts
             max_comb_size: Paramètre maintenu pour compatibilité (non utilisé)
+            force_segmentation: Si True, force l'utilisation de la segmentation
             
         Returns:
             dict: Résultats simplifiés (fastest, cheapest, min_tolls, status)
         """
-        
-        # Déléguer directement à l'optimiseur simplifié
+        # Déléguer directement à l'optimiseur simplifié avec évitement progressif
         return self.simple_optimizer.compute_route_with_toll_limit(
-            coordinates, max_tolls, veh_class
+            coordinates, max_tolls, veh_class, force_segmentation=force_segmentation, use_progressive=True
         )
