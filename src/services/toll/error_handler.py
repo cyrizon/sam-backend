@@ -98,25 +98,6 @@ class TollErrorHandler(BaseErrorHandler):
         return None, Config.StatusCodes.NO_OPEN_TOLL_FOUND
     
     @staticmethod
-    def create_fallback_response(coordinates, veh_class, status_code):
-        """
-        Crée une réponse de fallback avec la route de base.
-        
-        Args:
-            coordinates: Coordonnées de la route
-            veh_class: Classe de véhicule
-            status_code: Code de statut d'erreur
-            
-        Returns:
-            dict: Réponse de fallback        """
-        from src.services.toll.fallback_strategy import TollFallbackStrategy
-        
-        # Import tardif pour éviter les dépendances circulaires
-        # Ici on aurait besoin du service ORS, mais on ne peut pas l'injecter facilement
-        # Cette méthode pourrait être déplacée ou restructurée selon l'architecture
-        pass
-    
-    @staticmethod
     def log_operation_start(operation_name, **kwargs):
         """
         Log le début d'une opération avec ses paramètres.

@@ -31,8 +31,8 @@ class SmartRouteService:
         Initialise le service de routage intelligent avec les services nécessaires.
         """
         self.ors_service = ORSService()
-        # Activer la segmentation ET l'évitement progressif par défaut
-        self.toll_optimizer = TollRouteOptimizer(self.ors_service, use_segmentation=True)
+        # Utiliser la stratégie intelligente V2 simplifiée
+        self.toll_optimizer = TollRouteOptimizer(self.ors_service)
         self.budget_optimizer = BudgetRouteOptimizer(self.ors_service)
     
     def compute_route_with_toll_limit(
