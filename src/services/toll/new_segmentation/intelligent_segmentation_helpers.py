@@ -38,16 +38,34 @@ class SegmentationSpecialCases:
             
             # Utiliser la méthode spécifique ORS pour éviter les péages
             toll_free_route = self.ors.get_route_avoid_tollways(coordinates)
-            
             if toll_free_route:
                 print("✅ Route sans péages trouvée avec get_route_avoid_tollways")
+                
+                # Extraire les instructions et les ajouter au GeoJSON si elles ne sont pas déjà présentes
+                instructions = RouteUtils.extract_instructions(toll_free_route)
+                
+                # S'assurer que les instructions sont dans le GeoJSON
+                if 'features' in toll_free_route and toll_free_route['features']:
+                    feature = toll_free_route['features'][0]
+                    if 'properties' not in feature:
+                        feature['properties'] = {}
+                    if 'instructions' not in feature['properties'] and instructions:
+                        feature['properties']['instructions'] = instructions                
                 return {
                     'route': toll_free_route,
-                    'status': 'no_toll_success',
                     'target_tolls': 0,
-                    'strategy': 'toll_free_direct',
+                    'found_solution': 'no_toll_success',
+                    'respects_constraint': True,
+                    'strategy_used': 'toll_free_direct',
                     'distance': RouteUtils.extract_distance(toll_free_route),
-                    'duration': RouteUtils.extract_duration(toll_free_route)
+                    'duration': RouteUtils.extract_duration(toll_free_route),
+                    'instructions': instructions,
+                    'segments': {'count': 1, 'toll_segments': 0, 'free_segments': 1},
+                    'toll_info': {
+                        'selected_tolls': [],
+                        'toll_systems': [],
+                        'coordinates': []
+                    }
                 }
             else:
                 print("❌ Impossible de trouver une route sans péages")
@@ -68,15 +86,22 @@ class SegmentationSpecialCases:
         Returns:
             dict: Route de base formatée
         """
-        print("🔄 Formatage de la route de base comme résultat final")
-        
+        print("🔄 Formatage de la route de base comme résultat final")        
         return {
             'route': base_route,
-            'status': 'base_route_fallback',
             'target_tolls': None,  # Pas respecté, on retourne la route principale
-            'strategy': 'base_route_return',
+            'found_solution': 'base_route_fallback',
+            'respects_constraint': False,
+            'strategy_used': 'base_route_return',
             'distance': RouteUtils.extract_distance(base_route),
             'duration': RouteUtils.extract_duration(base_route),
+            'instructions': RouteUtils.extract_instructions(base_route),
+            'segments': {'count': 1, 'toll_segments': 0, 'free_segments': 1},
+            'toll_info': {
+                'selected_tolls': [],
+                'toll_systems': [],
+                'coordinates': []
+            },
             'note': 'Plus de péages demandés que disponibles, route principale retournée'
         }
 
@@ -107,6 +132,30 @@ class RouteUtils:
         """Extrait les coordonnées de la route."""
         try:
             return route['features'][0]['geometry']['coordinates']
+        except (KeyError, IndexError):
+            return []
+    
+    @staticmethod
+    def extract_instructions(route: Dict) -> List[Dict]:
+        """Extrait les instructions de navigation d'une route ORS."""
+        try:
+            segments = route['features'][0]['properties']['segments']
+            if not segments:
+                return []
+            
+            instructions = []
+            for segment in segments:
+                steps = segment.get('steps', [])
+                for step in steps:
+                    instructions.append({
+                        'instruction': step.get('instruction', ''),
+                        'distance': step.get('distance', 0),
+                        'duration': step.get('duration', 0),
+                        'type': step.get('type', 0),
+                        'name': step.get('name', ''),
+                        'way_points': step.get('way_points', [])
+                    })
+            return instructions
         except (KeyError, IndexError):
             return []
 
@@ -141,12 +190,16 @@ class RouteAssembler:
         
         # Fusionner en évitant la duplication du point de jonction
         final_coords = coords1 + coords2[1:]  # Enlever le premier point du segment 2
-        
-        # Calculer les métriques totales
+          # Calculer les métriques totales
         distance1 = RouteUtils.extract_distance(segment1)
         distance2 = RouteUtils.extract_distance(segment2)
         duration1 = RouteUtils.extract_duration(segment1)
         duration2 = RouteUtils.extract_duration(segment2)
+        
+        # Extraire et assembler les instructions
+        instructions1 = RouteUtils.extract_instructions(segment1)
+        instructions2 = RouteUtils.extract_instructions(segment2)
+        final_instructions = instructions1 + instructions2
         
         # Créer la route finale au format GeoJSON
         final_route = {
@@ -169,7 +222,6 @@ class RouteAssembler:
                 }
             }]
         }
-        
         print(f"✅ Route assemblée : {(distance1 + distance2)/1000:.1f} km, {(duration1 + duration2)/60:.0f} min")
         
         return {
@@ -182,5 +234,6 @@ class RouteAssembler:
                 'segment2': segment2
             },
             'distance': distance1 + distance2,
-            'duration': duration1 + duration2
+            'duration': duration1 + duration2,
+            'instructions': final_instructions
         }
