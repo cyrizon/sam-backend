@@ -120,7 +120,7 @@ class SegmentationSpecialCases:
                 print(f"🗺️ Récupération des instructions pour {start_coord} → {end_coord}")
                 
                 # Récupérer une route complète avec instructions
-                full_route = self.ors.get_route([start_coord, end_coord])
+                full_route = self.ors.get_route(start_coord, end_coord)
                 if full_route:
                     print("✅ Route complète avec instructions récupérée")
                     instructions = RouteUtils.extract_instructions(full_route)

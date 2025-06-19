@@ -18,6 +18,8 @@ Algorithme en 9 étapes :
 """
 
 from typing import List, Dict, Optional
+from .toll_segment_builder import TollSegmentBuilder
+from .segment_route_calculator import SegmentRouteCalculator
 from .osm_data_parser import OSMDataParser
 from .toll_matcher import TollMatcher, MatchedToll, convert_osm_tolls_to_matched_format
 from .toll_deduplicator import TollDeduplicator
@@ -51,6 +53,10 @@ class IntelligentSegmentationStrategyV2:
         self.point_finder = SegmentationPointFinder(self.osm_parser)
         self.segment_calculator = SegmentCalculator(ors_service)
         self.route_assembler = RouteAssembler()
+        
+        # Nouveaux modules pour la segmentation intelligente
+        self.segment_builder = TollSegmentBuilder(ors_service)
+        self.route_calculator = SegmentRouteCalculator(ors_service)
     
     def find_route_with_exact_tolls(
         self, 
@@ -95,34 +101,30 @@ class IntelligentSegmentationStrategyV2:
             # OPTIMISATION : Si le trajet de base a exactement le bon nombre de péages, on le retourne directement
             if len(tolls_on_route) == target_tolls:
                 print(f"✅ Optimisation : trajet de base avec exactement {len(tolls_on_route)} péage(s) = {target_tolls} demandé(s)")
-                return self.special_cases.format_base_route_as_result(base_route)
-            # Étape 3 : Sélectionner les péages à utiliser (prioriser système ouvert)
+                return self.special_cases.format_base_route_as_result(base_route)            # Étape 3 : Sélectionner les péages à utiliser (prioriser système ouvert)
             selected_tolls = self._select_target_tolls(tolls_on_route, target_tolls)
             if not selected_tolls:
-                return None
-              # Étape 4-5 : Trouver les points de segmentation (motorway_links)
-            segmentation_points = self.point_finder.find_segmentation_points(
-                route_coords, selected_tolls, tolls_on_route
+                return None            # Étape 4 : Construction des segments intelligents (nouvelle approche)
+            print("🏗️ Étape 4 : Construction des segments intelligents...")
+            segments = self.segment_builder.build_intelligent_segments(
+                coordinates[0], coordinates[1], tolls_on_route, selected_tolls,
+                osm_parser=self.osm_parser, route_coords=route_coords
             )
-            if not segmentation_points:
-                return None
+            if not segments:
+                print("❌ Impossible de construire les segments intelligents")
+                return self.special_cases.format_base_route_as_result(base_route)
             
-            # Étape 6 : Créer la liste des segments
-            all_segments_coords = self.segment_calculator.create_segments_coordinates(
-                coordinates, segmentation_points
-            )
+            # Étape 5 : Calcul des routes pour chaque segment
+            print("📍 Étape 5 : Calcul des routes pour chaque segment...")
+            segment_routes = self.route_calculator.calculate_all_segments(segments)
+            if not segment_routes:
+                print("❌ Échec du calcul des segments, fallback vers route de base")
+                return self.special_cases.format_base_route_as_result(base_route)
             
-            # Étape 7 : Calculer tous les segments
-            calculated_segments = self.segment_calculator.calculate_all_segments(
-                all_segments_coords, len(selected_tolls)
-            )
-            
-            if not calculated_segments:
-                return None
-            
-            # Étape 8-9 : Assembler et retourner le résultat final
+            # Étape 6 : Assembler et retourner le résultat final
+            print("🔧 Étape 6 : Assemblage du résultat final...")
             return self.route_assembler.assemble_final_route_multi(
-                calculated_segments, target_tolls, selected_tolls
+                segment_routes, target_tolls, selected_tolls
             )
     
     def _ensure_osm_data_loaded(self) -> bool:
@@ -182,28 +184,103 @@ class IntelligentSegmentationStrategyV2:
         return ordered_tolls
     
     def _select_target_tolls(self, available_tolls: List[MatchedToll], target_count: int) -> List[MatchedToll]:
-        """Étape 3 : Sélectionner les péages à utiliser (prioriser système ouvert)."""
-        print(f"🎯 Étape 3 : Sélection de {target_count} péage(s)...")
+        """
+        Étape 3 : Sélectionner les péages à utiliser en respectant les contraintes des systèmes.
+        
+        Règles :
+        - 1 péage : Seulement système ouvert
+        - 2 péages : Soit 2 ouverts, soit 2 fermés (pas de mixte)
+        - 3+ péages : Combinaisons possibles, mais chaque fermé accompagné d'au moins un autre fermé
+        """
+        print(f"🎯 Étape 3 : Sélection de {target_count} péage(s) avec contraintes systèmes...")
         
         if target_count > len(available_tolls):
             print(f"❌ Pas assez de péages disponibles ({len(available_tolls)} < {target_count})")
             return []
         
-        # Trier les péages : d'abord les systèmes ouverts, puis les fermés
+        # Séparer les péages par système
         open_tolls = [t for t in available_tolls if t.is_open_system]
         closed_tolls = [t for t in available_tolls if not t.is_open_system]
         
+        print(f"   📊 Disponibles : {len(open_tolls)} ouverts, {len(closed_tolls)} fermés")
+        
+        # Appliquer les règles selon le nombre demandé
+        if target_count == 1:
+            return self._select_one_toll(open_tolls, closed_tolls)
+        elif target_count == 2:
+            return self._select_two_tolls(open_tolls, closed_tolls)
+        else:
+            return self._select_multiple_tolls(open_tolls, closed_tolls, target_count)
+    
+    def _select_one_toll(self, open_tolls: List[MatchedToll], closed_tolls: List[MatchedToll]) -> List[MatchedToll]:
+        """Règle : 1 péage = seulement système ouvert."""
+        if open_tolls:
+            selected = [open_tolls[0]]
+            print(f"   ✅ 1 péage ouvert : {selected[0].effective_name}")
+            return selected
+        else:
+            print(f"   ❌ Aucun péage ouvert disponible pour 1 péage")
+            return []
+    
+    def _select_two_tolls(self, open_tolls: List[MatchedToll], closed_tolls: List[MatchedToll]) -> List[MatchedToll]:
+        """Règle : 2 péages = soit 2 ouverts, soit 2 fermés (pas de mixte)."""
+        # Priorité : 2 ouverts
+        if len(open_tolls) >= 2:
+            selected = open_tolls[:2]
+            print(f"   ✅ 2 péages ouverts : {[t.effective_name for t in selected]}")
+            return selected
+        
+        # Sinon : 2 fermés
+        if len(closed_tolls) >= 2:
+            selected = closed_tolls[:2]
+            print(f"   ✅ 2 péages fermés : {[t.effective_name for t in selected]}")
+            return selected
+        
+        print(f"   ❌ Impossible de faire 2 péages (besoin de 2 ouverts ou 2 fermés)")
+        return []
+    
+    def _select_multiple_tolls(self, open_tolls: List[MatchedToll], closed_tolls: List[MatchedToll], target_count: int) -> List[MatchedToll]:
+        """Règle : 3+ péages = combinaisons possibles, mais chaque fermé accompagné d'au moins un autre fermé."""
         selected_tolls = []
         
-        # D'abord prendre les péages ouverts
-        for toll in open_tolls[:target_count]:
-            selected_tolls.append(toll)
-            print(f"   ✅ Péage sélectionné : {toll.effective_name} (système ouvert)")
-        
-        # Compléter avec les péages fermés si nécessaire
+        # Stratégie : Prendre d'abord les ouverts, puis des paires de fermés
+        # Ajouter tous les ouverts disponibles
+        selected_tolls.extend(open_tolls)
         remaining = target_count - len(selected_tolls)
-        for toll in closed_tolls[:remaining]:
-            selected_tolls.append(toll)
-            print(f"   ✅ Péage sélectionné : {toll.effective_name} (système fermé)")
         
-        return selected_tolls
+        if remaining <= 0:
+            # Assez d'ouverts, prendre seulement ce qu'il faut
+            selected_tolls = open_tolls[:target_count]
+            print(f"   ✅ {target_count} péages ouverts : {[t.effective_name for t in selected_tolls]}")
+            return selected_tolls
+        
+        # Il faut ajouter des fermés - s'assurer qu'on en prend au moins 2
+        if remaining == 1 and len(closed_tolls) >= 2:
+            # Prendre 2 fermés au lieu d'1 pour respecter la contrainte
+            if len(selected_tolls) > 0:
+                # Enlever 1 ouvert et ajouter 2 fermés
+                selected_tolls = selected_tolls[:-1]
+                selected_tolls.extend(closed_tolls[:2])
+            else:
+                selected_tolls.extend(closed_tolls[:2])
+        else:
+            # Ajouter les fermés nécessaires (par paires si possible)
+            selected_tolls.extend(closed_tolls[:remaining])
+        
+        # Vérifier qu'on respecte la contrainte des fermés
+        final_selected = selected_tolls[:target_count]
+        closed_count = sum(1 for t in final_selected if not t.is_open_system)
+        
+        if closed_count == 1:
+            print(f"   ⚠️ Contrainte violée : 1 seul fermé détecté, ajustement nécessaire")
+            # Réessayer avec une stratégie différente
+            if len(closed_tolls) >= 2:
+                # Remplacer par 2 fermés
+                open_in_selection = [t for t in final_selected if t.is_open_system]
+                if len(open_in_selection) > 0:
+                    final_selected = open_in_selection[:-1] + closed_tolls[:2]
+                else:
+                    final_selected = closed_tolls[:target_count]
+        
+        print(f"   ✅ {len(final_selected)} péages sélectionnés : {[t.effective_name for t in final_selected]}")
+        return final_selected[:target_count]

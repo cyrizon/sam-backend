@@ -69,34 +69,79 @@ class TollDeduplicator:
     ) -> MatchedToll:
         """
         Trouve le péage le plus proche de la route parmi un groupe.
+        Utilise la distance point-à-polyline ET vérifie la correspondance avec les points de la route.
         
         Args:
             toll_group: Groupe de péages du même nom
             route_coords: Coordonnées de la route
             
         Returns:
-            MatchedToll: Péage le plus proche
+            MatchedToll: Péage le plus proche et correspondant au trajet
         """
+        from .polyline_intersection import point_to_polyline_distance
+        
+        print(f"   🔍 Déduplication de {len(toll_group)} péages du même nom:")
+        
+        # Première passe : trouver le péage qui correspond exactement à un point de la route
+        for toll in toll_group:
+            toll_lon, toll_lat = toll.osm_coordinates[0], toll.osm_coordinates[1]
+            print(f"      🧪 Test péage à [{toll_lon:.7f}, {toll_lat:.7f}]")
+            
+            # Vérifier si ce point correspond exactement (±1m) à un point de la route
+            for i, route_point in enumerate(route_coords):
+                route_lon, route_lat = route_point[0], route_point[1]
+                
+                # Calculer la distance en mètres
+                distance_m = TollDeduplicator._calculate_distance_meters([toll_lat, toll_lon], [route_lat, route_lon])
+                
+                if distance_m <= 1.0:  # Tolérance de 1m pour correspondance exacte
+                    print(f"         ✅ Correspondance exacte trouvée avec point route {i} (distance: {distance_m:.1f}m)")
+                    return toll
+        
+        print(f"      ⚠️ Aucune correspondance exacte trouvée, utilisation de la distance minimale")
+        
+        # Deuxième passe : utiliser la distance minimale comme avant
         closest_toll = None
         min_distance = float('inf')
-        
         for toll in toll_group:
-            # Calculer la distance moyenne à tous les points de la route
-            total_distance = 0
-            for route_point in route_coords[::10]:  # Échantillonnage pour performance
-                distance = TollDeduplicator._calculate_distance(
-                    [route_point[1], route_point[0]],  # [lat, lon]
-                    toll.osm_coordinates  # [lon, lat]
-                )
-                total_distance += distance
+            # Utiliser la distance point-à-polyline (plus précise)
+            toll_coords = [toll.osm_coordinates[1], toll.osm_coordinates[0]]  # [lat, lon]
+            distance_result = point_to_polyline_distance(toll_coords, route_coords)
+            distance_km = distance_result[0]  # Distance en km
             
-            avg_distance = total_distance / len(route_coords[::10])
+            print(f"      📏 Péage à [{toll.osm_coordinates[0]:.7f}, {toll.osm_coordinates[1]:.7f}] : {distance_km*1000:.1f}m")
             
-            if avg_distance < min_distance:
-                min_distance = avg_distance
+            if distance_km < min_distance:
+                min_distance = distance_km
                 closest_toll = toll
         
+        print(f"      ✅ Péage sélectionné : [{closest_toll.osm_coordinates[0]:.7f}, {closest_toll.osm_coordinates[1]:.7f}] ({min_distance*1000:.1f}m)")
         return closest_toll
+    
+    @staticmethod
+    def _calculate_distance_meters(coord1: List[float], coord2: List[float]) -> float:
+        """
+        Calcule la distance entre deux points en mètres.
+        
+        Args:
+            coord1: Premier point [lat, lon]
+            coord2: Deuxième point [lat, lon]
+            
+        Returns:
+            float: Distance en mètres
+        """
+        import math
+        
+        lat1, lon1 = math.radians(coord1[0]), math.radians(coord1[1])
+        lat2, lon2 = math.radians(coord2[0]), math.radians(coord2[1])
+        
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        
+        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+        c = 2 * math.asin(math.sqrt(a))
+        
+        return 6371000.0 * c  # Rayon de la Terre en mètres
     
     @staticmethod
     def _calculate_distance(coord1: List[float], coord2: List[float]) -> float:

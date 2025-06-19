@@ -61,17 +61,18 @@ class TollMatcher:
         """Initialise le matcher avec les données de barrières cachées."""
         self.barriers_df = None
         self.spatial_index = None
-        self._load_barriers_from_cache()
+        # Ne pas charger immédiatement, attendre la première utilisation
     
-    def _load_barriers_from_cache(self):
-        """Charge les données de barrières depuis le cache global."""
-        try:
-            self.barriers_df, self.spatial_index = _get_barriers_from_cache()
-            print(f"📊 Barrières chargées : {len(self.barriers_df)} péages disponibles")
-        except Exception as e:
-            print(f"❌ Erreur chargement barrières : {e}")
-            self.barriers_df = None
-            self.spatial_index = None
+    def _ensure_barriers_loaded(self):
+        """Assure que les données de barrières sont chargées (lazy loading)."""
+        if self.barriers_df is None:
+            try:
+                self.barriers_df, self.spatial_index = _get_barriers_from_cache()
+                print(f"📊 Barrières chargées : {len(self.barriers_df)} péages disponibles")
+            except Exception as e:
+                print(f"❌ Erreur chargement barrières : {e}")
+                self.barriers_df = None
+                self.spatial_index = None
     
     def match_osm_tolls_with_csv(
         self, 
@@ -89,6 +90,9 @@ class TollMatcher:
         Returns:
             List[MatchedToll]: Péages matchés avec leurs données combinées
         """
+        # Assurer que les données de barrières sont chargées
+        self._ensure_barriers_loaded()
+        
         if self.barriers_df is None:
             print("❌ Données de barrières non disponibles")
             return []
