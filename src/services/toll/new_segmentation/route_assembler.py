@@ -6,6 +6,7 @@ Module pour assembler les segments de route calculés.
 Responsable de l'assemblage final et du formatage des résultats.
 """
 
+import os
 from typing import List, Dict
 from .toll_matcher import MatchedToll
 from .intelligent_segmentation_helpers import RouteUtils
@@ -76,6 +77,7 @@ class RouteAssembler:
             total_distance += distance
             total_duration += duration
             print(f"   📍 Segment {i+1} : {distance/1000:.1f} km ajouté")
+        
         # Construire la route finale
         final_route = RouteAssembler._build_route_geojson(
             all_coords, total_distance, total_duration, selected_tolls, all_instructions
@@ -84,8 +86,9 @@ class RouteAssembler:
         print(f"✅ Route assemblée : {total_distance/1000:.1f} km")
         print(f"   📍 Péages utilisés : {[toll.effective_name for toll in selected_tolls]}")
         
-        return RouteAssembler._build_result_response(            final_route, target_tolls, selected_tolls, len(segments), 
-            total_distance, total_duration
+        return RouteAssembler._build_result_response(
+            final_route, target_tolls, selected_tolls, len(segments), 
+            total_distance, total_duration, all_instructions
         )
     
     @staticmethod
@@ -109,21 +112,16 @@ class RouteAssembler:
         Returns:
             Dict: GeoJSON de la route
         """
+        
         properties = {
             "summary": {
                 "distance": distance,
                 "duration": duration
-            },
-            "selected_tolls": [toll.effective_name for toll in selected_tolls],
-            "toll_systems": [
-                "ouvert" if toll.is_open_system else "fermé" 
-                for toll in selected_tolls
-            ]
+            }
         }
         
-        # Ajouter les instructions si disponibles
-        if instructions:
-            properties["instructions"] = instructions
+        # Note: instructions, selected_tolls, toll_systems sont maintenant uniquement 
+        # dans la réponse racine pour éviter la duplication
         
         return {
             "type": "FeatureCollection",
@@ -132,7 +130,8 @@ class RouteAssembler:
                 "geometry": {"type": "LineString", "coordinates": coordinates},
                 "properties": properties
             }]
-        }
+        }    
+    
     @staticmethod
     def _build_result_response(
         route: Dict, 
@@ -140,27 +139,47 @@ class RouteAssembler:
         selected_tolls: List[MatchedToll], 
         segments_count: int,
         distance: float, 
-        duration: float
+        duration: float,
+        instructions: List[Dict] = None
     ) -> Dict:
         """
         Construit la réponse finale avec toutes les métadonnées.
         
-        Args:
-            route: Route GeoJSON
+        Args:            route: Route GeoJSON
             target_tolls: Nombre de péages demandé
             selected_tolls: Péages sélectionnés
             segments_count: Nombre de segments
             distance: Distance totale
             duration: Durée totale
+            instructions: Instructions de navigation
             
         Returns:
             Dict: Réponse complète formatée
-        """        # Extraire les instructions du route GeoJSON pour les rendre facilement accessibles
-        instructions = None
-        if 'features' in route and route['features']:
-            feature_props = route['features'][0].get('properties', {})
-            instructions = feature_props.get('instructions', [])        
-        return {
+        """
+        
+        # Note: les instructions sont passées directement en paramètre pour éviter la duplication
+        
+        # Calculer les informations détaillées des péages (comme dans /api/route/)
+        detailed_tolls = []
+        total_toll_cost = 0
+        if route and 'features' in route and route['features']:
+            try:
+                from src.services.toll_locator import locate_tolls
+                from src.services.toll_cost import add_marginal_cost
+                
+                csv_path = os.path.join(os.path.dirname(__file__), "../../../data/barriers.csv")
+                tolls_dict = locate_tolls(route, csv_path, buffer_m=120)
+                detailed_tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
+                total_toll_cost = sum(t.get("cost", 0) for t in detailed_tolls)
+                
+                print(f"💰 Coût total des péages : {total_toll_cost}€")
+                print(f"🏧 Péages détaillés : {len(detailed_tolls)} trouvés")
+                
+            except Exception as e:
+                print(f"⚠️ Erreur calcul coût péages : {e}")
+                detailed_tolls = []
+                total_toll_cost = 0        
+        result = {
             'route': route,
             'target_tolls': target_tolls,
             'found_solution': 'intelligent_success',
@@ -169,6 +188,9 @@ class RouteAssembler:
             'distance': distance,
             'duration': duration,
             'instructions': instructions,  # Instructions au niveau principal
+            'cost': total_toll_cost,  # Coût total des péages (comme /api/route/)
+            'toll_count': len(detailed_tolls),  # Nombre de péages (comme /api/route/)
+            'tolls': detailed_tolls,  # Détails des péages (comme /api/tolls)
             'segments': {
                 'count': segments_count,
                 'toll_segments': segments_count - 1 if segments_count > 1 else 0,
@@ -186,3 +208,5 @@ class RouteAssembler:
                 ]
             }
         }
+        
+        return result

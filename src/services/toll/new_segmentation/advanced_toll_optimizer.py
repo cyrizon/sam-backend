@@ -143,21 +143,27 @@ class AdvancedTollOptimizer:
                 return self._format_analysis_result(result, None)
             else:
                 return self._format_error_result("Échec de l'analyse")
-                
         except Exception as e:
             return self._format_error_result(f"Erreur analyse : {e}")
     
     def _format_intelligent_result(self, result: Dict, target_tolls: int) -> Dict:
         """Formate le résultat de la stratégie intelligente."""
+        # ✅ CORRECTION : Transmettre TOUTES les propriétés du route_assembler
         return {
-            "found_solution": "intelligent_success",
-            "strategy_used": "intelligent_segmentation",
+            "found_solution": result.get('found_solution', "intelligent_success"),
+            "strategy_used": result.get('strategy_used', "intelligent_segmentation"),
             "route": result['route'],
-            "target_tolls": target_tolls,
+            "target_tolls": result.get('target_tolls', target_tolls),
             "segments": result.get('segments', {}),
             "distance": result.get('distance', 0),
             "duration": result.get('duration', 0),
-            "respects_constraint": True
+            "respects_constraint": result.get('respects_constraint', True),
+            # ✅ NOUVELLES PROPRIÉTÉS IMPORTANTES
+            "instructions": result.get('instructions'),  # Instructions de navigation
+            "cost": result.get('cost'),  # Coût total des péages
+            "toll_count": result.get('toll_count'),  # Nombre de péages
+            "tolls": result.get('tolls'),  # Détails des péages (format /api/tolls)
+            "toll_info": result.get('toll_info')  # Informations supplémentaires sur les péages
         }
     
     def _format_analysis_result(self, result: Dict, target_tolls: Optional[int]) -> Dict:

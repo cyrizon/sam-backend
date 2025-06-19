@@ -6,6 +6,7 @@ Classes d'aide pour la segmentation intelligente.
 Gère les cas spéciaux et les utilitaires pour éviter que le fichier principal dépasse 350 lignes.
 """
 
+import os
 from typing import List, Dict, Optional
 
 
@@ -43,14 +44,32 @@ class SegmentationSpecialCases:
                 
                 # Extraire les instructions et les ajouter au GeoJSON si elles ne sont pas déjà présentes
                 instructions = RouteUtils.extract_instructions(toll_free_route)
-                
-                # S'assurer que les instructions sont dans le GeoJSON
+                  # S'assurer que les instructions sont dans le GeoJSON
                 if 'features' in toll_free_route and toll_free_route['features']:
                     feature = toll_free_route['features'][0]
                     if 'properties' not in feature:
                         feature['properties'] = {}
                     if 'instructions' not in feature['properties'] and instructions:
-                        feature['properties']['instructions'] = instructions                
+                        feature['properties']['instructions'] = instructions
+                
+                # Calculer les informations de péages (comme dans /api/route/)
+                detailed_tolls = []
+                total_toll_cost = 0
+                try:
+                    from src.services.toll_locator import locate_tolls
+                    from src.services.toll_cost import add_marginal_cost
+                    
+                    csv_path = os.path.join(os.path.dirname(__file__), "../../../data/barriers.csv")
+                    tolls_dict = locate_tolls(toll_free_route, csv_path, buffer_m=120)
+                    detailed_tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
+                    total_toll_cost = sum(t.get("cost", 0) for t in detailed_tolls)
+                    
+                    print(f"💰 Route sans péages - Coût : {total_toll_cost}€ (devrait être 0)")
+                    
+                except Exception as e:
+                    print(f"⚠️ Erreur calcul coût route sans péages : {e}")
+                    detailed_tolls = []
+                    total_toll_cost = 0                
                 return {
                     'route': toll_free_route,
                     'target_tolls': 0,
@@ -60,6 +79,9 @@ class SegmentationSpecialCases:
                     'distance': RouteUtils.extract_distance(toll_free_route),
                     'duration': RouteUtils.extract_duration(toll_free_route),
                     'instructions': instructions,
+                    'cost': total_toll_cost,  # Coût total des péages (devrait être 0)
+                    'toll_count': len(detailed_tolls),  # Nombre de péages (devrait être 0)
+                    'tolls': detailed_tolls,  # Détails des péages (devrait être [])
                     'segments': {'count': 1, 'toll_segments': 0, 'free_segments': 1},
                     'toll_info': {
                         'selected_tolls': [],
@@ -86,7 +108,27 @@ class SegmentationSpecialCases:
         Returns:
             dict: Route de base formatée
         """
-        print("🔄 Formatage de la route de base comme résultat final")        
+        print("🔄 Formatage de la route de base comme résultat final")
+        
+        # Calculer les informations de péages (comme dans /api/route/)
+        detailed_tolls = []
+        total_toll_cost = 0
+        try:
+            from src.services.toll_locator import locate_tolls
+            from src.services.toll_cost import add_marginal_cost
+            
+            csv_path = os.path.join(os.path.dirname(__file__), "../../../data/barriers.csv")
+            tolls_dict = locate_tolls(base_route, csv_path, buffer_m=120)
+            detailed_tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
+            total_toll_cost = sum(t.get("cost", 0) for t in detailed_tolls)
+            
+            print(f"💰 Route de base - Coût : {total_toll_cost}€")
+            print(f"🏧 Route de base - Péages : {len(detailed_tolls)} trouvés")
+            
+        except Exception as e:
+            print(f"⚠️ Erreur calcul coût route de base : {e}")
+            detailed_tolls = []
+            total_toll_cost = 0        
         return {
             'route': base_route,
             'target_tolls': None,  # Pas respecté, on retourne la route principale
@@ -96,6 +138,9 @@ class SegmentationSpecialCases:
             'distance': RouteUtils.extract_distance(base_route),
             'duration': RouteUtils.extract_duration(base_route),
             'instructions': RouteUtils.extract_instructions(base_route),
+            'cost': total_toll_cost,  # Coût total des péages
+            'toll_count': len(detailed_tolls),  # Nombre de péages
+            'tolls': detailed_tolls,  # Détails des péages
             'segments': {'count': 1, 'toll_segments': 0, 'free_segments': 1},
             'toll_info': {
                 'selected_tolls': [],
