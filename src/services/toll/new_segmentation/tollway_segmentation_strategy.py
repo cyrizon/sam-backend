@@ -9,18 +9,20 @@ Responsabilité : extraire et afficher les coordonnées des segments de péages.
 
 from typing import List, Dict, Optional, Tuple
 from .tollway_extractor import TollwayExtractor, TollwaySegment, TollwayAnalyzer
+from .tollway_alternatives_calculator import TollwayAlternativesCalculator
+from .response_harmonizer import ResponseHarmonizer
 from benchmark.performance_tracker import performance_tracker
 
 
 class TollwaySegmentationStrategy:
     """
     Stratégie de visualisation des segments tollways d'ORS.
-    
     Pipeline simplifié :
     1. Récupère route de base avec extra_info: ["tollways"]
     2. Extrait segments de péages depuis les données ORS
     3. Affiche les coordonnées de départ/arrivée de chaque segment
-    """    
+    """
+    
     def __init__(self, ors_service):
         """
         Initialise la stratégie avec un service ORS.
@@ -31,6 +33,8 @@ class TollwaySegmentationStrategy:
         self.ors = ors_service
         self.extractor = TollwayExtractor()
         self.analyzer = TollwayAnalyzer()
+        self.alternatives_calculator = TollwayAlternativesCalculator(ors_service)
+        self.harmonizer = ResponseHarmonizer()
     
     def analyze_route_tollways(
         self, 
@@ -66,9 +70,8 @@ class TollwaySegmentationStrategy:
             print(f"📊 Analyse terminée : {len(toll_segments)} segments avec péages trouvés")
             # Étape 3 : Afficher les coordonnées des segments et calculer routes alternatives
             self._display_segment_coordinates(toll_segments)
-            
-            # Étape 4 : Calculer des routes sans péage pour chaque segment
-            alternatives = self._calculate_toll_free_alternatives(toll_segments)
+              # Étape 4 : Calculer des routes sans péage pour chaque segment
+            alternatives = self.alternatives_calculator.calculate_alternatives(toll_segments)
             
             # Étape 5 : Corriger le comptage des péages (grouper les segments consécutifs)
             actual_toll_count = self._count_actual_tolls(toll_segments)
@@ -124,25 +127,24 @@ class TollwaySegmentationStrategy:
     
     def _format_no_tolls_result(self, route: Dict) -> Dict:
         """
-        Formate le résultat quand aucun péage n'est trouvé.
-        
-        Args:
-            route: Route de base
-            
-        Returns:
-            dict: Résultat formaté
+        Formate le résultat quand aucun péage n'est trouvé avec format harmonisé.
         """
-        return {
-            'route': route,
-            'status': 'no_tolls_found',
-            'toll_segments': [],
-            'toll_count': 0,            'strategy': 'tollway_analysis',
-            'distance': self._get_route_distance(route)
-        }
+        from src.services.toll.new_segmentation.response_harmonizer import ResponseHarmonizer
+        
+        return ResponseHarmonizer.create_standard_response(
+            route=route,
+            target_tolls=None,
+            found_solution='no_tolls_found',
+            strategy_used='tollway_analysis',
+            respects_constraint=True,
+            detailed_tolls=[],  # Aucun péage
+            total_cost=0,  # Coût 0
+            segments_info={'count': 1, 'toll_segments': 0, 'free_segments': 1}
+        )
     
     def _format_analysis_result(self, route: Dict, toll_segments: List[TollwaySegment], tollway_data: Dict, alternatives: List[Dict] = None, actual_toll_count: int = None) -> Dict:
         """
-        Formate le résultat de l'analyse des tollways.
+        Formate le résultat de l'analyse des tollways avec harmonisation.
         
         Args:
             route: Route de base
@@ -152,9 +154,54 @@ class TollwaySegmentationStrategy:
             actual_toll_count: Nombre réel de péages (optionnel)
             
         Returns:
-            dict: Résultat formaté avec informations détaillées
+            dict: Résultat formaté harmonisé
         """
-        # Extraire les coordonnées des segments pour le résultat
+        # Utiliser le ResponseHarmonizer pour le format standard
+        from src.services.toll.new_segmentation.intelligent_segmentation_helpers import RouteUtils
+        
+        instructions = RouteUtils.extract_instructions(route)
+        distance = self._get_route_distance(route)
+        duration = self._get_route_duration(route)
+        final_toll_count = actual_toll_count if actual_toll_count is not None else len(toll_segments)
+        
+        # Créer la réponse harmonisée
+        response = self.harmonizer.create_standard_response(
+            route=route,
+            distance=distance,
+            duration=duration,
+            instructions=instructions,
+            target_tolls=None,  # Pas applicable pour l'analyse
+            found_solution='analysis_complete',
+            strategy_used='tollway_analysis',
+            toll_count_override=final_toll_count
+        )
+        
+        # Ajouter les données spécifiques à l'analyse (en plus du format standard)
+        segments_info = self._extract_segments_info(toll_segments)
+        cost_summary = self.analyzer.get_toll_summary(tollway_data)
+        
+        response.update({
+            'toll_segments': segments_info,
+            'toll_segments_count': len(toll_segments),  # Pour debug
+            'cost_summary': cost_summary
+        })
+        # Ajouter les alternatives si disponibles
+        if alternatives:
+            response['toll_free_alternatives'] = alternatives
+            response['alternatives_count'] = len(alternatives)
+        
+        return response
+    
+    def _extract_segments_info(self, toll_segments: List[TollwaySegment]) -> List[Dict]:
+        """
+        Extrait les informations des segments pour le résultat.
+        
+        Args:
+            toll_segments: Segments avec péages
+            
+        Returns:
+            List[Dict]: Informations des segments
+        """
         segments_info = []
         for i, segment in enumerate(toll_segments):
             if segment.coordinates and len(segment.coordinates) >= 2:
@@ -166,30 +213,8 @@ class TollwaySegmentationStrategy:
                     'end_coordinates': segment.coordinates[-1],
                     'total_points': len(segment.coordinates)
                 })
-        
-        # Résumé des coûts
-        cost_summary = self.analyzer.get_toll_summary(tollway_data)
-        
-        # Utiliser le comptage corrigé si disponible
-        final_toll_count = actual_toll_count if actual_toll_count is not None else len(toll_segments)
-        
-        result = {
-            'route': route,
-            'status': 'analysis_complete',
-            'toll_segments': segments_info,
-            'toll_count': final_toll_count,
-            'toll_segments_count': len(toll_segments),  # Nombre de segments (pour debug)
-            'cost_summary': cost_summary,
-            'strategy': 'tollway_analysis',
-            'distance': self._get_route_distance(route)
-        }
-        
-        # Ajouter les alternatives si disponibles
-        if alternatives:
-            result['toll_free_alternatives'] = alternatives
-            result['alternatives_count'] = len(alternatives)
-        
-        return result
+        return segments_info
+    
     def _get_route_distance(self, route: Dict) -> float:
         """
         Extrait la distance d'une route.
@@ -200,66 +225,9 @@ class TollwaySegmentationStrategy:
         Returns:
             float: Distance en mètres
         """
-        try:
-            return route['features'][0]['properties']['summary']['distance']
+        try:            return route['features'][0]['properties']['summary']['distance']
         except (KeyError, IndexError):
             return float('inf')
-    
-    def _calculate_toll_free_alternatives(self, toll_segments: List[TollwaySegment]) -> List[Dict]:
-        """
-        Calcule des routes sans péage pour chaque segment de péage.
-        
-        Args:
-            toll_segments: Liste des segments avec péages
-            
-        Returns:
-            List[Dict]: Routes alternatives sans péage pour chaque segment
-        """
-        alternatives = []
-        
-        if not toll_segments:
-            return alternatives
-        
-        print(f"\n🛣️ Calcul de routes alternatives sans péage pour {len(toll_segments)} segments :")
-        print("-" * 60)
-        
-        for i, segment in enumerate(toll_segments, 1):
-            if segment.coordinates and len(segment.coordinates) >= 2:
-                start_coord = segment.coordinates[0]
-                end_coord = segment.coordinates[-1]
-                
-                print(f"📍 Segment {i} : Alternative sans péage...")
-                print(f"   De : [{start_coord[0]:.6f}, {start_coord[1]:.6f}]")
-                print(f"   À  : [{end_coord[0]:.6f}, {end_coord[1]:.6f}]")
-                
-                try:
-                    # Calculer route sans péage entre début et fin du segment
-                    alternative_route = self.ors.get_route_avoid_tollways([start_coord, end_coord])
-                    
-                    if alternative_route and 'features' in alternative_route:
-                        distance = self._get_route_distance(alternative_route)
-                        duration = self._get_route_duration(alternative_route)
-                        
-                        alternative_info = {
-                            'segment_id': i,
-                            'start_coordinates': start_coord,
-                            'end_coordinates': end_coord,
-                            'alternative_route': alternative_route,
-                            'distance': distance,
-                            'duration': duration
-                        }
-                        alternatives.append(alternative_info)
-                        
-                        print(f"   ✅ Route trouvée : {distance/1000:.1f} km, {duration/60:.0f} min")
-                    else:
-                        print(f"   ❌ Aucune alternative trouvée")
-                        
-                except Exception as e:
-                    print(f"   ❌ Erreur : {e}")
-                    
-                print()
-        
-        return alternatives
     
     def _count_actual_tolls(self, toll_segments: List[TollwaySegment]) -> int:
         """
@@ -305,3 +273,4 @@ class TollwaySegmentationStrategy:
             return route['features'][0]['properties']['summary']['duration']
         except (KeyError, IndexError):
             return float('inf')
+  

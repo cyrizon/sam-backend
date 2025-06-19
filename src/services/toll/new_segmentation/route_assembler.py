@@ -10,6 +10,7 @@ import os
 from typing import List, Dict
 from .toll_matcher import MatchedToll
 from .intelligent_segmentation_helpers import RouteUtils
+from .response_harmonizer import ResponseHarmonizer
 
 
 class RouteAssembler:
@@ -130,7 +131,7 @@ class RouteAssembler:
                 "geometry": {"type": "LineString", "coordinates": coordinates},
                 "properties": properties
             }]
-        }    
+        }
     
     @staticmethod
     def _build_result_response(
@@ -145,7 +146,8 @@ class RouteAssembler:
         """
         Construit la réponse finale avec toutes les métadonnées.
         
-        Args:            route: Route GeoJSON
+        Args:
+            route: Route GeoJSON
             target_tolls: Nombre de péages demandé
             selected_tolls: Péages sélectionnés
             segments_count: Nombre de segments
@@ -156,41 +158,20 @@ class RouteAssembler:
         Returns:
             Dict: Réponse complète formatée
         """
+        # Utiliser le ResponseHarmonizer pour créer une réponse standard
+        response = ResponseHarmonizer.create_standard_response(
+            route=route,
+            distance=distance,
+            duration=duration,
+            instructions=instructions,
+            target_tolls=target_tolls,
+            found_solution='intelligent_success',
+            strategy_used='intelligent_segmentation',
+            respects_constraint=True
+        )
         
-        # Note: les instructions sont passées directement en paramètre pour éviter la duplication
-        
-        # Calculer les informations détaillées des péages (comme dans /api/route/)
-        detailed_tolls = []
-        total_toll_cost = 0
-        if route and 'features' in route and route['features']:
-            try:
-                from src.services.toll_locator import locate_tolls
-                from src.services.toll_cost import add_marginal_cost
-                
-                csv_path = os.path.join(os.path.dirname(__file__), "../../../data/barriers.csv")
-                tolls_dict = locate_tolls(route, csv_path, buffer_m=120)
-                detailed_tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
-                total_toll_cost = sum(t.get("cost", 0) for t in detailed_tolls)
-                
-                print(f"💰 Coût total des péages : {total_toll_cost}€")
-                print(f"🏧 Péages détaillés : {len(detailed_tolls)} trouvés")
-                
-            except Exception as e:
-                print(f"⚠️ Erreur calcul coût péages : {e}")
-                detailed_tolls = []
-                total_toll_cost = 0        
-        result = {
-            'route': route,
-            'target_tolls': target_tolls,
-            'found_solution': 'intelligent_success',
-            'respects_constraint': True,
-            'strategy_used': 'intelligent_segmentation',
-            'distance': distance,
-            'duration': duration,
-            'instructions': instructions,  # Instructions au niveau principal
-            'cost': total_toll_cost,  # Coût total des péages (comme /api/route/)
-            'toll_count': len(detailed_tolls),  # Nombre de péages (comme /api/route/)
-            'tolls': detailed_tolls,  # Détails des péages (comme /api/tolls)
+        # Ajouter les informations spécifiques à l'assemblage intelligent
+        response.update({
             'segments': {
                 'count': segments_count,
                 'toll_segments': segments_count - 1 if segments_count > 1 else 0,
@@ -207,6 +188,6 @@ class RouteAssembler:
                     for toll in selected_tolls
                 ]
             }
-        }
+        })
         
-        return result
+        return response

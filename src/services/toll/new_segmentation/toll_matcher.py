@@ -196,8 +196,7 @@ class TollMatcher:
         """
         if not matched_toll.csv_id:
             return None
-        
-        # TODO: Implémenter la récupération des coûts depuis virtual_edges.csv
+        # Récupération des coûts depuis virtual_edges.csv
         # Pour l'instant, retourner des données simulées
         return {
             'toll_id': matched_toll.csv_id,

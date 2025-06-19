@@ -148,7 +148,6 @@ class AdvancedTollOptimizer:
     
     def _format_intelligent_result(self, result: Dict, target_tolls: int) -> Dict:
         """Formate le résultat de la stratégie intelligente."""
-        # ✅ CORRECTION : Transmettre TOUTES les propriétés du route_assembler
         return {
             "found_solution": result.get('found_solution', "intelligent_success"),
             "strategy_used": result.get('strategy_used', "intelligent_segmentation"),
@@ -158,7 +157,7 @@ class AdvancedTollOptimizer:
             "distance": result.get('distance', 0),
             "duration": result.get('duration', 0),
             "respects_constraint": result.get('respects_constraint', True),
-            # ✅ NOUVELLES PROPRIÉTÉS IMPORTANTES
+            # Propriétés enrichies
             "instructions": result.get('instructions'),  # Instructions de navigation
             "cost": result.get('cost'),  # Coût total des péages
             "toll_count": result.get('toll_count'),  # Nombre de péages
@@ -167,7 +166,7 @@ class AdvancedTollOptimizer:
         }
     
     def _format_analysis_result(self, result: Dict, target_tolls: Optional[int]) -> Dict:
-        """Formate le résultat de l'analyse tollways."""
+        """Formate le résultat de l'analyse tollways avec format enrichi."""
         toll_count = result.get('toll_count', 0)
         
         if target_tolls is not None:
@@ -176,17 +175,34 @@ class AdvancedTollOptimizer:
         else:
             status = "analysis_complete"
             respects_constraint = True
+          # Extraire les instructions de la route
+        from src.services.toll.new_segmentation.intelligent_segmentation_helpers import RouteUtils
+        instructions = RouteUtils.extract_instructions(result.get('route', {}))
         
         return {
             "found_solution": status,
             "strategy_used": "tollway_analysis",
             "route": result['route'],
-            "toll_count": toll_count,
-            "toll_segments": result.get('toll_segments', []),
-            "cost_summary": result.get('cost_summary', {}),            
             "target_tolls": target_tolls,
             "respects_constraint": respects_constraint,
             "distance": result.get('distance', 0),
+            "duration": result.get('duration', 0),
+            # Format enrichi identique aux autres résultats
+            "instructions": instructions,
+            "cost": result.get('cost_summary', {}).get('total', 0),  # Coût total des péages
+            "toll_count": toll_count,
+            "tolls": result.get('detailed_tolls', []),  # Détails des péages
+            "segments": result.get('segments', {"count": 1, "toll_segments": 1, "free_segments": 0}),
+            "toll_info": {
+                "selected_tolls": [t.get('name', t.get('id', '')) for t in result.get('detailed_tolls', [])],
+                "toll_systems": [],  # À définir selon l'analyse
+                "coordinates": [
+                    {"name": t.get('name', t.get('id', '')), "lat": t.get('latitude', 0), "lon": t.get('longitude', 0)}
+                    for t in result.get('detailed_tolls', [])
+                ]
+            },
+            # Propriétés spécifiques à l'analyse
+            "toll_segments": result.get('toll_segments', []),
             "toll_free_alternatives": result.get('toll_free_alternatives', [])
         }
     
@@ -199,16 +215,29 @@ class AdvancedTollOptimizer:
         }
     
     def _format_toll_free_result(self, route: Dict) -> Dict:
-        """Formate le résultat d'une route sans péages."""
+        """Formate le résultat d'une route sans péages avec format enrichi."""        # Extraire les instructions
+        from src.services.toll.new_segmentation.intelligent_segmentation_helpers import RouteUtils
+        instructions = RouteUtils.extract_instructions(route)
+        
         return {
             "found_solution": "no_toll_success",
             "strategy_used": "toll_free_direct",
             "route": route,
-            "toll_count": 0,
             "target_tolls": 0,
             "respects_constraint": True,
             "distance": self._extract_distance(route),            
-            "duration": self._extract_duration(route)
+            "duration": self._extract_duration(route),
+            # Format enrichi identique aux autres résultats
+            "instructions": instructions,
+            "cost": 0,  # Route sans péages = coût 0
+            "toll_count": 0,
+            "tolls": [],  # Aucun péage
+            "segments": {"count": 1, "toll_segments": 0, "free_segments": 1},
+            "toll_info": {
+                "selected_tolls": [],
+                "toll_systems": [],
+                "coordinates": []
+            }
         }
     
     def _extract_distance(self, route: Dict) -> float:

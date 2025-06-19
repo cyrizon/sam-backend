@@ -110,6 +110,31 @@ class SegmentationSpecialCases:
         """
         print("🔄 Formatage de la route de base comme résultat final")
         
+        # Récupérer une route complète avec instructions
+        # Extraire les coordonnées de départ et d'arrivée
+        try:
+            coordinates = RouteUtils.extract_route_coordinates(base_route)
+            if coordinates and len(coordinates) >= 2:
+                start_coord = coordinates[0]
+                end_coord = coordinates[-1]
+                print(f"🗺️ Récupération des instructions pour {start_coord} → {end_coord}")
+                
+                # Récupérer une route complète avec instructions
+                full_route = self.ors.get_route([start_coord, end_coord])
+                if full_route:
+                    print("✅ Route complète avec instructions récupérée")
+                    instructions = RouteUtils.extract_instructions(full_route)
+                    print(f"📝 {len(instructions)} instructions trouvées")
+                else:
+                    print("⚠️ Impossible de récupérer la route complète, utilisation de la route de base")
+                    instructions = RouteUtils.extract_instructions(base_route)
+            else:
+                print("⚠️ Impossible d'extraire les coordonnées, utilisation de la route de base")
+                instructions = RouteUtils.extract_instructions(base_route)
+        except Exception as e:
+            print(f"⚠️ Erreur lors de la récupération des instructions : {e}")
+            instructions = RouteUtils.extract_instructions(base_route)
+        
         # Calculer les informations de péages (comme dans /api/route/)
         detailed_tolls = []
         total_toll_cost = 0
@@ -124,29 +149,51 @@ class SegmentationSpecialCases:
             
             print(f"💰 Route de base - Coût : {total_toll_cost}€")
             print(f"🏧 Route de base - Péages : {len(detailed_tolls)} trouvés")
-            
         except Exception as e:
             print(f"⚠️ Erreur calcul coût route de base : {e}")
             detailed_tolls = []
-            total_toll_cost = 0        
+            total_toll_cost = 0
+        # Nettoyer les duplications dans le GeoJSON
+        from .response_harmonizer import ResponseHarmonizer
+        cleaned_route = ResponseHarmonizer.clean_geojson_duplications(base_route)
+          # Construire les toll_info à partir des péages détectés
+        toll_info = {
+            'selected_tolls': [toll.get('name', toll.get('id', '')) for toll in detailed_tolls],
+            'toll_systems': [
+                "ouvert" if toll.get('role') == 'O' else "fermé" 
+                for toll in detailed_tolls
+            ],
+            'coordinates': [
+                {
+                    'name': toll.get('name', toll.get('id', '')),
+                    'lat': toll.get('latitude', 0),
+                    'lon': toll.get('longitude', 0)
+                }
+                for toll in detailed_tolls
+            ]
+        }
+          # Calculer les segments correctement pour une route de base
+        # Une route de base = 1 segment principal qui traverse des péages
+        # Pas de segmentation réelle, juste identification des péages traversés
+        toll_segments_count = len(detailed_tolls)
+        
         return {
-            'route': base_route,
+            'route': cleaned_route,  # Route nettoyée sans duplications
             'target_tolls': None,  # Pas respecté, on retourne la route principale
             'found_solution': 'base_route_fallback',
             'respects_constraint': False,
             'strategy_used': 'base_route_return',
             'distance': RouteUtils.extract_distance(base_route),
             'duration': RouteUtils.extract_duration(base_route),
-            'instructions': RouteUtils.extract_instructions(base_route),
-            'cost': total_toll_cost,  # Coût total des péages
-            'toll_count': len(detailed_tolls),  # Nombre de péages
+            'instructions': instructions,  # Utiliser les instructions récupérées
+            'cost': total_toll_cost,  # Coût total des péages            'toll_count': len(detailed_tolls),  # Nombre de péages
             'tolls': detailed_tolls,  # Détails des péages
-            'segments': {'count': 1, 'toll_segments': 0, 'free_segments': 1},
-            'toll_info': {
-                'selected_tolls': [],
-                'toll_systems': [],
-                'coordinates': []
+            'segments': {
+                'count': 1,  # Une seule route (pas de segmentation)
+                'toll_segments': toll_segments_count,  # Nombre de péages sur cette route
+                'free_segments': 0   # Pas de segments sans péages (route continue avec péages)
             },
+            'toll_info': toll_info,
             'note': 'Plus de péages demandés que disponibles, route principale retournée'
         }
 
@@ -184,6 +231,21 @@ class RouteUtils:
     def extract_instructions(route: Dict) -> List[Dict]:
         """Extrait les instructions de navigation d'une route ORS."""
         try:
+            # Debug : afficher la structure de la route
+            if 'features' in route and route['features']:
+                feature = route['features'][0]
+                properties = feature.get('properties', {})
+                print(f"🔍 Debug instructions - properties keys: {list(properties.keys())}")
+                
+                if 'segments' in properties:
+                    segments = properties['segments']
+                    print(f"🔍 Debug instructions - segments count: {len(segments)}")
+                    if segments:
+                        first_segment = segments[0]
+                        print(f"🔍 Debug instructions - first segment keys: {list(first_segment.keys())}")
+                else:
+                    print("🔍 Debug instructions - no 'segments' in properties")
+            
             segments = route['features'][0]['properties']['segments']
             if not segments:
                 return []
@@ -201,7 +263,8 @@ class RouteUtils:
                         'way_points': step.get('way_points', [])
                     })
             return instructions
-        except (KeyError, IndexError):
+        except (KeyError, IndexError) as e:
+            print(f"🔍 Debug instructions - Error: {e}")
             return []
 
 
