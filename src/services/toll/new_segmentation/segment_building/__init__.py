@@ -9,12 +9,16 @@ from .segment_strategy import SegmentStrategy
 from .segment_builders import SegmentBuilders
 from .toll_positioning import TollPositioning
 from .exit_finder import ExitFinder
+from .strategic_entrance_finder import StrategicEntranceFinder
+from .highway_entrance_analyzer import HighwayEntranceAnalyzer
 
 __all__ = [
     'SegmentStrategy',
     'SegmentBuilders', 
     'TollPositioning',
-    'ExitFinder'
+    'ExitFinder',
+    'StrategicEntranceFinder',
+    'HighwayEntranceAnalyzer'
 ]
 
 __all__ = [

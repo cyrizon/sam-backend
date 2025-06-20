@@ -149,6 +149,72 @@ class MotorwayJunctionAnalyzer:
         print("❌ Aucune sortie trouvée qui évite tous les péages")
         return None
 
+    def find_entrance_between_tolls(
+        self,
+        route_coords: List[List[float]],
+        tolls_to_avoid: List[MatchedToll],
+        target_toll: MatchedToll
+    ) -> Optional[Dict]:
+        """
+        Trouve une entrée d'autoroute réelle entre les péages à éviter et le péage cible.
+        
+        Cette méthode utilise les vraies motorway_junctions au lieu de points géométriques arbitraires.
+        
+        Args:
+            route_coords: Coordonnées de la route de base
+            tolls_to_avoid: Péages qu'on veut éviter
+            target_toll: Péage qu'on veut atteindre
+            
+        Returns:
+            Optional[Dict]: Info de l'entrée trouvée ou None
+        """
+        if not tolls_to_avoid:
+            return None
+            
+        print(f"🔍 Recherche entrée d'autoroute réelle entre péages à éviter et {target_toll.effective_name}")
+        
+        # 1. Chercher toutes les junctions sur la route
+        junctions_on_route = self.junction_finder.find_junctions_on_route(route_coords)
+        if not junctions_on_route:
+            print("❌ Aucune junction trouvée sur la route")
+            return None
+            
+        print(f"🔍 {len(junctions_on_route)} junctions trouvées sur la route")
+        
+        # 2. Ordonner les junctions selon leur position sur la route
+        ordered_junctions = self.junction_finder.order_junctions_by_route_position(junctions_on_route, route_coords)
+        
+        # 3. Trouver les positions des péages sur la route
+        last_avoided_toll = tolls_to_avoid[-1]  # Dernier péage à éviter
+        last_avoided_position = self.junction_filter.find_toll_position_on_route(last_avoided_toll, route_coords)
+        target_toll_position = self.junction_filter.find_toll_position_on_route(target_toll, route_coords)
+        
+        # 4. Filtrer les junctions qui sont APRÈS le dernier péage à éviter mais AVANT le péage cible
+        junctions_between = self.junction_filter.filter_junctions_between_tolls(
+            ordered_junctions, last_avoided_position, target_toll_position, route_coords
+        )
+        
+        if not junctions_between:
+            print(f"❌ Aucune junction trouvée entre {last_avoided_toll.effective_name} et {target_toll.effective_name}")
+            return None
+            
+        print(f"✅ {len(junctions_between)} entrées d'autoroute trouvées entre les péages")
+        
+        # 5. Prendre la première junction viable (la plus proche du péage à éviter)
+        # Cela assure qu'on rejoint l'autoroute dès que possible après avoir évité les péages
+        for junction in junctions_between:
+            junction_name = self._format_junction_name(junction)
+            print(f"🎯 Entrée candidate : {junction_name}")
+            # Vérifier que cette entrée nous mène bien vers le péage cible
+            # (validation basique pour l'instant)
+            return {
+                'name': junction_name,
+                'link_coordinates': junction.get('coordinates', junction.get('link_coordinates', [])),
+                'junction_info': junction
+            }
+        
+        return None
+
     def _format_junction_name(self, junction: Dict) -> str:
         """
         Formate le nom d'une junction avec sa référence pour un affichage plus informatif.

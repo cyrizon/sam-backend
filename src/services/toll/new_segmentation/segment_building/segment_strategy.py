@@ -8,6 +8,9 @@ Responsabilité : déterminer comment construire les segments selon les règles 
 
 from typing import List, Dict
 from ..toll_matcher import MatchedToll
+from .toll_positioning import TollPositioning
+from .strategic_entrance_finder import StrategicEntranceFinder
+from .exit_finder import ExitFinder
 
 
 class SegmentStrategy:
@@ -56,22 +59,24 @@ class SegmentStrategy:
         for i, current_toll in enumerate(selected_tolls):
             is_first = (i == 0)
             is_last = (i == len(selected_tolls) - 1)
-            
             # 1. Segment vers le péage actuel (si nécessaire)
             if is_first:
                 # Premier péage : gérer l'évitement des péages avant
-                from .toll_positioning import TollPositioning
                 toll_positioning = TollPositioning()
                 
                 tolls_before = toll_positioning.get_tolls_before(current_toll, all_tolls)
                 if tolls_before:
-                    # Éviter les péages avant : Départ → Entrée avant péage
-                    entrance_coords = self.entrance_exit_finder.find_entrance_coordinates(current_toll)
+                    # Éviter les péages avant : Départ → Entrée stratégique avant péage
+                    strategic_finder = StrategicEntranceFinder(self.entrance_exit_finder, self.junction_analyzer)
+                    
+                    entrance_coords = strategic_finder.find_strategic_entrance_before_toll(
+                        current_toll, tolls_before, route_coords
+                    )
                     segment = {
                         'type': 'avoid_tolls',
                         'start': current_point,
                         'end': entrance_coords,
-                        'description': f"Départ vers entrée {current_toll.effective_name} (évite {len(tolls_before)} péages)"
+                        'description': f"Départ vers entrée stratégique {current_toll.effective_name} (évite {len(tolls_before)} péages)"
                     }
                     segments.append(segment)
                     current_point = entrance_coords
@@ -113,13 +118,11 @@ class SegmentStrategy:
             # 2. Segment après le péage (sortie si nécessaire)
             if is_last:
                 # Dernier péage : gérer l'évitement des péages après
-                from .toll_positioning import TollPositioning
                 toll_positioning = TollPositioning()
                 
                 tolls_after = toll_positioning.get_tolls_after(current_toll, all_tolls)
                 if tolls_after:
                     # Éviter les péages après : Péage → Sortie, puis Sortie → Arrivée
-                    from .exit_finder import ExitFinder
                     exit_finder = ExitFinder(self.entrance_exit_finder, self.junction_analyzer)
                     
                     exit_coords = exit_finder.find_optimal_exit_after_toll(current_toll, tolls_after, route_coords)
@@ -157,14 +160,12 @@ class SegmentStrategy:
             else:
                 # Péage intermédiaire : vérifier s'il faut sortir
                 next_toll = selected_tolls[i + 1]
-                from .toll_positioning import TollPositioning
                 toll_positioning = TollPositioning()
                 
                 tolls_between = toll_positioning.get_tolls_between(current_toll, next_toll, all_tolls)
                 
                 if tolls_between:
                     # Il y a des péages à éviter : Péage → Sortie, puis Sortie → Entrée suivant
-                    from .exit_finder import ExitFinder
                     exit_finder = ExitFinder(self.entrance_exit_finder, self.junction_analyzer)
                     
                     exit_coords = exit_finder.find_optimal_exit_after_toll(current_toll, tolls_between, route_coords)
