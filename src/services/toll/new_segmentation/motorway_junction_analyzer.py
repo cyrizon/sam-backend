@@ -590,12 +590,16 @@ class MotorwayJunctionAnalyzer:
         if 'échangeur' in name or 'echangeur' in name:
             print(f"   ✅ Inclusion {junction['name']} : échangeur")
             return True
-        
         # 5. Si destination vers des villes (pas d'aire), c'est une vraie sortie
         if destination and not any(excluded in destination for excluded in ['aire', 'service', 'parking']):
             print(f"   ✅ Inclusion {junction['name']} : destination vers ville -> {destination}")
             return True
         
-        # 6. Par défaut, être conservateur : garder si pas sûr
+        # 6. NOUVEAU: Exclure les sorties sans référence (souvent inutilisées ou en construction)
+        if not ref or ref.strip() == '':
+            print(f"   🚫 Exclusion {junction['name']} : pas de référence (sortie peu utilisée)")
+            return False
+        
+        # 7. Par défaut, être conservateur : garder si pas sûr ET avec référence
         print(f"   ⚠️ Inclusion par défaut {junction['name']} (ref: {ref})")
         return True

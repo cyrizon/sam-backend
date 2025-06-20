@@ -177,7 +177,6 @@ class OSMDataParser:
                 properties=properties
             )
             self.motorway_links.append(link)
-        
         elif geometry_type == 'Point' and len(coordinates) >= 2:
             # Motorway_link simplifié avec un seul point (format OSM parfois utilisé)
             # Convertir en format LineString avec deux points identiques
@@ -195,6 +194,13 @@ class OSMDataParser:
         if geometry.get('type') == 'Point':
             coordinates = geometry.get('coordinates', [])
             if len(coordinates) >= 2:
+                # NOUVEAU: Filtrer les péages sans opérateur
+                operator = properties.get('operator')
+                if not operator or operator.strip() == '':
+                    # Exclure les péages sans opérateur (souvent obsolètes ou non-officiels)
+                    print(f"   🚫 Péage {properties.get('name', 'Sans nom')} exclu : pas d'opérateur")
+                    return
+                
                 # Déterminer le type de péage
                 toll_type = "open"  # Par défaut
                 if properties.get('barrier') == 'toll_booth':
@@ -208,6 +214,7 @@ class OSMDataParser:
                     properties=properties
                 )
                 self.toll_stations.append(station)
+                print(f"   ✅ Péage {properties.get('name', 'Sans nom')} inclus : opérateur '{operator}'")
     
     def _is_toll_station(self, properties: Dict) -> bool:
         """

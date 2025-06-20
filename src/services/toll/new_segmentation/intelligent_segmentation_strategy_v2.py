@@ -145,22 +145,20 @@ class IntelligentSegmentationStrategyV2:
 
     def _identify_tolls_on_base_route(self, route_coords: List[List[float]]) -> List[MatchedToll]:
         """Étape 2 : Identifier les péages SUR la route de base avec détection stricte."""
-        print("🔍 Étape 2 : Identification des péages sur la route...")
-          # Recherche large des péages proches SANS déduplication (pour avoir tous les candidats)
-        osm_tolls_large = self.osm_parser.find_tolls_near_route(route_coords, max_distance_km=5.0)
-        print(f"   📍 Détection large brute : {len(osm_tolls_large)} péages dans 5 km")
+        print("🔍 Étape 2 : Identification des péages sur la route...")        # Recherche large des péages proches SANS déduplication (pour avoir tous les candidats)
+        osm_tolls_large = self.osm_parser.find_tolls_near_route(route_coords, max_distance_km=0.5)
+        print(f"   📍 Détection large brute : {len(osm_tolls_large)} péages dans 500m")
         
         # Recherche stricte des péages vraiment SUR la route (intersection géométrique)
         tolls_on_route_strict = filter_tolls_on_route_strict(
             osm_tolls_large, 
             route_coords, 
-            max_distance_m=200,  # 200m max de la polyline
+            max_distance_m=100,  # 100m max de la polyline (réduit pour plus de précision)
             coordinate_attr='coordinates'
         )
-        
-        # Extraire les péages de la détection stricte
+          # Extraire les péages de la détection stricte
         osm_tolls_strict = [toll_data[0] for toll_data in tolls_on_route_strict]
-        print(f"   🎯 Détection stricte : {len(osm_tolls_strict)} péages vraiment sur la route")
+        print(f"   🎯 Détection stricte : {len(osm_tolls_strict)} péages vraiment sur la route (dans 100m)")
         
         # Convertir et matcher avec les données CSV (utiliser la détection stricte)
         osm_tolls_formatted = convert_osm_tolls_to_matched_format(osm_tolls_strict)
