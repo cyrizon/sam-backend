@@ -189,11 +189,10 @@ class JunctionFinder:
         for term in excluded_terms:
             if term in name:
                 return False
-        
-        # NOUVEAU : Filtrage strict - exclure les sorties sans référence
+        # NOUVEAU : Filtrage strict - excluer les sorties sans référence
         if not ref or ref.strip() == '':
-            print(f"   🚫 Junction '{junction_data.get('name', 'Sans nom')}' exclue : pas de référence")
+            # Log seulement en mode debug pour éviter le spam
             return False
         
-        print(f"   ✅ Junction '{junction_data.get('name', 'Sans nom')}' incluse : référence '{ref}'")
+        # Log seulement les inclusions importantes
         return True

@@ -145,19 +145,33 @@ class IntelligentSegmentationStrategyV2:
 
     def _identify_tolls_on_base_route(self, route_coords: List[List[float]]) -> List[MatchedToll]:
         """Étape 2 : Identifier les péages SUR la route de base avec détection stricte."""
-        print("🔍 Étape 2 : Identification des péages sur la route...")        # Recherche large des péages proches SANS déduplication (pour avoir tous les candidats)
+        print("🔍 Étape 2 : Identification des péages sur la route...")
+        
+        # Recherche large des péages proches SANS déduplication (pour avoir tous les candidats)
         osm_tolls_large = self.osm_parser.find_tolls_near_route(route_coords, max_distance_km=0.5)
         print(f"   📍 Détection large : {len(osm_tolls_large)} péages dans 500m")
+        
         # Recherche stricte des péages vraiment SUR la route (intersection géométrique)
         tolls_on_route_strict = filter_tolls_on_route_strict(
             osm_tolls_large, 
             route_coords, 
             max_distance_m=1,  # 1m max de la polyline (ultra-strict pour éviter les péages côté opposé)
-            coordinate_attr='coordinates'
+            coordinate_attr='coordinates',
+            verbose=False  # Pas de spam des rejets
         )
-          # Extraire les péages de la détection stricte
+        
+        # Extraire les péages de la détection stricte
         osm_tolls_strict = [toll_data[0] for toll_data in tolls_on_route_strict]
         print(f"   🎯 Détection stricte : {len(osm_tolls_strict)} péages vraiment sur la route (dans 1m)")
+          # Afficher seulement les péages acceptés
+        if osm_tolls_strict:
+            print(f"   ✅ Péages validés sur la route :")
+            for toll in osm_tolls_strict:
+                # Accès correct aux propriétés de TollStation
+                toll_name = toll.name or "Sans nom"
+                print(f"      • {toll_name}")
+        else:
+            print(f"   ❌ Aucun péage trouvé sur la route")
         
         # Convertir et matcher avec les données CSV (utiliser la détection stricte)
         osm_tolls_formatted = convert_osm_tolls_to_matched_format(osm_tolls_strict)

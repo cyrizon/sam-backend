@@ -158,7 +158,8 @@ def filter_tolls_on_route_strict(
     tolls: List, 
     route_polyline: List[List[float]], 
     max_distance_m: float = 200,
-    coordinate_attr: str = 'coordinates'
+    coordinate_attr: str = 'coordinates',
+    verbose: bool = True
 ) -> List[Tuple[object, float, List[float]]]:
     """
     Filtre les péages qui sont strictement SUR la route avec intersection géométrique.
@@ -168,6 +169,7 @@ def filter_tolls_on_route_strict(
         route_polyline: Points de la route [[lon, lat], ...]
         max_distance_m: Distance maximale en mètres pour considérer un péage "sur la route"
         coordinate_attr: Nom de l'attribut contenant les coordonnées
+        verbose: Afficher les détails de chaque péage testé
         
     Returns:
         List[Tuple[object, float, List[float]]]: 
@@ -178,7 +180,8 @@ def filter_tolls_on_route_strict(
     
     tolls_on_route = []
     
-    print(f"🎯 Détection stricte : péages à moins de {max_distance_m}m de la polyline")
+    if verbose:
+        print(f"🎯 Détection stricte : péages à moins de {max_distance_m}m de la polyline")
     
     for toll in tolls:
         # Extraire les coordonnées selon le type d'objet
@@ -196,29 +199,31 @@ def filter_tolls_on_route_strict(
         is_on_route, distance_m, projection = is_toll_on_route_strict(
             coords, route_polyline, max_distance_m
         )
-        
         if is_on_route:
             tolls_on_route.append((toll, distance_m, projection))
             
-            # Log pour debug
-            toll_name = getattr(toll, 'name', None) or getattr(toll, 'effective_name', 'Péage inconnu')
-            if callable(toll_name):
-                toll_name = toll_name()
-            elif hasattr(toll, 'osm_name'):
-                toll_name = toll.osm_name or 'Péage sans nom'
-            
-            print(f"   ✅ {toll_name} : {distance_m:.1f}m de la route")
+            if verbose:
+                # Log pour debug
+                toll_name = getattr(toll, 'name', None) or getattr(toll, 'effective_name', 'Péage inconnu')
+                if callable(toll_name):
+                    toll_name = toll_name()
+                elif hasattr(toll, 'osm_name'):
+                    toll_name = toll.osm_name or 'Péage sans nom'
+                
+                print(f"   ✅ {toll_name} : {distance_m:.1f}m de la route")
         else:
-            # Log pour debug (péages proches mais pas assez)
-            toll_name = getattr(toll, 'name', None) or getattr(toll, 'effective_name', 'Péage inconnu')
-            if callable(toll_name):
-                toll_name = toll_name()
-            elif hasattr(toll, 'osm_name'):
-                toll_name = toll.osm_name or 'Péage sans nom'
-            
-            print(f"   ❌ {toll_name} : {distance_m:.1f}m de la route (trop loin)")
+            if verbose:
+                # Log pour debug (péages proches mais pas assez) - seulement si verbose=True
+                toll_name = getattr(toll, 'name', None) or getattr(toll, 'effective_name', 'Péage inconnu')
+                if callable(toll_name):
+                    toll_name = toll_name()
+                elif hasattr(toll, 'osm_name'):
+                    toll_name = toll.osm_name or 'Péage sans nom'
+                
+                print(f"   ❌ {toll_name} : {distance_m:.1f}m de la route (trop loin)")
     
-    print(f"📍 Détection stricte terminée : {len(tolls_on_route)} péages vraiment sur la route")
+    if verbose:
+        print(f"📍 Détection stricte terminée : {len(tolls_on_route)} péages vraiment sur la route")
     return tolls_on_route
 
 
