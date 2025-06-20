@@ -147,7 +147,7 @@ class IntelligentSegmentationStrategyV2:
         """Étape 2 : Identifier les péages SUR la route de base avec détection stricte."""
         print("🔍 Étape 2 : Identification des péages sur la route...")        # Recherche large des péages proches SANS déduplication (pour avoir tous les candidats)
         osm_tolls_large = self.osm_parser.find_tolls_near_route(route_coords, max_distance_km=0.5)
-        print(f"   📍 Détection large brute : {len(osm_tolls_large)} péages dans 500m")
+        print(f"   📍 Détection large : {len(osm_tolls_large)} péages dans 500m")
         # Recherche stricte des péages vraiment SUR la route (intersection géométrique)
         tolls_on_route_strict = filter_tolls_on_route_strict(
             osm_tolls_large, 
@@ -185,9 +185,9 @@ class IntelligentSegmentationStrategyV2:
         Étape 3 : Sélectionner les péages à utiliser en respectant les contraintes des systèmes.
         
         Règles :
-        - 1 péage : Seulement système ouvert
-        - 2 péages : Soit 2 ouverts, soit 2 fermés (pas de mixte)
-        - 3+ péages : Combinaisons possibles, mais chaque fermé accompagné d'au moins un autre fermé
+        - 1 péage : Seulement système ouvert (fermé seul = impossible)
+        - 2+ péages : Priorité aux fermés (plus logique entrance→exit), puis ouverts
+        - Contrainte : Jamais de péage fermé seul (toujours par paires minimum)
         """
         print(f"🎯 Étape 3 : Sélection de {target_count} péage(s) avec contraintes systèmes...")
         
@@ -198,86 +198,51 @@ class IntelligentSegmentationStrategyV2:
         # Séparer les péages par système
         open_tolls = [t for t in available_tolls if t.is_open_system]
         closed_tolls = [t for t in available_tolls if not t.is_open_system]
-        
         print(f"   📊 Disponibles : {len(open_tolls)} ouverts, {len(closed_tolls)} fermés")
         
-        # Appliquer les règles selon le nombre demandé
-        if target_count == 1:
-            return self._select_one_toll(open_tolls, closed_tolls)
-        elif target_count == 2:
-            return self._select_two_tolls(open_tolls, closed_tolls)
-        else:
-            return self._select_multiple_tolls(open_tolls, closed_tolls, target_count)
+        # Logique unifiée : toujours prioriser les fermés, puis compléter avec ouverts
+        return self._select_tolls_unified(open_tolls, closed_tolls, target_count)
     
-    def _select_one_toll(self, open_tolls: List[MatchedToll], closed_tolls: List[MatchedToll]) -> List[MatchedToll]:
-        """Règle : 1 péage = seulement système ouvert."""
-        if open_tolls:
-            selected = [open_tolls[0]]
-            print(f"   ✅ 1 péage ouvert : {selected[0].effective_name}")
-            return selected
-        else:
-            print(f"   ❌ Aucun péage ouvert disponible pour 1 péage")
-            return []
-    
-    def _select_two_tolls(self, open_tolls: List[MatchedToll], closed_tolls: List[MatchedToll]) -> List[MatchedToll]:
-        """Règle : 2 péages = soit 2 ouverts, soit 2 fermés (pas de mixte)."""
-        # Priorité : 2 ouverts
-        if len(open_tolls) >= 2:
-            selected = open_tolls[:2]
-            print(f"   ✅ 2 péages ouverts : {[t.effective_name for t in selected]}")
-            return selected
+    def _select_tolls_unified(self, open_tolls: List[MatchedToll], closed_tolls: List[MatchedToll], target_count: int) -> List[MatchedToll]:
+        """
+        Logique unifiée de sélection de péages.
         
-        # Sinon : 2 fermés
-        if len(closed_tolls) >= 2:
-            selected = closed_tolls[:2]
-            print(f"   ✅ 2 péages fermés : {[t.effective_name for t in selected]}")
-            return selected
-        
-        print(f"   ❌ Impossible de faire 2 péages (besoin de 2 ouverts ou 2 fermés)")
-        return []
-    
-    def _select_multiple_tolls(self, open_tolls: List[MatchedToll], closed_tolls: List[MatchedToll], target_count: int) -> List[MatchedToll]:
-        """Règle : 3+ péages = combinaisons possibles, mais chaque fermé accompagné d'au moins un autre fermé."""
+        Règles :
+        1. Toujours prioriser les péages fermés (par paires)
+        2. Si contrainte violée (1 seul fermé), passer aux ouverts
+        3. Compléter avec les ouverts si nécessaire
+        """
         selected_tolls = []
         
-        # Stratégie : Prendre d'abord les ouverts, puis des paires de fermés
-        # Ajouter tous les ouverts disponibles
-        selected_tolls.extend(open_tolls)
+        # Étape 1 : Prendre d'abord les fermés (par paires si possible)
+        if len(closed_tolls) >= 2:
+            # Calculer combien de paires on peut prendre
+            pairs_available = len(closed_tolls) // 2
+            pairs_needed = min(pairs_available, target_count // 2)
+            
+            # Si target_count est impair et qu'on a assez de fermés, prendre une paire de plus
+            if target_count % 2 == 1 and pairs_available > pairs_needed:
+                pairs_needed += 1
+            
+            selected_tolls.extend(closed_tolls[:pairs_needed * 2])
+        
+        # Étape 2 : Compléter avec des ouverts si nécessaire
         remaining = target_count - len(selected_tolls)
+        if remaining > 0:
+            selected_tolls.extend(open_tolls[:remaining])
         
-        if remaining <= 0:
-            # Assez d'ouverts, prendre seulement ce qu'il faut
-            selected_tolls = open_tolls[:target_count]
-            print(f"   ✅ {target_count} péages ouverts : {[t.effective_name for t in selected_tolls]}")
-            return selected_tolls
-        
-        # Il faut ajouter des fermés - s'assurer qu'on en prend au moins 2
-        if remaining == 1 and len(closed_tolls) >= 2:
-            # Prendre 2 fermés au lieu d'1 pour respecter la contrainte
-            if len(selected_tolls) > 0:
-                # Enlever 1 ouvert et ajouter 2 fermés
-                selected_tolls = selected_tolls[:-1]
-                selected_tolls.extend(closed_tolls[:2])
-            else:
-                selected_tolls.extend(closed_tolls[:2])
-        else:
-            # Ajouter les fermés nécessaires (par paires si possible)
-            selected_tolls.extend(closed_tolls[:remaining])
-        
-        # Vérifier qu'on respecte la contrainte des fermés
+        # Étape 3 : Ajuster à la taille exacte
         final_selected = selected_tolls[:target_count]
-        closed_count = sum(1 for t in final_selected if not t.is_open_system)
         
+        # Étape 4 : Vérifier la contrainte (pas de fermé seul)
+        closed_count = sum(1 for t in final_selected if not t.is_open_system)
         if closed_count == 1:
-            print(f"   ⚠️ Contrainte violée : 1 seul fermé détecté, ajustement nécessaire")
-            # Réessayer avec une stratégie différente
-            if len(closed_tolls) >= 2:
-                # Remplacer par 2 fermés
-                open_in_selection = [t for t in final_selected if t.is_open_system]
-                if len(open_in_selection) > 0:
-                    final_selected = open_in_selection[:-1] + closed_tolls[:2]
-                else:
-                    final_selected = closed_tolls[:target_count]
+            print(f"   ⚠️ Contrainte violée : 1 seul fermé détecté, passage aux ouverts...")
+            # Si on ne peut pas respecter la contrainte, prendre que des ouverts
+            final_selected = open_tolls[:target_count]
         
         print(f"   ✅ {len(final_selected)} péages sélectionnés : {[t.effective_name for t in final_selected]}")
-        return final_selected[:target_count]
+        print(f"      - Fermés : {sum(1 for t in final_selected if not t.is_open_system)}")
+        print(f"      - Ouverts : {sum(1 for t in final_selected if t.is_open_system)}")
+        
+        return final_selected
