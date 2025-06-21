@@ -36,10 +36,10 @@ class MatchedToll:
     csv_name: Optional[str]
     csv_role: Optional[str]  # 'O' pour ouvert, 'F' pour fermé
     csv_coordinates: Optional[List[float]]  # [lon, lat] WGS84
-    
     # Métadonnées du matching
     distance_m: float  # Distance entre OSM et CSV en mètres
     confidence: float  # Confiance du matching (0-1)
+    is_exit: bool = False  # True si ce péage est une sortie d'autoroute optimisée
     
     @property
     def is_open_system(self) -> bool:

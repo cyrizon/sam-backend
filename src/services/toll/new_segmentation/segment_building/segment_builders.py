@@ -151,7 +151,7 @@ class SegmentBuilders:
             
         Returns:
             Dict: Segment de route
-        """        
+        """
         # Vérifier s'il y a des péages à éviter APRÈS le dernier péage sélectionné
         tolls_after = self.toll_positioning.get_tolls_after(last_toll, all_tolls)
         
@@ -161,7 +161,14 @@ class SegmentBuilders:
                 route_coords, last_toll, tolls_after
             )
             
-            if exit_junction:
+            # Vérifier si le péage est déjà une sortie (exit_junction == None signifie péage déjà sortie)
+            if hasattr(last_toll, 'is_exit') and last_toll.is_exit and exit_junction is None:
+                # Le péage est déjà une sortie, aller directement à la destination sans éviter péages
+                segment_type = 'avoid_tolls'
+                start_coords = last_toll.osm_coordinates
+                description = f"{last_toll.effective_name} vers arrivée (déjà une sortie)"
+                print(f"   📍 Dernier segment : {last_toll.effective_name} → Arrivée (péage déjà sortie, évite {len(tolls_after)} péages)")
+            elif exit_junction:
                 # Utiliser la sortie du péage sélectionné et router vers la sortie optimale
                 exit_coords = self.entrance_exit_finder.find_exit_coordinates(last_toll)
                 segment_type = 'avoid_tolls'

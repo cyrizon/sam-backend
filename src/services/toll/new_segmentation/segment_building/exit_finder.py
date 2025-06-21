@@ -43,6 +43,11 @@ class ExitFinder:
         Returns:
             List[float]: Coordonnées de la sortie optimale
         """
+        # Vérifier si le péage est déjà une sortie (optimisé)
+        if hasattr(toll, 'is_exit') and toll.is_exit:
+            print(f"       🚪 {toll.effective_name} est déjà une sortie - utilisation de ses coordonnées")
+            return toll.osm_coordinates
+        
         if self.junction_analyzer and route_coords:
             exit_junction = self.junction_analyzer.find_exit_after_toll(
                 route_coords, toll, tolls_to_avoid

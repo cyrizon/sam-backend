@@ -106,6 +106,11 @@ class MotorwayJunctionAnalyzer:
         Returns:
             Dict: Informations sur la sortie optimale ou None
         """
+        # Vérifier si le péage utilisé est déjà une sortie d'autoroute
+        if hasattr(used_toll, 'is_exit') and used_toll.is_exit:
+            print(f"   🚪 {used_toll.effective_name} est déjà une sortie - pas besoin de chercher une sortie supplémentaire")
+            return None
+            
         print(f"🔍 Recherche de sortie après {used_toll.effective_name} pour éviter {len(unwanted_tolls_after)} péages")
         
         # 1. Analyser toutes les junctions sur la route

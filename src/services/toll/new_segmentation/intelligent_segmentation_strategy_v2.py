@@ -28,6 +28,7 @@ from .segmentation_point_finder import SegmentationPointFinder
 from .segment_calculator import SegmentCalculator
 from .route_assembler import RouteAssembler
 from .polyline_intersection import filter_tolls_on_route_strict
+from .exit_optimization import ExitOptimizationManager
 from benchmark.performance_tracker import performance_tracker
 
 
@@ -48,6 +49,7 @@ class IntelligentSegmentationStrategyV2:
         self.ors = ors_service
         self.osm_parser = OSMDataParser(osm_data_file)
         self.toll_matcher = TollMatcher()
+        self.exit_optimizer = ExitOptimizationManager(self.osm_parser, self.toll_matcher, self.ors)
         self.osm_loaded = False
         self.special_cases = SegmentationSpecialCases(ors_service)
         self.point_finder = SegmentationPointFinder(self.osm_parser)
@@ -104,7 +106,15 @@ class IntelligentSegmentationStrategyV2:
                 return self.special_cases.format_base_route_as_result(base_route)            # Étape 3 : Sélectionner les péages à utiliser (prioriser système ouvert)
             selected_tolls = self._select_target_tolls(tolls_on_route, target_tolls)
             if not selected_tolls:
-                return None            # Étape 4 : Construction des segments intelligents (nouvelle approche)
+                return None
+            
+            # Étape 3.5 : Optimiser les péages pour éviter les bugs de sortie
+            selected_tolls = self._optimize_tolls_for_exit(selected_tolls, tolls_on_route, coordinates[1])
+            
+            # Étape 3.6 : Mettre à jour tolls_on_route avec les péages optimisés
+            tolls_on_route = self._update_tolls_list_with_optimized(tolls_on_route, selected_tolls)
+            
+            # Étape 4 : Construction des segments intelligents (nouvelle approche)
             print("🏗️ Étape 4 : Construction des segments intelligents...")
             segments = self.segment_builder.build_intelligent_segments(
                 coordinates[0], coordinates[1], tolls_on_route, selected_tolls,
@@ -157,7 +167,7 @@ class IntelligentSegmentationStrategyV2:
             route_coords, 
             max_distance_m=1,  # 1m max de la polyline (ultra-strict pour éviter les péages côté opposé)
             coordinate_attr='coordinates',
-            verbose=False  # Pas de spam des rejets
+            verbose=True  # Pas de spam des rejets
         )
         
         # Extraire les péages de la détection stricte
@@ -260,3 +270,77 @@ class IntelligentSegmentationStrategyV2:
         print(f"      - Ouverts : {sum(1 for t in final_selected if t.is_open_system)}")
         
         return final_selected
+
+    def _optimize_tolls_for_exit(self, selected_tolls: List[MatchedToll], all_tolls: List[MatchedToll], destination: List[float]) -> List[MatchedToll]:
+        """
+        Optimise les péages sélectionnés en trouvant des sorties d'autoroute optimales.
+        
+        Args:
+            selected_tolls: Les péages sélectionnés initialement
+            all_tolls: Tous les péages disponibles sur la route
+            destination: Destination finale de la route
+            
+        Returns:
+            List[MatchedToll]: Les péages optimisés
+        """
+        return self.exit_optimizer.optimize_multiple_tolls(selected_tolls, all_tolls, destination)
+    
+    def _update_tolls_list_with_optimized(self, original_tolls: List[MatchedToll], optimized_tolls: List[MatchedToll]) -> List[MatchedToll]:
+        """
+        Met à jour la liste des péages sur la route en remplaçant les péages optimisés.
+        
+        Args:
+            original_tolls: Liste originale des péages sur la route
+            optimized_tolls: Liste des péages après optimisation
+            
+        Returns:
+            List[MatchedToll]: Liste mise à jour avec les péages optimisés
+        """
+        print(f"🔄 Mise à jour de la liste des péages avec optimisations...")
+        
+        # Créer une copie de la liste originale
+        updated_tolls = original_tolls.copy()
+        
+        # Pour chaque péage optimisé, vérifier s'il remplace un péage existant
+        for optimized_toll in optimized_tolls:
+            # Chercher si ce péage optimisé remplace un péage existant
+            replaced = False
+            for i, original_toll in enumerate(updated_tolls):
+                # Si le péage optimisé a le même nom/id qu'un original, le remplacer
+                if (original_toll.osm_id == optimized_toll.osm_id or 
+                    original_toll.effective_name == optimized_toll.effective_name):
+                    updated_tolls[i] = optimized_toll
+                    replaced = True
+                    print(f"   🔄 Péage mis à jour : {optimized_toll.effective_name}")
+                    break
+            
+            # Si c'est un nouveau péage (suite à l'optimisation), l'ajouter
+            if not replaced:
+                # Essayer de l'insérer à la bonne position selon les coordonnées
+                inserted = False
+                for i, existing_toll in enumerate(updated_tolls):
+                    # Si le nouveau péage a des coordonnées et qu'on peut estimer sa position
+                    if (optimized_toll.osm_coordinates and existing_toll.osm_coordinates and
+                        self._is_toll_before(optimized_toll, existing_toll)):
+                        updated_tolls.insert(i, optimized_toll)
+                        inserted = True
+                        print(f"   ➕ Nouveau péage inséré : {optimized_toll.effective_name}")
+                        break
+                
+                # Si on n'a pas pu l'insérer, l'ajouter à la fin
+                if not inserted:
+                    updated_tolls.append(optimized_toll)
+                    print(f"   ➕ Nouveau péage ajouté : {optimized_toll.effective_name}")
+        
+        print(f"   ✅ Liste mise à jour : {len(updated_tolls)} péages")
+        return updated_tolls
+    
+    def _is_toll_before(self, toll1: MatchedToll, toll2: MatchedToll) -> bool:
+        """
+        Détermine si toll1 vient avant toll2 sur la route (approximation basique).
+        """
+        if not toll1.osm_coordinates or not toll2.osm_coordinates:
+            return False
+        
+        # Approximation simple : comparer les latitudes (pour routes Nord-Sud)
+        return toll1.osm_coordinates[1] > toll2.osm_coordinates[1]
