@@ -201,7 +201,6 @@ class ExitOptimizationManager:
         except Exception as e:
             print(f"   ⚠️ Erreur lors du test de route via sortie : {e}")
             return None
-    
     def optimize_multiple_tolls(
         self, 
         selected_tolls: List[MatchedToll], 
@@ -209,7 +208,10 @@ class ExitOptimizationManager:
         route_destination: List[float]
     ) -> List[MatchedToll]:        
         """
-        Optimise plusieurs péages en une seule opération.
+        Optimise uniquement le dernier péage sélectionné si nécessaire.
+        
+        Logic: L'optimisation n'est nécessaire que pour le dernier péage sélectionné,
+        et seulement s'il y a des péages restants après lui sur la route.
         
         Args:
             selected_tolls: Les péages sélectionnés initialement
@@ -219,28 +221,45 @@ class ExitOptimizationManager:
         Returns:
             List[MatchedToll]: Les péages optimisés
         """
-        if len(selected_tolls) <= 1:
+        if len(selected_tolls) == 0:
             return selected_tolls
         
         print(f"🔍 Optimisation des sorties pour {len(selected_tolls)} péages...")
-        optimized_tolls = []
         
-        for i, toll in enumerate(selected_tolls):
-            print(f"   📍 Optimisation du péage {i+1}/{len(selected_tolls)} : {toll.effective_name}")
-            
-            # Calculer les péages restants après ce péage
-            remaining_tolls = self._get_remaining_tolls(toll, all_tolls)
-            print(f"      → {len(remaining_tolls)} péages restants après celui-ci")
-            
-            # Tenter l'optimisation
-            optimized_toll = self.optimize_toll_exit(toll, remaining_tolls, route_destination)
-            
-            if optimized_toll:
-                print(f"   🔄 Remplacement : {toll.effective_name} → {optimized_toll.effective_name}")
-                optimized_tolls.append(optimized_toll)
-            else:
-                print(f"   ➡️ Péage conservé : {toll.effective_name}")
-                optimized_tolls.append(toll)
+        # Ne considérer que le dernier péage sélectionné
+        last_toll = selected_tolls[-1]
+        remaining_tolls = self._get_remaining_tolls(last_toll, all_tolls)
+        
+        print(f"   📍 Dernier péage sélectionné : {last_toll.effective_name}")
+        print(f"   📍 Péages restants après le dernier : {len(remaining_tolls)}")
+        
+        if len(remaining_tolls) == 0:
+            print(f"   ✅ Aucun péage restant après le dernier - pas d'optimisation nécessaire")
+            return selected_tolls
+          # Vérifier si le dernier péage a déjà été optimisé
+        if hasattr(last_toll, 'is_exit') and last_toll.is_exit:
+            print(f"   ✅ Dernier péage déjà optimisé comme sortie - pas de re-optimisation")
+            return selected_tolls
+        
+        # Vérifier si le dernier péage est un système fermé (condition pour optimisation)
+        if last_toll.is_open_system:
+            print(f"   ✅ Dernier péage est un système ouvert - pas d'optimisation nécessaire")
+            return selected_tolls
+        
+        print(f"   🎯 Optimisation nécessaire pour le dernier péage (système fermé avec péages restants)")
+        
+        # Optimiser uniquement le dernier péage
+        optimized_last_toll = self.optimize_toll_exit(last_toll, remaining_tolls, route_destination)
+        
+        # Construire la liste finale
+        optimized_tolls = selected_tolls[:-1]  # Tous sauf le dernier
+        
+        if optimized_last_toll:
+            print(f"   🔄 Remplacement du dernier péage : {last_toll.effective_name} → {optimized_last_toll.effective_name}")
+            optimized_tolls.append(optimized_last_toll)
+        else:
+            print(f"   ➡️ Dernier péage conservé : {last_toll.effective_name}")
+            optimized_tolls.append(last_toll)
         
         return optimized_tolls
     
