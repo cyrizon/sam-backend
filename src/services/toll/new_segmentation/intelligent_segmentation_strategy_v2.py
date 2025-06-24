@@ -95,7 +95,7 @@ class IntelligentSegmentationStrategyV2:
             # Étape 2 : Identifier les péages SUR la route de base
             route_coords = RouteUtils.extract_route_coordinates(base_route)
             tolls_on_route = self._identify_tolls_on_base_route(route_coords)
-              # CAS SPÉCIAL 2 : Plus de péages demandés que disponibles → retourner route de base
+            # CAS SPÉCIAL 2 : Plus de péages demandés que disponibles → retourner route de base
             if len(tolls_on_route) < target_tolls:
                 print(f"⚠️ Pas assez de péages sur la route ({len(tolls_on_route)} < {target_tolls})")
                 return self.special_cases.format_base_route_as_result(base_route)
@@ -107,7 +107,7 @@ class IntelligentSegmentationStrategyV2:
             selected_tolls = self._select_target_tolls(tolls_on_route, target_tolls)
             if not selected_tolls:
                 return None
-              # Étape 3.5 : Optimiser les péages pour éviter les bugs de sortie
+            # Étape 3.5 : Optimiser les péages pour éviter les bugs de sortie
             selected_tolls = self._optimize_tolls_for_exit(selected_tolls, tolls_on_route, coordinates[1], route_coords)
             
             # Étape 3.6 : Mettre à jour tolls_on_route avec les péages optimisés

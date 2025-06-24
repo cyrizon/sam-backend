@@ -10,7 +10,7 @@ Responsabilité : Choisir la meilleure stratégie selon le contexte et les donn�
 import os
 from typing import List, Dict, Optional
 from .tollway_segmentation_strategy import TollwaySegmentationStrategy
-from .intelligent_segmentation_strategy_v2 import IntelligentSegmentationStrategyV2
+from .intelligent_segmentation_strategy_v3 import IntelligentSegmentationStrategyV3
 from src.services.toll.constants import TollOptimizationConfig as Config
 from src.services.toll.error_handler import TollErrorHandler
 from benchmark.performance_tracker import performance_tracker
@@ -37,14 +37,13 @@ class AdvancedTollOptimizer:
         
         # Stratégie d'analyse (toujours disponible)
         self.tollway_strategy = TollwaySegmentationStrategy(ors_service)
-        
-        # Stratégie intelligente (si données OSM disponibles)
+          # Stratégie intelligente (si données OSM disponibles)
         self.intelligent_strategy = None
         if osm_data_file and os.path.exists(osm_data_file):
-            self.intelligent_strategy = IntelligentSegmentationStrategyV2(ors_service, osm_data_file)
-            print(f"🧠 Stratégie intelligente activée avec {osm_data_file}")
+            self.intelligent_strategy = IntelligentSegmentationStrategyV3(ors_service, osm_data_file)
+            print(f"🧠 Stratégie hybride activée avec {osm_data_file}")
         else:
-            print("⚠️ Stratégie intelligente non disponible (données OSM manquantes)")
+            print("⚠️ Stratégie hybride non disponible (données OSM manquantes)")
     
     def optimize_route_with_exact_tolls(
         self,
