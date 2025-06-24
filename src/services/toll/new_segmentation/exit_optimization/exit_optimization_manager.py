@@ -19,11 +19,11 @@ Architecture :
 """
 
 from typing import List, Optional
-from .motorway_exit_finder import MotorwayExitFinder
-from .exit_toll_detector import ExitTollDetector
-from ..toll_matcher import MatchedToll
-from ..osm_data_parser import OSMDataParser, MotorwayJunction
-from ..toll_matcher import TollMatcher
+from src.services.toll.new_segmentation.exit_optimization.motorway_exit_finder import MotorwayExitFinder
+from src.services.toll.new_segmentation.exit_optimization.exit_toll_detector import ExitTollDetector
+from src.services.toll.new_segmentation.toll_matcher import MatchedToll
+from src.services.toll.new_segmentation.osm_data_parser import OSMDataParser, MotorwayJunction
+from src.services.toll.new_segmentation.toll_matcher import TollMatcher
 
 
 class ExitOptimizationManager:
@@ -48,7 +48,9 @@ class ExitOptimizationManager:
         self, 
         target_toll: MatchedToll, 
         remaining_tolls: List[MatchedToll],
-        route_destination: List[float]
+        route_destination: List[float],
+        previous_toll: Optional[MatchedToll] = None,
+        route_coords: Optional[List[List[float]]] = None
     ) -> Optional[MatchedToll]:
         """
         Optimise un péage en trouvant une sortie d'autoroute alternative.
@@ -57,6 +59,8 @@ class ExitOptimizationManager:
             target_toll: Le péage qu'on voudrait optimiser
             remaining_tolls: Les péages restants sur la route
             route_destination: Destination finale de la route
+            previous_toll: Le péage précédent (pour délimiter le segment de recherche)
+            route_coords: Coordonnées de la route complète
             
         Returns:
             Optional[MatchedToll]: Le péage optimisé, ou None si pas d'optimisation possible
@@ -67,15 +71,29 @@ class ExitOptimizationManager:
         if not self._should_optimize(target_toll, remaining_tolls):
             return None
         
-        # 2. Trouver les sorties d'autoroute proches
+        # 2. Récupérer les coordonnées du péage cible et du péage précédent
         target_coords = self._get_toll_coordinates(target_toll)
         if not target_coords:
             print(f"   ❌ Impossible de récupérer les coordonnées de {target_toll.effective_name}")
             return None
+          # 3. Utiliser les coordonnées pour créer un segment de recherche
+        if previous_toll:
+            prev_coords = self._get_toll_coordinates(previous_toll)
+            if prev_coords and route_coords:
+                print(f"   🎯 Recherche sur segment de route entre {previous_toll.effective_name} et {target_toll.effective_name}")
+                # Chercher la dernière sortie AVANT le péage cible sur le segment
+                exits = self._find_exits_on_route_segment(prev_coords, target_coords, route_coords)
+            else:
+                print(f"   ⚠️ Fallback: recherche autour du péage (prev_coords: {bool(prev_coords)}, route_coords: {bool(route_coords)})")
+                # Fallback: chercher autour du péage cible
+                exits = self.exit_finder.find_exits_near_point(target_coords, search_radius_km=1.0)
+        else:
+            print(f"   ⚠️ Pas de péage précédent, recherche autour du péage cible")
+            # Pas de péage précédent, chercher autour du péage cible
+            exits = self.exit_finder.find_exits_near_point(target_coords, search_radius_km=1.0)
         
-        exits = self.exit_finder.find_exits_near_point(target_coords, search_radius_km=1.0)
         if not exits:
-            print(f"   ⚠️ Aucune sortie d'autoroute trouvée près de {target_toll.effective_name}")
+            print(f"   ⚠️ Aucune sortie d'autoroute trouvée sur le segment avant {target_toll.effective_name}")
             return None
         
         # 3. Tester la sortie la plus proche
@@ -190,7 +208,6 @@ class ExitOptimizationManager:
             print(f"       🔍 Recherche de péages sur cette route...")
             
             exit_toll = self.toll_detector.detect_tolls_on_exit_route(route_coords, exit_coords)
-            
             if exit_toll:
                 print(f"       ✅ Péage trouvé : {exit_toll.effective_name}")
             else:
@@ -201,12 +218,14 @@ class ExitOptimizationManager:
         except Exception as e:
             print(f"   ⚠️ Erreur lors du test de route via sortie : {e}")
             return None
+    
     def optimize_multiple_tolls(
         self, 
         selected_tolls: List[MatchedToll], 
         all_tolls: List[MatchedToll],
-        route_destination: List[float]
-    ) -> List[MatchedToll]:        
+        route_destination: List[float],
+        route_coords: Optional[List[List[float]]] = None
+    ) -> List[MatchedToll]:
         """
         Optimise uniquement le dernier péage sélectionné si nécessaire.
         
@@ -240,16 +259,22 @@ class ExitOptimizationManager:
         if hasattr(last_toll, 'is_exit') and last_toll.is_exit:
             print(f"   ✅ Dernier péage déjà optimisé comme sortie - pas de re-optimisation")
             return selected_tolls
-        
-        # Vérifier si le dernier péage est un système fermé (condition pour optimisation)
+          # Vérifier si le dernier péage est un système fermé (condition pour optimisation)
         if last_toll.is_open_system:
             print(f"   ✅ Dernier péage est un système ouvert - pas d'optimisation nécessaire")
             return selected_tolls
         
         print(f"   🎯 Optimisation nécessaire pour le dernier péage (système fermé avec péages restants)")
         
-        # Optimiser uniquement le dernier péage
-        optimized_last_toll = self.optimize_toll_exit(last_toll, remaining_tolls, route_destination)
+        # Optimiser uniquement le dernier péage avec le péage précédent si disponible
+        previous_toll = selected_tolls[-2] if len(selected_tolls) > 1 else None
+        optimized_last_toll = self.optimize_toll_exit(
+            last_toll, 
+            remaining_tolls, 
+            route_destination, 
+            previous_toll, 
+            route_coords
+        )
         
         # Construire la liste finale
         optimized_tolls = selected_tolls[:-1]  # Tous sauf le dernier
@@ -280,3 +305,121 @@ class ExitOptimizationManager:
         except ValueError:
             # Si le péage n'est pas trouvé, retourner une liste vide
             return []
+    
+    def _find_exits_on_route_segment(
+        self, 
+        prev_coords: List[float], 
+        target_coords: List[float], 
+        route_coords: List[List[float]]
+    ) -> List[MotorwayJunction]:
+        """
+        Trouve la dernière sortie avant le péage cible (pas sur tout le segment entre les péages).
+        
+        Args:
+            prev_coords: Coordonnées du péage précédent (non utilisé maintenant)
+            target_coords: Coordonnées du péage cible
+            route_coords: Coordonnées complètes de la route
+            
+        Returns:
+            List[MotorwayJunction]: Sorties trouvées avant le péage cible, ordonnées par position
+        """
+        print(f"   🔍 Recherche de sorties autour du péage cible {target_coords}")
+        
+        # Chercher les sorties autour du péage cible uniquement (dans 10km)
+        exits_near_target = self.exit_finder.find_exits_near_point(target_coords, search_radius_km=10.0)
+        
+        if not exits_near_target:
+            print(f"   ❌ Aucune sortie trouvée autour du péage cible")
+            return []
+        
+        # Position du péage cible sur la route
+        target_position = self._calculate_position_on_route(target_coords, route_coords)
+        if target_position is None:
+            print(f"   ❌ Impossible de déterminer la position du péage cible sur la route")
+            return []
+        
+        # Analyser chaque sortie et garder seulement celles AVANT le péage cible
+        exits_before_target = []
+        for junction in exits_near_target:
+            exit_position = self._calculate_position_on_route(junction.coordinates, route_coords)
+            if exit_position is None:
+                continue
+            
+            # Garder seulement les sorties AVANT le péage cible sur la route
+            if exit_position < target_position:
+                exits_before_target.append(junction)
+                junction_name = junction.properties.get('name', 'sans nom')
+                print(f"   ✅ Sortie avant péage : {junction_name} (pos: {exit_position:.1f} < {target_position:.1f})")
+            else:
+                junction_name = junction.properties.get('name', 'sans nom')
+                print(f"   ❌ Sortie après péage : {junction_name} (pos: {exit_position:.1f} >= {target_position:.1f})")
+        
+        if not exits_before_target:
+            print(f"   ❌ Aucune sortie trouvée AVANT le péage cible")
+            return []
+        
+        # Trier par position décroissante pour avoir la dernière sortie avant le péage en premier
+        exits_before_target.sort(key=lambda x: self._calculate_position_on_route(x.coordinates, route_coords), reverse=True)
+        
+        print(f"   📍 {len(exits_before_target)} sorties trouvées avant le péage cible")
+        return exits_before_target
+    
+    def _calculate_position_on_route(self, point: List[float], route_coords: List[List[float]]) -> Optional[float]:
+        """
+        Calcule la position d'un point sur la route (distance cumulée depuis le début).
+        
+        Args:
+            point: Coordonnées du point [lon, lat]
+            route_coords: Coordonnées de la route complète
+            
+        Returns:
+            Optional[float]: Position en km depuis le début de la route, ou None si échec
+        """
+        if not route_coords or len(route_coords) < 2:
+            return None
+            
+        min_distance = float('inf')
+        best_position = None
+        
+        cumulative_distance = 0.0
+        
+        for i in range(len(route_coords) - 1):
+            # Distance du point à ce segment de route
+            segment_start = route_coords[i]
+            segment_end = route_coords[i + 1]
+            
+            # Distance du point au segment
+            dist_to_segment = self._distance_point_to_segment(point, segment_start, segment_end)
+            
+            if dist_to_segment < min_distance:
+                min_distance = dist_to_segment
+                # Position approximative sur ce segment
+                segment_length = self._calculate_distance(segment_start, segment_end)
+                best_position = cumulative_distance + segment_length * 0.5  # Milieu du segment
+            
+            # Ajouter la distance de ce segment
+            cumulative_distance += self._calculate_distance(segment_start, segment_end)
+        
+        return best_position if min_distance < 1.0 else None  # Seulement si à moins de 1km
+    
+    def _distance_point_to_segment(self, point: List[float], seg_start: List[float], seg_end: List[float]) -> float:
+        """
+        Calcule la distance d'un point à un segment de ligne.
+        
+        Args:
+            point: Point [lon, lat]
+            seg_start: Début du segment [lon, lat]
+            seg_end: Fin du segment [lon, lat]
+            
+        Returns:
+            float: Distance en km
+        """
+        # Simplification : distance au point le plus proche du segment
+        dist_to_start = self._calculate_distance(point, seg_start)
+        dist_to_end = self._calculate_distance(point, seg_end)
+        return min(dist_to_start, dist_to_end)
+
+    def _calculate_distance(self, point1: List[float], point2: List[float]) -> float:
+        """Calcule la distance entre deux points en km."""
+        from src.services.toll.new_segmentation.osm_data_parser import calculate_distance
+        return calculate_distance(point1, point2)

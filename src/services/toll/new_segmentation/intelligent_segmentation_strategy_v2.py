@@ -107,9 +107,8 @@ class IntelligentSegmentationStrategyV2:
             selected_tolls = self._select_target_tolls(tolls_on_route, target_tolls)
             if not selected_tolls:
                 return None
-            
-            # Étape 3.5 : Optimiser les péages pour éviter les bugs de sortie
-            selected_tolls = self._optimize_tolls_for_exit(selected_tolls, tolls_on_route, coordinates[1])
+              # Étape 3.5 : Optimiser les péages pour éviter les bugs de sortie
+            selected_tolls = self._optimize_tolls_for_exit(selected_tolls, tolls_on_route, coordinates[1], route_coords)
             
             # Étape 3.6 : Mettre à jour tolls_on_route avec les péages optimisés
             tolls_on_route = self._update_tolls_list_with_optimized(tolls_on_route, selected_tolls)
@@ -267,8 +266,8 @@ class IntelligentSegmentationStrategyV2:
         print(f"      - Ouverts : {sum(1 for t in final_selected if t.is_open_system)}")
         
         return final_selected
-
-    def _optimize_tolls_for_exit(self, selected_tolls: List[MatchedToll], all_tolls: List[MatchedToll], destination: List[float]) -> List[MatchedToll]:
+    
+    def _optimize_tolls_for_exit(self, selected_tolls: List[MatchedToll], all_tolls: List[MatchedToll], destination: List[float], route_coords: List[List[float]]) -> List[MatchedToll]:
         """
         Optimise les péages sélectionnés en trouvant des sorties d'autoroute optimales.
         
@@ -276,11 +275,12 @@ class IntelligentSegmentationStrategyV2:
             selected_tolls: Les péages sélectionnés initialement
             all_tolls: Tous les péages disponibles sur la route
             destination: Destination finale de la route
+            route_coords: Coordonnées complètes de la route
             
         Returns:
             List[MatchedToll]: Les péages optimisés
         """
-        return self.exit_optimizer.optimize_multiple_tolls(selected_tolls, all_tolls, destination)
+        return self.exit_optimizer.optimize_multiple_tolls(selected_tolls, all_tolls, destination, route_coords)
     
     def _update_tolls_list_with_optimized(self, original_tolls: List[MatchedToll], optimized_tolls: List[MatchedToll]) -> List[MatchedToll]:
         """
