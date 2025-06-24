@@ -20,7 +20,6 @@ Algorithme en 9 étapes :
 from typing import List, Dict, Optional
 from .toll_segment_builder import TollSegmentBuilder
 from .segment_route_calculator import SegmentRouteCalculator
-from .osm_data_parser import OSMDataParser
 from .toll_matcher import TollMatcher, MatchedToll, convert_osm_tolls_to_matched_format
 from .toll_deduplicator import TollDeduplicator
 from .intelligent_segmentation_helpers import SegmentationSpecialCases, RouteUtils
@@ -30,6 +29,7 @@ from .route_assembler import RouteAssembler
 from .polyline_intersection import filter_tolls_on_route_strict
 from .exit_optimization import ExitOptimizationManager
 from benchmark.performance_tracker import performance_tracker
+from src.services.osm_data_cache import osm_data_cache
 
 
 class IntelligentSegmentationStrategyV2:
@@ -38,19 +38,19 @@ class IntelligentSegmentationStrategyV2:
     Basée sur la route de base et la segmentation aux points de sortie.
     """
     
-    def __init__(self, ors_service, osm_data_file: str):
+    def __init__(self, ors_service, osm_data_file: str = None):
         """
-        Initialise la stratégie avec un service ORS et des données OSM.
+        Initialise la stratégie avec un service ORS et les données OSM du cache global.
         
         Args:
             ors_service: Service ORS pour les calculs de routes
-            osm_data_file: Chemin vers le fichier GeoJSON OSM
+            osm_data_file: (ignoré, conservé pour compatibilité)
         """
         self.ors = ors_service
-        self.osm_parser = OSMDataParser(osm_data_file)
+        self.osm_parser = osm_data_cache._osm_parser  # Utilise le parser du cache global
         self.toll_matcher = TollMatcher()
         self.exit_optimizer = ExitOptimizationManager(self.osm_parser, self.toll_matcher, self.ors)
-        self.osm_loaded = False
+        self.osm_loaded = True  # Toujours True car le cache est initialisé au démarrage
         self.special_cases = SegmentationSpecialCases(ors_service)
         self.point_finder = SegmentationPointFinder(self.osm_parser)
         self.segment_calculator = SegmentCalculator(ors_service)
@@ -138,11 +138,8 @@ class IntelligentSegmentationStrategyV2:
             )
     
     def _ensure_osm_data_loaded(self) -> bool:
-        """Assure que les données OSM sont chargées."""
-        if not self.osm_loaded:
-            print("📁 Chargement des données OSM...")
-            self.osm_loaded = self.osm_parser.load_and_parse()
-        return self.osm_loaded
+        """Assure que les données OSM sont chargées (toujours True avec le cache)."""
+        return True
     
     def _get_base_route(self, coordinates: List[List[float]]) -> Optional[Dict]:
         """Étape 1 : Récupérer la route de base."""

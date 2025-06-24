@@ -12,7 +12,7 @@ Responsabilité : extraire et structurer les données OSM pertinentes.
 
 import json
 from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 
 
@@ -23,6 +23,7 @@ class MotorwayJunction:
     ref: Optional[str]  # Numéro de sortie (ex: "6.1")
     coordinates: List[float]  # [lon, lat]
     properties: Dict
+    linked_motorway_links: List['MotorwayLink'] = field(default_factory=list)  # Chaîne de liens associés
     
     def distance_to(self, point: List[float]) -> float:
         """Calcule la distance à un point en km."""
@@ -36,6 +37,7 @@ class MotorwayLink:
     destination: Optional[str]
     coordinates: List[List[float]]  # Liste de points [lon, lat]
     properties: Dict
+    next_link: Optional['MotorwayLink'] = None  # Lien suivant dans la chaîne
     
     def get_start_point(self) -> List[float]:
         """Retourne le point de début du lien."""
@@ -124,6 +126,9 @@ class OSMDataParser:
             print(f"   - Motorway junctions: {len(self.motorway_junctions)}")
             print(f"   - Motorway links: {len(self.motorway_links)}")
             print(f"   - Toll stations: {len(self.toll_stations)}")
+            
+            # Phase 2: Linking des éléments OSM
+            self._link_motorway_elements()
             
             return True
             
@@ -320,3 +325,52 @@ class OSMDataParser:
                 nearby_tolls.append(toll)
         
         return nearby_tolls
+
+    def _link_motorway_elements(self) -> None:
+        """
+        Lie les motorway_junctions avec leurs chaînes de motorway_links.
+        
+        Phase 2 du parsing : association des éléments OSM par proximité.
+        """
+        from src.services.toll.new_segmentation.linking.junction_linker import JunctionLinker
+        
+        linker = JunctionLinker()
+        linker.link_all_junctions(self.motorway_junctions, self.motorway_links)
+        
+        # Afficher un exemple pour validation
+        self._print_test_junction()
+    
+    def _print_test_junction(self) -> None:
+        """
+        Affiche les détails de la junction de test pour validation.
+        """
+        from src.services.toll.new_segmentation.linking.junction_linker import JunctionLinker
+        
+        linker = JunctionLinker()
+        test_junction = linker.find_junction_by_id(self.motorway_junctions, "621758529")
+        
+        if test_junction:
+            print(f"\n🔍 Junction de test trouvée : {test_junction.node_id}")
+            print(f"   📍 Coordonnées : {test_junction.coordinates}")
+            print(f"   🔗 Nombre de links liés : {len(test_junction.linked_motorway_links)}")
+            
+            for i, link in enumerate(test_junction.linked_motorway_links):
+                link_id = link.way_id.split('/')[-1] if '/' in link.way_id else link.way_id
+                print(f"   Link {i+1}: {link_id}")
+                if link.destination:
+                    print(f"      → Destination: {link.destination}")
+                print(f"      → Start: {link.get_start_point()}")
+                print(f"      → End: {link.get_end_point()}")
+                
+                # Vérifier si c'est un des IDs attendus
+                expected_ids = ["657897788", "126357480", "1298540619", "1298540620"]
+                if link_id in expected_ids:
+                    print(f"      ✅ ID attendu trouvé!")
+                else:
+                    print(f"      ⚠️ ID inattendu")
+        else:
+            print(f"\n❌ Junction de test 621758529 non trouvée")
+            print(f"   Junctions disponibles (échantillon) :")
+            for i, junction in enumerate(self.motorway_junctions[:5]):
+                junction_id = junction.node_id.split('/')[-1] if '/' in junction.node_id else junction.node_id
+                print(f"   - {junction_id}")

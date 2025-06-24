@@ -19,6 +19,10 @@ def create_app():
     from src.services.toll_data_cache import toll_data_cache
     toll_data_cache.initialize()
 
+    print("🚦 Initialisation du cache global OSM...")
+    from src.services.osm_data_cache import osm_data_cache
+    osm_data_cache.initialize()
+
     # Enregistrer les routes
     from src.routes import register_routes
     register_routes(app)
