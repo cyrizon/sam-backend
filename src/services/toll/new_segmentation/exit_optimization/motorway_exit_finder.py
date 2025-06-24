@@ -157,3 +157,42 @@ class MotorwayExitFinder:
               f"(ref: {closest_exit.ref}, node: {closest_exit.node_id})")
         
         return closest_exit
+    
+    def get_exit_link_last_point(self, junction_data):
+        """
+        Retourne le dernier point de la way motorway_link associée à la junction.
+        
+        Args:
+            junction_data: Dictionnaire contenant les données de la junction
+            
+        Returns:
+            List[float]: Coordonnées [lon, lat] du dernier point de la way
+        """
+        from src.services.osm_data_cache import osm_data_cache
+        
+        junction_coords = junction_data['coordinates']
+        
+        # Chercher parmi toutes les motorway_junctions celle qui correspond
+        matching_junction = None
+        for junction in osm_data_cache.motorway_junctions:
+            if junction.coordinates == junction_coords:
+                matching_junction = junction
+                break
+        
+        if not matching_junction or not matching_junction.linked_motorway_links:
+            print(f"   ⚠️ Aucune way motorway_link trouvée pour la junction, fallback sur coordonnées junction")
+            return junction_coords
+        
+        # Prendre la première way liée (ou la plus longue si plusieurs)
+        first_link = matching_junction.linked_motorway_links[0]
+        
+        # Parcourir toute la chaîne de ways jusqu'à la fin
+        current_link = first_link
+        while current_link.next_link:
+            current_link = current_link.next_link
+        
+        # Retourner le dernier point de la dernière way
+        last_point = current_link.get_end_point()
+        print(f"   ✅ Dernier point de la way trouvé : {last_point}")
+        
+        return last_point

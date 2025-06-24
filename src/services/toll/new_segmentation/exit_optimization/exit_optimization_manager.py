@@ -100,19 +100,22 @@ class ExitOptimizationManager:
         closest_exit = self.exit_finder.get_closest_exit(exits)
         if not closest_exit:
             return None
-        
         # 4. Calculer une route via cette sortie
         exit_toll = self._test_exit_route(closest_exit, route_destination)
         if not exit_toll:
             print(f"   ❌ Aucun péage détecté sur la route via {closest_exit.properties.get('name', 'sortie inconnue')}")
             return None
-        
+
         print(f"   🔍 Péage candidat trouvé : {exit_toll.effective_name}")
         # 5. Valider le remplacement
         if exit_toll and self.toll_detector.validate_exit_toll_replacement(target_toll, exit_toll):
             print(f"   ✅ Optimisation réussie : {target_toll.effective_name} → {exit_toll.effective_name}")
             # Marquer ce péage comme étant une sortie d'autoroute
             exit_toll.is_exit = True
+            # IMPORTANT: Utiliser les coordonnées de la sortie réelle, pas du péage
+            exit_coords = self.exit_finder.get_exit_link_last_point({'coordinates': closest_exit.coordinates})
+            exit_toll.osm_coordinates = exit_coords
+            print(f"   🎯 Coordonnées de sortie assignées au péage : {exit_coords}")
             return exit_toll
         else:
             print(f"   ❌ Validation du remplacement échouée")
@@ -174,7 +177,10 @@ class ExitOptimizationManager:
         Returns:
             Optional[MatchedToll]: Péage détecté sur la route de sortie
         """
-        exit_coords = exit_data.coordinates
+        # Utiliser le dernier point de la way motorway_link au lieu des coordonnées de la junction
+        exit_coords = self.exit_finder.get_exit_link_last_point({'coordinates': exit_data.coordinates})
+        print(f"   🎯 Point de sortie final utilisé : {exit_coords}")
+        
         if not exit_coords:
             return None
         
