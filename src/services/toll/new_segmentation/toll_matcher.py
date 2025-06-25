@@ -139,7 +139,7 @@ class TollMatcher:
                     osm_name=osm_toll.get('name'),
                     osm_coordinates=osm_coords,
                     csv_id=best_match['id'],
-                    csv_name=best_match.get('name', ''),
+                    csv_name=best_match.get('name_base', ''),  # Utiliser name_base
                     csv_role=best_match.get('role', ''),
                     csv_coordinates=[csv_lon, csv_lat],
                     distance_m=min_distance,
@@ -148,7 +148,7 @@ class TollMatcher:
                 
                 matched_tolls.append(matched_toll)
                 
-                print(f"   ✅ {osm_toll.get('name', 'Péage')} → {best_match.get('name', '')} "
+                print(f"   ✅ {osm_toll.get('name', 'Péage')} → {best_match.get('name_base', 'Nom CSV manquant')} "
                       f"({min_distance:.0f}m, {best_match.get('role', '')}-système)")
             else:
                 # Péage OSM sans équivalent CSV

@@ -64,6 +64,9 @@ class SegmentRouteCalculator:
             
             if route:
                 print(f"   ✅ Route sans péage calculée")
+                print(f"   🔍 DEBUG: Clés de la route : {list(route.keys())}")
+                if 'features' in route:
+                    print(f"   🔍 DEBUG: Nombre de features : {len(route['features'])}")
                 return route
             else:
                 print(f"   ❌ Impossible de calculer une route sans péage")
@@ -92,6 +95,9 @@ class SegmentRouteCalculator:
             
             if route:
                 print(f"   ✅ Route normale calculée")
+                print(f"   🔍 DEBUG: Clés de la route : {list(route.keys())}")
+                if 'features' in route:
+                    print(f"   🔍 DEBUG: Nombre de features : {len(route['features'])}")
                 return route
             else:
                 print(f"   ❌ Impossible de calculer la route normale")

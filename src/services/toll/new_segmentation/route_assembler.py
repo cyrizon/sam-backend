@@ -37,12 +37,15 @@ class RouteAssembler:
             Dict: Route finale assemblée avec métadonnées
         """
         print("🔧 Assemblage de la route finale multi-segments...")
+        print(f"🔍 DEBUG: Assemblage de {len(segments)} segments")
+        
         # Extraire toutes les coordonnées, instructions et assembler
         all_coords = []
         all_instructions = []
         total_distance = 0
         total_duration = 0        
         for i, segment in enumerate(segments):
+            print(f"🔍 DEBUG: Segment {i+1} - Clés: {list(segment.keys())}")
             coords = RouteUtils.extract_route_coordinates(segment)
             instructions = RouteUtils.extract_instructions(segment)
             distance = RouteUtils.extract_distance(segment)

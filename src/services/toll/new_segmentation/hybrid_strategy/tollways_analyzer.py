@@ -155,6 +155,9 @@ class TollwaysAnalyzer:
             'segments_to_avoid': []  # Segments à éviter complètement
         }
         
+        # Détecter les segments "faux gratuits" entre péages fermés
+        fake_free_segments = self._detect_fake_free_segments(analysis, selected_tolls)
+        
         for segment_info in analysis['segments_with_tolls']:
             segment_tolls = segment_info['tolls']
             
@@ -194,8 +197,120 @@ class TollwaysAnalyzer:
                     })
                     strategies['segments_to_avoid'].append(segment_info['segment'])
         
+        # Forcer l'optimisation de sortie pour les segments "faux gratuits"
+        self._apply_fake_free_segment_fix(strategies, fake_free_segments, selected_tolls)
+        
         print(f"   📋 Stratégies identifiées :")
         print(f"      - Évitement tollways : {len(strategies['tollways_based'])}")
         print(f"      - Optimisation sortie : {len(strategies['exit_optimization'])}")
+        print(f"      - Segments faux gratuits détectés : {len(fake_free_segments)}")
         
+        return strategies
+    
+    def _detect_fake_free_segments(
+        self, 
+        analysis: Dict, 
+        selected_tolls: List[MatchedToll]
+    ) -> List[Dict]:
+        """
+        Détecte les segments "gratuits" qui sont en fait entre deux péages fermés
+        et ne peuvent donc pas être utilisés pour l'évitement.
+        """
+        print("🕵️ Détection des segments faux gratuits entre péages fermés...")
+        
+        fake_free_segments = []
+        all_tolls = []
+        
+        # Collecter tous les péages avec leur position
+        for segment_info in analysis['segments_with_tolls']:
+            for toll in segment_info['tolls']:
+                all_tolls.append({
+                    'toll': toll,
+                    'segment_index': segment_info['segment_index'],
+                    'is_closed_system': self._is_closed_system_toll(toll)
+                })
+        
+        # Trier les péages par position sur la route
+        all_tolls.sort(key=lambda x: x['segment_index'])
+        
+        # Vérifier chaque segment gratuit
+        for free_segment in analysis['free_segments']:
+            segment_index = free_segment['segment_index']
+            
+            # Trouver les péages avant et après ce segment
+            peages_before = [t for t in all_tolls if t['segment_index'] < segment_index]
+            peages_after = [t for t in all_tolls if t['segment_index'] > segment_index]
+            
+            if peages_before and peages_after:
+                # Péage fermé le plus proche avant
+                closest_before = max(peages_before, key=lambda x: x['segment_index'])
+                # Péage fermé le plus proche après
+                closest_after = min(peages_after, key=lambda x: x['segment_index'])
+                
+                # Si les deux péages les plus proches sont fermés
+                if closest_before['is_closed_system'] and closest_after['is_closed_system']:
+                    fake_free_segments.append({
+                        'segment': free_segment,
+                        'peage_before': closest_before['toll'],
+                        'peage_after': closest_after['toll']
+                    })
+                    
+                    print(f"   ⚠️ Segment faux gratuit détecté entre :")
+                    print(f"      - {closest_before['toll'].effective_name} (fermé)")
+                    print(f"      - {closest_after['toll'].effective_name} (fermé)")
+        
+        return fake_free_segments
+    
+    def _is_closed_system_toll(self, toll: MatchedToll) -> bool:
+        """Détermine si un péage est un système fermé (F) ou ouvert (O)."""
+        # Utiliser l'attribut csv_role du MatchedToll (provenant du CSV matching)
+        # F = fermé (closed system), O = ouvert (open system)
+        if hasattr(toll, 'csv_role') and toll.csv_role:
+            return toll.csv_role.upper() == 'F'
+        
+        # Si pas de csv_role, considérer comme ouvert par défaut (permet l'évitement)
+        return False
+    
+    def _apply_fake_free_segment_fix(
+        self, 
+        strategies: Dict, 
+        fake_free_segments: List[Dict], 
+        selected_tolls: List[MatchedToll]
+    ):
+        """
+        Applique la correction pour les segments faux gratuits en forçant
+        l'utilisation de l'optimisation de sortie au lieu de l'évitement tollways.
+        """
+        if not fake_free_segments:
+            return
+        
+        print("🔧 Application de la correction pour segments faux gratuits...")
+        
+        selected_names = [toll.effective_name for toll in selected_tolls]
+        
+        for fake_segment_info in fake_free_segments:
+            peage_before = fake_segment_info['peage_before']
+            peage_after = fake_segment_info['peage_after']
+            
+            # Si ces péages sont dans notre sélection, forcer l'optimisation de sortie
+            # pour gérer le passage entre eux
+            peages_to_handle = []
+            if peage_before.effective_name in selected_names:
+                peages_to_handle.append(peage_before)
+            if peage_after.effective_name in selected_names:
+                peages_to_handle.append(peage_after)
+            
+            if peages_to_handle:
+                # Créer une stratégie d'optimisation de sortie pour ces péages
+                strategies['exit_optimization'].append({
+                    'segment_info': None,  # Pas de segment spécifique
+                    'tolls_to_use': peages_to_handle,
+                    'tolls_to_avoid': [],
+                    'method': 'handle_closed_system_transition',
+                    'reason': f'Transition entre péages fermés {peage_before.effective_name} → {peage_after.effective_name}'
+                })
+                
+                print(f"   ✅ Correction appliquée pour transition :")
+                print(f"      {peage_before.effective_name} → {peage_after.effective_name}")
+
         return strategies

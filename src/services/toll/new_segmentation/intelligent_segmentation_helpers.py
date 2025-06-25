@@ -207,7 +207,13 @@ class RouteUtils:
     def extract_distance(route: Dict) -> float:
         """Extrait la distance d'une route ORS."""
         try:
-            return route['features'][0]['properties']['summary']['distance']
+            # Handle new hybrid segment format
+            if 'route' in route and 'segment_info' in route:
+                # New format: extract from route sub-dict
+                return route['route']['features'][0]['properties']['summary']['distance']
+            else:
+                # Legacy format: direct access
+                return route['features'][0]['properties']['summary']['distance']
         except (KeyError, IndexError):
             return 0.0
     
@@ -215,7 +221,13 @@ class RouteUtils:
     def extract_duration(route: Dict) -> float:
         """Extrait la durée d'une route ORS."""
         try:
-            return route['features'][0]['properties']['summary']['duration']
+            # Handle new hybrid segment format
+            if 'route' in route and 'segment_info' in route:
+                # New format: extract from route sub-dict
+                return route['route']['features'][0]['properties']['summary']['duration']
+            else:
+                # Legacy format: direct access
+                return route['features'][0]['properties']['summary']['duration']
         except (KeyError, IndexError):
             return 0.0
     
@@ -223,7 +235,13 @@ class RouteUtils:
     def extract_route_coordinates(route: Dict) -> List[List[float]]:
         """Extrait les coordonnées de la route."""
         try:
-            return route['features'][0]['geometry']['coordinates']
+            # Handle new hybrid segment format
+            if 'route' in route and 'segment_info' in route:
+                # New format: extract from route sub-dict
+                return route['route']['features'][0]['geometry']['coordinates']
+            else:
+                # Legacy format: direct access
+                return route['features'][0]['geometry']['coordinates']
         except (KeyError, IndexError):
             return []
     
@@ -231,9 +249,17 @@ class RouteUtils:
     def extract_instructions(route: Dict) -> List[Dict]:
         """Extrait les instructions de navigation d'une route ORS."""
         try:
+            # Handle new hybrid segment format
+            if 'route' in route and 'segment_info' in route:
+                # New format: extract from route sub-dict
+                actual_route = route['route']
+            else:
+                # Legacy format: direct access
+                actual_route = route
+            
             # Debug : afficher la structure de la route
-            if 'features' in route and route['features']:
-                feature = route['features'][0]
+            if 'features' in actual_route and actual_route['features']:
+                feature = actual_route['features'][0]
                 properties = feature.get('properties', {})
                 print(f"🔍 Debug instructions - properties keys: {list(properties.keys())}")
                 
@@ -246,7 +272,7 @@ class RouteUtils:
                 else:
                     print("🔍 Debug instructions - no 'segments' in properties")
             
-            segments = route['features'][0]['properties']['segments']
+            segments = actual_route['features'][0]['properties']['segments']
             if not segments:
                 return []
             

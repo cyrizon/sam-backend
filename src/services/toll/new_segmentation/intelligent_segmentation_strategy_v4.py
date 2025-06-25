@@ -111,6 +111,8 @@ class IntelligentSegmentationStrategyV4:
                 print("❌ Échec calcul segments, fallback route de base")
                 return self.special_cases.format_base_route_as_result(base_route)
             
+            
+
             # Étape 6 : Assemblage final
             print("🔧 Étape 6 : Assemblage final...")
             return self.route_assembler.assemble_final_route_multi(
@@ -261,6 +263,12 @@ class IntelligentSegmentationStrategyV4:
             print(f"🔄 Calcul segment : {description}")
             print(f"   📍 Départ: {start_coord}")
             print(f"   📍 Arrivée: {end_coord}")
+            
+            # Debug : Afficher les clés et coordonnées des segments
+            for idx, seg in enumerate(segments):
+                start = seg.get('start')
+                end = seg.get('end')
+                print(f"   [DEBUG] Segment {idx+1}: keys={list(seg.keys())}, start={start}, end={end}")
             
             # Calculer selon le type de segment
             if segment_type == 'toll_free':

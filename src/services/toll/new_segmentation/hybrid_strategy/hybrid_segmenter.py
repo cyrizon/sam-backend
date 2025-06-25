@@ -119,32 +119,52 @@ class HybridSegmenter:
         optimized_tolls = selected_tolls.copy()
         
         for strategy_info in strategies['exit_optimization']:
+            method = strategy_info.get('method', 'optimize_exit')
             tolls_to_use = strategy_info['tolls_to_use']
             tolls_to_avoid = strategy_info['tolls_to_avoid']
             
-            print(f"      🎯 Segment complexe : {len(tolls_to_use)} à utiliser, {len(tolls_to_avoid)} à éviter")
-            
-            # Pour chaque péage à utiliser dans ce segment, l'optimiser
-            for toll_to_optimize in tolls_to_use:
-                # Trouver le péage précédent pour délimiter la recherche
-                toll_index = optimized_tolls.index(toll_to_optimize)
-                previous_toll = optimized_tolls[toll_index - 1] if toll_index > 0 else None
+            if method == 'handle_closed_system_transition':
+                # Cas spécial : transition entre péages fermés
+                reason = strategy_info.get('reason', 'Transition entre péages fermés')
+                print(f"      🔒 Gestion transition péages fermés : {reason}")
                 
-                # Appliquer l'optimisation de sortie
-                optimized_toll = self.exit_optimizer.optimize_toll_exit(
-                    toll_to_optimize,
-                    tolls_to_avoid,  # Péages restants = péages à éviter
-                    route_coords[-1],  # Destination = fin de route
-                    previous_toll,
-                    route_coords
-                )
+                # Pour les transitions entre péages fermés, on garde les péages tels quels
+                # mais on s'assure qu'ils sont optimisés pour les meilleures sorties
+                for toll in tolls_to_use:
+                    if toll in optimized_tolls:
+                        toll_index = optimized_tolls.index(toll)
+                        # Marquer ce péage comme nécessitant une attention particulière
+                        toll.special_handling = 'closed_system_transition'
+                        print(f"         🔒 {toll.effective_name} : transition péages fermés")
                 
-                if optimized_toll:
-                    # Remplacer dans la liste
-                    optimized_tolls[toll_index] = optimized_toll
-                    print(f"         ✅ {toll_to_optimize.effective_name} → {optimized_toll.effective_name}")
-                else:
-                    print(f"         ❌ Optimisation échouée pour {toll_to_optimize.effective_name}")
+            else:
+                # Cas standard : optimisation normale
+                print(f"      🎯 Segment complexe : {len(tolls_to_use)} à utiliser, {len(tolls_to_avoid)} à éviter")
+                
+                # Pour chaque péage à utiliser dans ce segment, l'optimiser
+                for toll_to_optimize in tolls_to_use:
+                    if toll_to_optimize not in optimized_tolls:
+                        continue
+                        
+                    # Trouver le péage précédent pour délimiter la recherche
+                    toll_index = optimized_tolls.index(toll_to_optimize)
+                    previous_toll = optimized_tolls[toll_index - 1] if toll_index > 0 else None
+                    
+                    # Appliquer l'optimisation de sortie
+                    optimized_toll = self.exit_optimizer.optimize_toll_exit(
+                        toll_to_optimize,
+                        tolls_to_avoid,  # Péages restants = péages à éviter
+                        route_coords[-1],  # Destination = fin de route
+                        previous_toll,
+                        route_coords
+                    )
+                    
+                    if optimized_toll:
+                        # Remplacer dans la liste
+                        optimized_tolls[toll_index] = optimized_toll
+                        print(f"         ✅ {toll_to_optimize.effective_name} → {optimized_toll.effective_name}")
+                    else:
+                        print(f"         ❌ Optimisation échouée pour {toll_to_optimize.effective_name}")
         
         return optimized_tolls
     

@@ -56,6 +56,7 @@ class TollStation:
     coordinates: List[float]  # [lon, lat]
     toll_type: str  # "open" ou "closed"
     properties: Dict
+    csv_match: Optional[Dict] = None  # NOUVEAU : Données CSV pré-matchées
     
     def distance_to(self, point: List[float]) -> float:
         """Calcule la distance à un point en km."""
@@ -129,6 +130,9 @@ class OSMDataParser:
             
             # Phase 2: Linking des éléments OSM
             self._link_motorway_elements()
+            
+            # Phase 3: NOUVEAU - Pré-matching des péages OSM/CSV
+            self._prematch_tolls_with_csv()
             
             return True
             
@@ -374,3 +378,81 @@ class OSMDataParser:
             for i, junction in enumerate(self.motorway_junctions[:5]):
                 junction_id = junction.node_id.split('/')[-1] if '/' in junction.node_id else junction.node_id
                 print(f"   - {junction_id}")
+    
+    def _prematch_tolls_with_csv(self) -> None:
+        """
+        NOUVEAU : Pré-matche les péages OSM avec les données CSV au chargement.
+        
+        OPTIMISATION CLÉ : Les péages sont matchés une seule fois au chargement,
+        pas à chaque requête. Chaque péage OSM aura son csv_role et nom CSV disponibles.
+        """
+        print("🔗 Phase 3 : Pré-matching péages OSM/CSV...")
+        
+        try:
+            # Importer le TollMatcher pour utiliser sa logique de matching
+            from .toll_matcher import TollMatcher
+            
+            # Initialiser le matcher
+            matcher = TollMatcher()
+            
+            # Convertir les péages OSM au format attendu par le matcher
+            osm_tolls_dict = []
+            for toll_station in self.toll_stations:
+                toll_dict = {
+                    'id': toll_station.feature_id,
+                    'name': toll_station.name,
+                    'coordinates': toll_station.coordinates
+                }
+                osm_tolls_dict.append(toll_dict)
+            
+            # Effectuer le matching avec les données CSV
+            matched_tolls = matcher.match_osm_tolls_with_csv(osm_tolls_dict, max_distance_km=5.0)
+            
+            # Associer les résultats du matching aux toll_stations
+            self._associate_csv_matches(matched_tolls)
+            
+            print(f"✅ Pré-matching terminé : {len(matched_tolls)} péages traités")
+            
+        except Exception as e:
+            print(f"⚠️ Erreur pré-matching (non-critique) : {e}")
+            # Le pré-matching est optionnel, on continue même en cas d'erreur
+    
+    def _associate_csv_matches(self, matched_tolls: List) -> None:
+        """
+        Associe les résultats du matching CSV aux toll_stations OSM.
+        
+        Args:
+            matched_tolls: Résultats du matching OSM/CSV
+        """
+        # Créer un dictionnaire pour lookup rapide
+        matches_by_osm_id = {match.osm_id: match for match in matched_tolls}
+        
+        matched_count = 0
+        unmatched_count = 0
+        
+        for toll_station in self.toll_stations:
+            match = matches_by_osm_id.get(toll_station.feature_id)
+            
+            if match and match.csv_id:
+                # Péage matché avec succès
+                toll_station.csv_match = {
+                    'id': match.csv_id,
+                    'name': match.csv_name,
+                    'role': match.csv_role,  # 'O' ou 'F' - CLÉ pour l'optimisation
+                    'coordinates': match.csv_coordinates,
+                    'distance_m': match.distance_m,
+                    'confidence': match.confidence
+                }
+                matched_count += 1
+                
+                role_str = f"({match.csv_role})" if match.csv_role else "(role inconnue)"
+                csv_name_display = match.csv_name or "Nom CSV manquant"
+                print(f"   ✅ {toll_station.name or 'Sans nom'} → {csv_name_display} {role_str}")
+                
+            else:
+                # Péage non matché - sera considéré comme fermé (csv_role='F')
+                toll_station.csv_match = None
+                unmatched_count += 1
+                print(f"   🔍 {toll_station.name or 'Sans nom'} → Non matché (considéré fermé)")
+        
+        print(f"   📊 Résultats matching : {matched_count} matchés, {unmatched_count} non-matchés")
