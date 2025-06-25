@@ -54,12 +54,16 @@ class SegmentAvoidanceManager:
             List[Dict]: Segments d'évitement calculés
         """
         print("🛣️ Création des segments d'évitement...")
+        print(f"   🔍 DEBUG: segments_to_avoid = {segments_to_avoid}")
+        print(f"   🔍 DEBUG: type(segments_to_avoid) = {type(segments_to_avoid)}")
+        print(f"   🔍 DEBUG: len(tollways_segments) = {len(tollways_segments)}")
         
         avoidance_segments = []
         current_position = start_coord
         
         for i, segment in enumerate(tollways_segments):
-            if segment in segments_to_avoid:
+            print(f"   🔍 DEBUG: Segment {i}, à éviter ? {i in segments_to_avoid}")
+            if i in segments_to_avoid:  # Comparer l'index, pas l'objet segment
                 # Segment à éviter → Créer un segment d'évitement
                 print(f"   🚫 Évitement segment {i} : {segment['start_waypoint']}-{segment['end_waypoint']}")
                 
@@ -81,10 +85,13 @@ class SegmentAvoidanceManager:
                 if segment_coords:
                     normal_segment = {
                         'type': 'normal',
+                        'start': segment_coords[0],
+                        'end': segment_coords[-1],
                         'start_coord': segment_coords[0],
                         'end_coord': segment_coords[-1],
                         'coordinates': segment_coords,
-                        'original_segment': segment
+                        'original_segment': segment,
+                        'description': f"Segment normal {i}"
                     }
                     avoidance_segments.append(normal_segment)
                     current_position = normal_segment['end_coord']
@@ -143,16 +150,19 @@ class SegmentAvoidanceManager:
             end_coord = route_coords[next_free_segment['end_waypoint']]
             
             # Calculer route sans péage
-            avoidance_route = self.ors.get_base_route([start_coord, end_coord], include_tollways=False)
+            avoidance_route = self.ors.get_route_avoid_tollways([start_coord, end_coord])
             
             if avoidance_route:
                 return {
-                    'type': 'avoidance',
+                    'type': 'avoid_tolls',
                     'strategy': 'end_to_end',
+                    'start': start_coord,
+                    'end': end_coord,
                     'start_coord': start_coord,
                     'end_coord': end_coord,
                     'route': avoidance_route,
-                    'avoided_segment': avoid_segment
+                    'avoided_segment': avoid_segment,
+                    'description': f"Évitement sans péage (fin→fin)"
                 }
         except Exception as e:
             print(f"         ⚠️ Erreur stratégie 1 : {e}")
@@ -176,16 +186,19 @@ class SegmentAvoidanceManager:
             end_coord = route_coords[next_free_segment['end_waypoint']]
             
             # Calculer route sans péage
-            avoidance_route = self.ors.get_base_route([start_coord, end_coord], include_tollways=False)
+            avoidance_route = self.ors.get_route_avoid_tollways([start_coord, end_coord])
             
             if avoidance_route:
                 return {
-                    'type': 'avoidance',
+                    'type': 'avoid_tolls',
                     'strategy': 'start_to_end',
+                    'start': start_coord,
+                    'end': end_coord,
                     'start_coord': start_coord,
                     'end_coord': end_coord,
                     'route': avoidance_route,
-                    'avoided_segment': avoid_segment
+                    'avoided_segment': avoid_segment,
+                    'description': f"Évitement sans péage (début→fin)"
                 }
         except Exception as e:
             print(f"         ⚠️ Erreur stratégie 2 : {e}")
@@ -214,16 +227,19 @@ class SegmentAvoidanceManager:
             
             if exit_coord and entrance_coord:
                 # Calculer route sans péage
-                avoidance_route = self.ors.get_base_route([exit_coord, entrance_coord], include_tollways=False)
+                avoidance_route = self.ors.get_route_avoid_tollways([exit_coord, entrance_coord])
                 
                 if avoidance_route:
                     return {
-                        'type': 'avoidance',
+                        'type': 'avoid_tolls',
                         'strategy': 'exit_to_entrance',
+                        'start': exit_coord,
+                        'end': entrance_coord,
                         'start_coord': exit_coord,
                         'end_coord': entrance_coord,
                         'route': avoidance_route,
-                        'avoided_segment': avoid_segment
+                        'avoided_segment': avoid_segment,
+                        'description': f"Évitement sans péage (sortie→entrée)"
                     }
         except Exception as e:
             print(f"         ⚠️ Erreur stratégie 3 : {e}")
@@ -233,14 +249,14 @@ class SegmentAvoidanceManager:
     def _find_previous_free_segment(self, segments: List[Dict], current_index: int) -> Optional[Dict]:
         """Trouve le segment gratuit précédent."""
         for i in range(current_index - 1, -1, -1):
-            if segments[i]['is_free']:
+            if not segments[i]['is_toll']:  # Segment gratuit si NOT is_toll
                 return segments[i]
         return None
     
     def _find_next_free_segment(self, segments: List[Dict], current_index: int) -> Optional[Dict]:
         """Trouve le segment gratuit suivant."""
         for i in range(current_index + 1, len(segments)):
-            if segments[i]['is_free']:
+            if not segments[i]['is_toll']:  # Segment gratuit si NOT is_toll
                 return segments[i]
         return None
     

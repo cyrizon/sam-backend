@@ -507,22 +507,38 @@ class IntelligentSegmentationStrategyV2Optimized:
         """
         print("🏗️ Création segments optimisés...")
         
-        # Analyser les segments tollways vs péages sélectionnés
+        print("\n🟦 DEBUG: Péages transmis à l'analyseur de segments (tous sur la route, <1m, après déduplication):")
+        for t in tolls_on_segments:
+            print(f"   - {t.effective_name} | {t.csv_role} | {t.osm_coordinates}")
+        print(f"🟦 DEBUG: Péages sélectionnés (à utiliser): {[t.effective_name for t in selected_tolls]}")
+
+        # Analyser les segments tollways vs TOUS les péages détectés sur la route
         analysis = self.tollways_analyzer.analyze_segments_for_tolls(
-            tollways_data['segments'], selected_tolls, route_coords
+            tollways_data['segments'],
+            tolls_on_segments,  # TOUS les péages détectés sur la route
+            route_coords
         )
         
         # Identifier les segments à éviter
-        segments_to_avoid = self._identify_segments_to_avoid(analysis, selected_tolls)
+        segments_indices_to_avoid = self._identify_segments_to_avoid(analysis, selected_tolls)
+        
+        # Debug : afficher les indices à éviter
+        for index in segments_indices_to_avoid:
+            print(f"   📝 Segment {index} ajouté à la liste d'évitement")
+        
+        print(f"🎯 {len(segments_indices_to_avoid)} segments seront évités sur {len(segments_indices_to_avoid)} identifiés")
         
         # Créer les segments d'évitement avec logique optimisée
-        optimized_segments = self.avoidance_manager.create_avoidance_segments(
+        avoidance_segments = self.avoidance_manager.create_avoidance_segments(
             tollways_data['segments'],
-            segments_to_avoid,
+            segments_indices_to_avoid,  # Passer les indices directement
             route_coords,
             coordinates[0],
             coordinates[1]
         )
+        
+        # Optimiser l'assemblage final pour éviter les redondances
+        optimized_segments = self._optimize_final_assembly(avoidance_segments)
         
         # Appliquer la logique des segments gratuits optimisée
         final_segments = self._apply_free_segments_logic(optimized_segments, selected_tolls)
@@ -534,7 +550,9 @@ class IntelligentSegmentationStrategyV2Optimized:
         """
         Identifie les segments tollways à éviter selon la logique optimisée.
         
-        LOGIQUE : Éviter les segments qui contiennent des péages non-sélectionnés.
+        LOGIQUE : 
+        1. Éviter les segments qui contiennent des péages non-sélectionnés
+        2. Éviter les "faux segments gratuits" dans les systèmes fermés
         
         Args:
             analysis: Analyse des segments vs péages
@@ -546,15 +564,105 @@ class IntelligentSegmentationStrategyV2Optimized:
         selected_toll_ids = {toll.osm_id for toll in selected_tolls}
         segments_to_avoid = []
         
+        # Étape 1 : Segments avec péages non-sélectionnés
         for segment_info in analysis['segments_with_tolls']:
             segment_toll_ids = {toll.osm_id for toll in segment_info['tolls']}
             
             # Si le segment contient des péages non-sélectionnés, l'éviter
             if not segment_toll_ids.issubset(selected_toll_ids):
                 segments_to_avoid.append(segment_info['segment_index'])
-                print(f"   🚫 Segment {segment_info['segment_index']} à éviter (péages non-sélectionnés)")
+                toll_names = [toll.effective_name for toll in segment_info['tolls']]
+                print(f"   🚫 Segment {segment_info['segment_index']} à éviter (péages non-sélectionnés: {toll_names})")
+        
+        # Étape 2 : Identifier les "faux segments gratuits" dans les systèmes fermés
+        false_free_segments = self._identify_false_free_segments(analysis, selected_tolls)
+        segments_to_avoid.extend(false_free_segments)
         
         return segments_to_avoid
+    
+    def _identify_false_free_segments(self, analysis: Dict, selected_tolls: List[MatchedToll]) -> List[int]:
+        """
+        Identifie les "faux segments gratuits" qui sont en réalité dans un système fermé.
+        
+        Un segment gratuit est "faux" s'il est entre deux péages fermés du même système,
+        car on ne peut pas sortir de l'autoroute sans payer.
+        
+        Args:
+            analysis: Analyse des segments vs péages
+            selected_tolls: Péages sélectionnés
+            
+        Returns:
+            List[int]: Indices des faux segments gratuits à éviter
+        """
+        false_free_segments = []
+        
+        # Obtenir les péages fermés non-sélectionnés
+        all_tolls_on_route = []
+        for segment_info in analysis['segments_with_tolls']:
+            all_tolls_on_route.extend(segment_info['tolls'])
+        
+        unselected_closed_tolls = [
+            toll for toll in all_tolls_on_route 
+            if toll.csv_role == 'F' and toll not in selected_tolls
+        ]
+        
+        if len(unselected_closed_tolls) < 2:
+            return false_free_segments
+        
+        print(f"   🔍 Analyse des faux segments gratuits entre {len(unselected_closed_tolls)} péages fermés non-sélectionnés...")
+        
+        # Pour chaque segment gratuit, vérifier s'il est entre deux péages fermés
+        for free_segment_info in analysis['free_segments']:
+            segment_index = free_segment_info['segment_index']
+            
+            # Trouver les péages fermés avant et après ce segment
+            toll_before = self._find_nearest_closed_toll_before(segment_index, unselected_closed_tolls, analysis)
+            toll_after = self._find_nearest_closed_toll_after(segment_index, unselected_closed_tolls, analysis)
+            
+            if toll_before and toll_after:
+                # Vérifier s'ils sont du même système autoroutier (même préfixe)
+                if self._are_tolls_same_system(toll_before, toll_after):
+                    false_free_segments.append(segment_index)
+                    print(f"   🚫 Segment gratuit {segment_index} identifié comme faux (entre {toll_before.effective_name} et {toll_after.effective_name})")
+        
+        return false_free_segments
+    
+    def _find_nearest_closed_toll_before(self, segment_index: int, closed_tolls: List[MatchedToll], analysis: Dict) -> Optional[MatchedToll]:
+        """Trouve le péage fermé le plus proche avant un segment donné."""
+        for i in range(segment_index - 1, -1, -1):
+            for segment_info in analysis['segments_with_tolls']:
+                if segment_info['segment_index'] == i:
+                    for toll in segment_info['tolls']:
+                        if toll in closed_tolls:
+                            return toll
+        return None
+    
+    def _find_nearest_closed_toll_after(self, segment_index: int, closed_tolls: List[MatchedToll], analysis: Dict) -> Optional[MatchedToll]:
+        """Trouve le péage fermé le plus proche après un segment donné."""
+        max_segments = max(info['segment_index'] for info in analysis['segments_with_tolls'] + analysis['free_segments'])
+        
+        for i in range(segment_index + 1, max_segments + 1):
+            for segment_info in analysis['segments_with_tolls']:
+                if segment_info['segment_index'] == i:
+                    for toll in segment_info['tolls']:
+                        if toll in closed_tolls:
+                            return toll
+        return None
+    
+    def _are_tolls_same_system(self, toll1: MatchedToll, toll2: MatchedToll) -> bool:
+        """
+        Vérifie si deux péages appartiennent au même système autoroutier.
+        
+        Utilise le préfixe des identifiants CSV (ex: APRR_F123 et APRR_F456 = même système APRR).
+        """
+        if not toll1.csv_id or not toll2.csv_id:
+            return False
+        
+        # Extraire le préfixe (ex: "APRR" de "APRR_F123")
+        prefix1 = toll1.csv_id.split('_')[0] if '_' in toll1.csv_id else toll1.csv_id
+        prefix2 = toll2.csv_id.split('_')[0] if '_' in toll2.csv_id else toll2.csv_id
+        
+        return prefix1 == prefix2
     
     def _apply_free_segments_logic(
         self, 
@@ -652,6 +760,93 @@ class IntelligentSegmentationStrategyV2Optimized:
         print(f"✅ {len(calculated_segments)} segments calculés")
         return calculated_segments
     
+    def _optimize_final_assembly(self, segments: List[Dict]) -> List[Dict]:
+        """
+        Optimise l'assemblage final des segments pour éviter les redondances.
+        
+        Args:
+            segments: Segments bruts créés
+            
+        Returns:
+            List[Dict]: Segments optimisés et assemblés
+        """
+        if not segments:
+            return []
+        
+        print(f"🔧 Optimisation assemblage final ({len(segments)} segments bruts)...")
+        
+        # Regrouper les segments consécutifs d'évitement
+        optimized = []
+        i = 0
+        
+        while i < len(segments):
+            current_segment = segments[i]
+            
+            if current_segment.get('type') == 'avoid_tolls':
+                # Regrouper tous les segments d'évitement consécutifs
+                avoidance_group = [current_segment]
+                j = i + 1
+                
+                while j < len(segments) and segments[j].get('type') == 'avoid_tolls':
+                    avoidance_group.append(segments[j])
+                    j += 1
+                
+                if len(avoidance_group) > 1:
+                    # Fusionner les segments d'évitement consécutifs
+                    merged_segment = self._merge_avoidance_segments(avoidance_group)
+                    optimized.append(merged_segment)
+                    print(f"   🔗 {len(avoidance_group)} segments d'évitement fusionnés")
+                else:
+                    optimized.append(current_segment)
+                
+                i = j
+            else:
+                # Segment normal
+                optimized.append(current_segment)
+                i += 1
+        
+        print(f"   ✅ {len(optimized)} segments après optimisation")
+        return optimized
+    
+    def _merge_avoidance_segments(self, avoidance_segments: List[Dict]) -> Dict:
+        """
+        Fusionne plusieurs segments d'évitement consécutifs en un seul.
+        
+        Args:
+            avoidance_segments: Segments d'évitement à fusionner
+            
+        Returns:
+            Dict: Segment d'évitement fusionné
+        """
+        if len(avoidance_segments) == 1:
+            return avoidance_segments[0]
+        
+        first = avoidance_segments[0]
+        last = avoidance_segments[-1]
+        
+        # Calculer une nouvelle route d'évitement globale
+        try:
+            global_route = self.ors.get_route_avoid_tollways(
+                [first['start_coord'], last['end_coord']]
+            )
+            
+            if global_route:
+                return {
+                    'type': 'avoid_tolls',
+                    'strategy': 'merged_avoidance',
+                    'start': first['start_coord'],
+                    'end': last['end_coord'],
+                    'start_coord': first['start_coord'],
+                    'end_coord': last['end_coord'],
+                    'route': global_route,
+                    'merged_count': len(avoidance_segments),
+                    'description': f"Évitement fusionné de {len(avoidance_segments)} segments"
+                }
+        except Exception as e:
+            print(f"   ⚠️ Erreur fusion segments : {e}")
+        
+        # Fallback : retourner le premier segment
+        return first
     
     def _calculate_distance(self, point1: List[float], point2: List[float]) -> float:
         """
@@ -719,8 +914,8 @@ class IntelligentSegmentationStrategyV2Optimized:
         adapted = {
             'start': segment.get('start_coord', segment.get('start', [0, 0])),
             'end': segment.get('end_coord', segment.get('end', [0, 0])),
-            'type': segment.get('segment_type', segment.get('type', 'normal')),
-            'description': segment.get('description', f"Segment {segment.get('id', 'inconnu')}")
+            'type': segment.get('type', segment.get('segment_type', 'normal')),
+            'description': segment.get('description', f"Segment {segment.get('type', 'normal')} {segment.get('id', 'inconnu')}")
         }
         
         print(f"   🔧 Segment adapté : {adapted['description']}")

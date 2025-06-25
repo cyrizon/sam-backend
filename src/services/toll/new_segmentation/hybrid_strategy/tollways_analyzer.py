@@ -50,6 +50,11 @@ class TollwaysAnalyzer:
                 # Trouver quels péages sont dans ce segment
                 tolls_in_segment = self._find_tolls_in_segment(segment, tolls_on_route, route_coords)
                 
+                if tolls_in_segment:
+                    print(f"   💰 Segment {i} (payant) contient {len(tolls_in_segment)} péage(s): {[t.effective_name for t in tolls_in_segment]}")
+                else:
+                    print(f"   💰 Segment {i} (payant) sans péage détecté")
+                
                 segment_info = {
                     'segment_index': i,
                     'segment': segment,
@@ -95,7 +100,7 @@ class TollwaysAnalyzer:
         tolls_in_segment = []
         
         for toll in tolls:
-            toll_coords = toll.osm_coordinates or toll.csv_coordinates
+            toll_coords = toll.osm_coordinates
             if not toll_coords:
                 continue
                 
