@@ -55,7 +55,7 @@ class IntelligentSegmentationStrategyV2Optimized:
         
         # Modules core
         self.toll_matcher = TollMatcher()
-        self.toll_deduplicator = TollDeduplicator()
+        # Note: TollDeduplicator utilisé comme méthode statique
         self.special_cases = SegmentationSpecialCases(ors_service)
         self.route_calculator = SegmentRouteCalculator(ors_service)
         self.route_assembler = RouteAssembler()
@@ -87,12 +87,12 @@ class IntelligentSegmentationStrategyV2Optimized:
                 return self.special_cases.get_toll_free_route(coordinates)
             
             # Étape 1 : Route de base + segments tollways
-            base_route, tollways_data = self._get_base_route_with_tollways(coordinates)
-            if not base_route:
+            base_route_response, tollways_data = self._get_base_route_with_tollways(coordinates)
+            if not base_route_response:
                 return None
             
             # Étape 2 : Identifier péages pré-matchés SUR les segments
-            route_coords = RouteUtils.extract_route_coordinates(base_route)
+            route_coords = RouteUtils.extract_route_coordinates(base_route_response)
             tolls_on_segments = self._identify_prematched_tolls_on_segments(
                 tollways_data['segments'], route_coords
             )
@@ -100,11 +100,11 @@ class IntelligentSegmentationStrategyV2Optimized:
             # CAS SPÉCIAUX : optimisations directes
             if len(tolls_on_segments) < target_tolls:
                 print(f"⚠️ Pas assez de péages ({len(tolls_on_segments)} < {target_tolls})")
-                return self.special_cases.format_base_route_as_result(base_route)
+                return self.special_cases.format_base_route_as_result(base_route_response)
             
             if len(tolls_on_segments) == target_tolls:
                 print(f"✅ Nombre exact de péages trouvé")
-                return self.special_cases.format_base_route_as_result(base_route)
+                return self.special_cases.format_base_route_as_result(base_route_response)
             
             # Étape 3 : Sélectionner péages cibles (prioriser système ouvert)
             selected_tolls = self._select_target_tolls_optimized(tolls_on_segments, target_tolls)
@@ -119,7 +119,7 @@ class IntelligentSegmentationStrategyV2Optimized:
             
             if not segments:
                 print("❌ Échec segmentation optimisée, fallback route de base")
-                return self.special_cases.format_base_route_as_result(base_route)
+                return self.special_cases.format_base_route_as_result(base_route_response)
             
             # Étape 5 : Calcul des routes pour chaque segment
             print("🛣️ Étape 5 : Calcul des routes par segment...")
@@ -127,15 +127,17 @@ class IntelligentSegmentationStrategyV2Optimized:
             
             if not calculated_segments:
                 print("❌ Échec calcul des segments")
-                return self.special_cases.format_base_route_as_result(base_route)
+                return self.special_cases.format_base_route_as_result(base_route_response)
             
             # Étape 6 : Assemblage final optimisé
             print("🔧 Étape 6 : Assemblage final optimisé...")
-            final_route = self._assemble_optimized_route(calculated_segments)
+            final_route = self.route_assembler.assemble_final_route_multi(
+                calculated_segments, target_tolls, selected_tolls
+            )
             
             if not final_route:
                 print("❌ Échec assemblage final")
-                return self.special_cases.format_base_route_as_result(base_route)
+                return self.special_cases.format_base_route_as_result(base_route_response)
             
             print("✅ Segmentation V2 Optimisée réussie")
             return final_route
@@ -145,59 +147,40 @@ class IntelligentSegmentationStrategyV2Optimized:
         Obtient la route de base avec les segments tollways.
         
         Returns:
-            Tuple[route, tollways_data]: Route de base et données tollways
+            Tuple[route_response, tollways_data]: Réponse ORS complète et données tollways
         """
         print("🛣️ Étape 1 : Route de base + segments tollways...")
-        
-        # Route de base sans évitement
-        response = self.ors.get_base_route(coordinates)
-        if not response or response.get('status') != 'success':
+
+        response = self.ors.get_base_route(coordinates, include_tollways=True)
+        if not response or "features" not in response or not response["features"]:
             print("❌ Échec obtention route de base")
             return None, None
-        
-        base_route = response.get('data', {}).get('routes', [{}])[0]
-        if not base_route:
-            print("❌ Route de base vide")
-            return None, None
-        
-        # Extraire segments tollways
-        tollways_data = self._extract_tollways_segments(base_route)
+
+        base_feature = response["features"][0]
+        properties = base_feature.get("properties", {})
+
+        # Extraire segments tollways à partir des propriétés
+        tollways_data = self._extract_tollways_segments(properties)
         if not tollways_data:
             print("⚠️ Aucun segment tollway trouvé")
-            return base_route, {'segments': []}
-        
+            return response, {'segments': []}
+
         print(f"✅ Route de base obtenue avec {len(tollways_data['segments'])} segments tollways")
-        return base_route, tollways_data
-    
-    def _extract_tollways_segments(self, route: Dict) -> Optional[Dict]:
+        return response, tollways_data
+
+    def _extract_tollways_segments(self, properties: Dict) -> Optional[Dict]:
         """
-        Extrait les segments tollways de la route ORS.
-        
-        Args:
-            route: Route ORS complète
-            
-        Returns:
-            Dict contenant les segments tollways analysés
+        Extrait les segments tollways à partir des propriétés d'une feature ORS.
         """
-        geometry = route.get('geometry')
-        if not geometry:
-            return None
-        
-        # Chercher les segments dans les extras
-        extras = route.get('extras', {})
+        extras = properties.get('extras', {})
         tollways_info = extras.get('tollways', {})
-        
         if not tollways_info:
             return None
-        
         segments = []
         values = tollways_info.get('values', [])
-        
         for segment_info in values:
-            # Format ORS : [start_index, end_index, is_toll_flag]
             if len(segment_info) >= 3:
                 start_idx, end_idx, is_toll = segment_info
-                
                 segment = {
                     'start_waypoint': start_idx,
                     'end_waypoint': end_idx,
@@ -205,7 +188,6 @@ class IntelligentSegmentationStrategyV2Optimized:
                     'segment_type': 'toll' if is_toll else 'free'
                 }
                 segments.append(segment)
-        
         return {
             'segments': segments,
             'total_segments': len(segments),
@@ -240,12 +222,12 @@ class IntelligentSegmentationStrategyV2Optimized:
             print("⚠️ Aucun péage pré-matché disponible, fallback sur matching traditionnel")
             return self._fallback_traditional_matching(route_coords)
         
-        # Filtrer les péages qui sont sur les segments tollways
+        # Filtrer les péages qui sont VRAIMENT sur la route (tous segments)
+        # Utiliser une détection stricte comme dans la V2 originale
         tolls_on_segments = []
-        
+
         for segment in segments:
-            if not segment['is_toll']:
-                continue  # Ignorer les segments gratuits
+            print(f"   Segment {segment['start_waypoint']} à {segment['end_waypoint']} (toll: {segment['is_toll']})")
             
             # Extraire les coordonnées du segment
             start_idx = segment['start_waypoint']
@@ -256,15 +238,35 @@ class IntelligentSegmentationStrategyV2Optimized:
             
             segment_coords = route_coords[start_idx:end_idx + 1]
             
-            # Trouver les péages pré-matchés sur ce segment
+            # Trouver les péages pré-matchés sur ce segment (tous segments, pas seulement payants)
             segment_tolls = self._find_prematched_tolls_on_segment(
                 prematched_tolls, segment_coords
             )
             
             tolls_on_segments.extend(segment_tolls)
         
-        # Déduplication
-        tolls_on_segments = self.toll_deduplicator.deduplicate_tolls(tolls_on_segments)
+        # Filtrage strict : garder seulement les péages à moins de 1m de la route
+        print("🎯 Filtrage strict des péages (distance < 1m)...")
+        strict_tolls = []
+        for toll in tolls_on_segments:
+            min_distance_m = float('inf')
+            for coord in route_coords:
+                dist_m = self._calculate_distance_meters(
+                    [toll.osm_coordinates[1], toll.osm_coordinates[0]], 
+                    [coord[1], coord[0]]
+                )
+                min_distance_m = min(min_distance_m, dist_m)
+            
+            if min_distance_m <= 1.0:  # 1m max
+                strict_tolls.append(toll)
+                print(f"   ✅ {toll.effective_name} : {min_distance_m:.1f}m")
+            else:
+                print(f"   ❌ {toll.effective_name} : {min_distance_m:.1f}m (trop loin)")
+        
+        tolls_on_segments = strict_tolls
+        
+        # Déduplication par proximité (méthode statique)
+        tolls_on_segments = TollDeduplicator.deduplicate_tolls_by_proximity(tolls_on_segments, route_coords)
         
         print(f"✅ {len(tolls_on_segments)} péages pré-matchés trouvés sur segments")
         
@@ -394,9 +396,12 @@ class IntelligentSegmentationStrategyV2Optimized:
         target_count: int
     ) -> List[MatchedToll]:
         """
-        Sélectionne les péages cibles en priorisant le système ouvert.
+        Sélectionne les péages cibles en priorisant le système fermé (comme l'ancienne V2).
         
-        OPTIMISATION : Utilise directement le csv_role pré-calculé.
+        RÈGLES (identiques à l'ancienne V2) :
+        - 1 péage : Seulement système ouvert (fermé seul = impossible)
+        - 2+ péages : Priorité aux fermés (plus logique entrance→exit), puis ouverts
+        - Contrainte : Jamais de péage fermé seul (toujours par paires minimum)
         
         Args:
             tolls_on_segments: Péages disponibles sur les segments
@@ -405,7 +410,11 @@ class IntelligentSegmentationStrategyV2Optimized:
         Returns:
             List[MatchedToll]: Péages sélectionnés
         """
-        print(f"🎯 Étape 3 : Sélection {target_count} péages cibles (prioriser système ouvert)...")
+        print(f"🎯 Étape 3 : Sélection {target_count} péages cibles (prioriser système fermé)...")
+        
+        if target_count > len(tolls_on_segments):
+            print(f"❌ Pas assez de péages disponibles ({len(tolls_on_segments)} < {target_count})")
+            return []
         
         if len(tolls_on_segments) <= target_count:
             return tolls_on_segments
@@ -414,21 +423,61 @@ class IntelligentSegmentationStrategyV2Optimized:
         open_system_tolls = [t for t in tolls_on_segments if t.csv_role == 'O']
         closed_system_tolls = [t for t in tolls_on_segments if t.csv_role != 'O']
         
-        print(f"   🔓 Système ouvert : {len(open_system_tolls)} péages")
-        print(f"   🔒 Système fermé : {len(closed_system_tolls)} péages")
+        print(f"   � Disponibles : {len(open_system_tolls)} ouverts, {len(closed_system_tolls)} fermés")
         
-        selected = []
+        # Utiliser la logique unifiée de l'ancienne V2
+        return self._select_tolls_unified_optimized(open_system_tolls, closed_system_tolls, target_count)
+    
+    def _select_tolls_unified_optimized(
+        self, 
+        open_tolls: List[MatchedToll], 
+        closed_tolls: List[MatchedToll], 
+        target_count: int
+    ) -> List[MatchedToll]:
+        """
+        Logique unifiée de sélection de péages (identique à l'ancienne V2).
         
-        # Prioriser les péages à système ouvert
-        selected.extend(open_system_tolls[:target_count])
+        Règles :
+        1. Toujours prioriser les péages fermés (par paires)
+        2. Si contrainte violée (1 seul fermé), passer aux ouverts
+        3. Compléter avec les ouverts si nécessaire
+        """
+        selected_tolls = []
         
-        # Compléter avec les péages fermés si nécessaire
-        remaining = target_count - len(selected)
+        # Étape 1 : Prendre d'abord les fermés (par paires si possible)
+        if len(closed_tolls) >= 2:
+            # Calculer combien de paires on peut prendre
+            pairs_available = len(closed_tolls) // 2
+            pairs_needed = min(pairs_available, target_count // 2)
+            
+            # Si target_count est impair et qu'on a assez de fermés, prendre une paire de plus
+            if target_count % 2 == 1 and pairs_available > pairs_needed:
+                pairs_needed += 1
+            
+            selected_tolls.extend(closed_tolls[:pairs_needed * 2])
+        
+        # Étape 2 : Compléter avec des ouverts si nécessaire
+        remaining = target_count - len(selected_tolls)
         if remaining > 0:
-            selected.extend(closed_system_tolls[:remaining])
+            selected_tolls.extend(open_tolls[:remaining])
         
-        print(f"✅ {len(selected)} péages sélectionnés")
-        return selected
+        # Étape 3 : Ajuster à la taille exacte
+        final_selected = selected_tolls[:target_count]
+        
+        # Étape 4 : Vérifier la contrainte (pas de fermé seul, sauf si pas d'alternative)
+        closed_count = sum(1 for t in final_selected if t.csv_role != 'O')
+        if closed_count == 1 and len(open_tolls) > 0:
+            print(f"   ⚠️ Contrainte violée : 1 seul fermé détecté, passage aux ouverts...")
+            # Si on ne peut pas respecter la contrainte ET qu'on a des ouverts, prendre que des ouverts
+            final_selected = open_tolls[:target_count]
+        elif closed_count == 1 and len(open_tolls) == 0:
+            print(f"   ✅ 1 seul fermé accepté (pas d'alternative ouverte)")
+        
+        print(f"   ✅ {len(final_selected)} péages sélectionnés : {[t.effective_name for t in final_selected]}")
+        print(f"      - Fermés : {sum(1 for t in final_selected if t.csv_role != 'O')}")
+        print(f"      - Ouverts : {sum(1 for t in final_selected if t.csv_role == 'O')}")
+        
+        return final_selected
     
     def _create_optimized_segments(
         self,
@@ -587,8 +636,11 @@ class IntelligentSegmentationStrategyV2Optimized:
         for i, segment in enumerate(segments):
             print(f"   Segment {i+1}/{len(segments)}...")
             
+            # Adapter le format du segment si nécessaire
+            adapted_segment = self._adapt_segment_format(segment)
+            
             # Calculer la route pour ce segment
-            route_result = self.route_calculator.calculate_segment_route(segment)
+            route_result = self.route_calculator.calculate_segment_route(adapted_segment)
             
             if route_result:
                 calculated_segments.append(route_result)
@@ -600,27 +652,6 @@ class IntelligentSegmentationStrategyV2Optimized:
         print(f"✅ {len(calculated_segments)} segments calculés")
         return calculated_segments
     
-    def _assemble_optimized_route(self, calculated_segments: List[Dict]) -> Optional[Dict]:
-        """
-        Assemble la route finale à partir des segments calculés.
-        
-        Args:
-            calculated_segments: Segments avec routes calculées
-            
-        Returns:
-            Dict: Route finale assemblée
-        """
-        print("🔧 Assemblage final optimisé...")
-        
-        # Utiliser l'assembleur existant
-        final_route = self.route_assembler.assemble_segments(calculated_segments)
-        
-        if final_route:
-            print("✅ Assemblage réussi")
-            return final_route
-        else:
-            print("❌ Échec assemblage")
-            return None
     
     def _calculate_distance(self, point1: List[float], point2: List[float]) -> float:
         """
@@ -645,3 +676,52 @@ class IntelligentSegmentationStrategyV2Optimized:
         c = 2 * math.asin(math.sqrt(a))
         
         return 6371 * c  # Rayon de la Terre en km
+    
+    def _calculate_distance_meters(self, coord1: List[float], coord2: List[float]) -> float:
+        """
+        Calcule la distance entre deux points en mètres.
+        
+        Args:
+            coord1: Premier point [lat, lon]
+            coord2: Deuxième point [lat, lon]
+            
+        Returns:
+            float: Distance en mètres
+        """
+        import math
+        
+        lat1, lon1 = math.radians(coord1[0]), math.radians(coord1[1])
+        lat2, lon2 = math.radians(coord2[0]), math.radians(coord2[1])
+        
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        
+        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+        c = 2 * math.asin(math.sqrt(a))
+        
+        return 6371000.0 * c  # Rayon de la Terre en mètres
+    
+    def _adapt_segment_format(self, segment: Dict) -> Dict:
+        """
+        Adapte le format d'un segment pour le SegmentRouteCalculator.
+        
+        Args:
+            segment: Segment original
+            
+        Returns:
+            Dict: Segment adapté avec les clés attendues
+        """
+        # Si le segment a déjà le bon format, le retourner tel quel
+        if all(key in segment for key in ['start', 'end', 'type', 'description']):
+            return segment
+        
+        # Sinon, essayer d'adapter le format
+        adapted = {
+            'start': segment.get('start_coord', segment.get('start', [0, 0])),
+            'end': segment.get('end_coord', segment.get('end', [0, 0])),
+            'type': segment.get('segment_type', segment.get('type', 'normal')),
+            'description': segment.get('description', f"Segment {segment.get('id', 'inconnu')}")
+        }
+        
+        print(f"   🔧 Segment adapté : {adapted['description']}")
+        return adapted
