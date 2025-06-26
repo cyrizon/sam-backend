@@ -413,6 +413,13 @@ class OSMDataParser:
             
             print(f"✅ Pré-matching terminé : {len(matched_tolls)} péages traités")
             
+            # Générer un rapport JSON des correspondances OSM/CSV
+            try:
+                from .osm_csv_match_reporter import write_osm_csv_match_report
+                write_osm_csv_match_report(self.toll_stations)
+            except Exception as e:
+                print(f"⚠️ Erreur lors de la génération du rapport de matching OSM/CSV : {e}")
+            
         except Exception as e:
             print(f"⚠️ Erreur pré-matching (non-critique) : {e}")
             # Le pré-matching est optionnel, on continue même en cas d'erreur
