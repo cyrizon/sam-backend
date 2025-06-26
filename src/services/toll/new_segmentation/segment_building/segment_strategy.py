@@ -73,7 +73,7 @@ class SegmentStrategy:
                         current_toll, tolls_before, route_coords
                     )
                     segment = {
-                        'type': 'avoid_tolls',
+                        'segment_type': 'avoid_tolls',
                         'start': current_point,
                         'end': entrance_coords,
                         'description': f"Départ vers entrée stratégique {current_toll.effective_name} (évite {len(tolls_before)} péages)"
@@ -84,7 +84,7 @@ class SegmentStrategy:
                     
                     # Entrée → Péage
                     segment = {
-                        'type': 'normal',
+                        'segment_type': 'normal',
                         'start': current_point,
                         'end': current_toll.osm_coordinates,
                         'description': f"Entrée vers {current_toll.effective_name}"
@@ -95,7 +95,7 @@ class SegmentStrategy:
                 else:
                     # Pas de péages avant : Départ → Péage directement
                     segment = {
-                        'type': 'normal',
+                        'segment_type': 'normal',
                         'start': current_point,
                         'end': current_toll.osm_coordinates,
                         'description': f"Départ vers {current_toll.effective_name}"
@@ -106,7 +106,7 @@ class SegmentStrategy:
             else:
                 # Péage intermédiaire : on y arrive depuis le point précédent
                 segment = {
-                    'type': 'normal',
+                    'segment_type': 'normal',
                     'start': current_point,
                     'end': current_toll.osm_coordinates,
                     'description': f"Vers {current_toll.effective_name}"
@@ -129,7 +129,7 @@ class SegmentStrategy:
                     
                     # Péage → Sortie
                     segment = {
-                        'type': 'normal',
+                        'segment_type': 'normal',
                         'start': current_point,
                         'end': exit_coords,
                         'description': f"{current_toll.effective_name} vers sortie"
@@ -140,7 +140,7 @@ class SegmentStrategy:
                     
                     # Sortie → Arrivée
                     segment = {
-                        'type': 'avoid_tolls',
+                        'segment_type': 'avoid_tolls',
                         'start': current_point,
                         'end': end_coords,
                         'description': f"Sortie vers arrivée (évite {len(tolls_after)} péages)"
@@ -150,7 +150,7 @@ class SegmentStrategy:
                 else:
                     # Pas de péages après : Péage → Arrivée directement
                     segment = {
-                        'type': 'normal',
+                        'segment_type': 'normal',
                         'start': current_point,
                         'end': end_coords,
                         'description': f"{current_toll.effective_name} vers arrivée"
@@ -173,7 +173,7 @@ class SegmentStrategy:
                     
                     # Péage → Sortie
                     segment = {
-                        'type': 'normal',
+                        'segment_type': 'normal',
                         'start': current_point,
                         'end': exit_coords,
                         'description': f"{current_toll.effective_name} vers sortie"
@@ -184,7 +184,7 @@ class SegmentStrategy:
                     
                     # Sortie → Entrée suivant
                     segment = {
-                        'type': 'avoid_tolls',
+                        'segment_type': 'avoid_tolls',
                         'start': current_point,
                         'end': entrance_coords,
                         'description': f"Sortie vers entrée {next_toll.effective_name} (évite {len(tolls_between)} péages)"

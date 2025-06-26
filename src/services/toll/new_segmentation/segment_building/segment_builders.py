@@ -82,7 +82,7 @@ class SegmentBuilders:
             print(f"   📍 Segment 1 : Départ → {first_toll.effective_name} (route normale)")
         
         return {
-            'type': segment_type,
+            'segment_type': segment_type,
             'start': start_coords,
             'end': end_coords,
             'description': f"Départ vers {first_toll.effective_name}"
@@ -125,7 +125,7 @@ class SegmentBuilders:
             print(f"   📍 Segment : {previous_toll.effective_name} → {current_toll.effective_name} (route normale)")
         
         return {
-            'type': segment_type,
+            'segment_type': segment_type,
             'start': start_coords,
             'end': end_coords,
             'description': f"{previous_toll.effective_name} vers {current_toll.effective_name}"
@@ -199,7 +199,7 @@ class SegmentBuilders:
             print(f"   📍 Dernier segment : {last_toll.effective_name} → Arrivée (route normale)")
         
         return {
-            'type': segment_type,
+            'segment_type': segment_type,
             'start': start_coords,
             'end': end_coords,
             'description': description
@@ -239,7 +239,7 @@ class SegmentBuilders:
                 print(f"       🎯 Coordonnées : {start_coords} → {end_coords}")
                 
                 return {
-                    'type': 'normal',  # Route normale jusqu'à la sortie
+                    'segment_type': 'normal',  # Route normale jusqu'à la sortie
                     'start': start_coords,
                     'end': end_coords,
                     'description': f"{toll.effective_name} vers sortie {exit_junction['name']}",
@@ -251,7 +251,7 @@ class SegmentBuilders:
         print(f"   📍 Segment péage → sortie : {toll.effective_name} → sortie (fallback)")
         
         return {
-            'type': 'normal',
+            'segment_type': 'normal',
             'start': toll.osm_coordinates,
             'end': exit_coords,
             'description': f"{toll.effective_name} vers sortie"
@@ -281,7 +281,7 @@ class SegmentBuilders:
         print(f"       🎯 Coordonnées : {exit_coords} → {end_coords}")
         
         return {
-            'type': 'avoid_tolls',  # Route sans péages
+            'segment_type': 'avoid_tolls',  # Route sans péages
             'start': exit_coords,
             'end': end_coords,
             'description': f"Sortie vers arrivée (évite péages)"

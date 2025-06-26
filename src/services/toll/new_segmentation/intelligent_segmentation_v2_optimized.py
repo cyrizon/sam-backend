@@ -123,7 +123,7 @@ class IntelligentSegmentationStrategyV2Optimized:
             
             # Étape 5 : Calcul des routes pour chaque segment
             print("🛣️ Étape 5 : Calcul des routes par segment...")
-            calculated_segments = self._calculate_segments_routes(segments)
+            calculated_segments = self._calculate_segments_routes(segments, base_route_response, tollways_data)
             
             if not calculated_segments:
                 print("❌ Échec calcul des segments")
@@ -539,10 +539,27 @@ class IntelligentSegmentationStrategyV2Optimized:
         
         # Optimiser l'assemblage final pour éviter les redondances
         optimized_segments = self._optimize_final_assembly(avoidance_segments)
-        
+
+        # Marquage des segments réutilisables (mêmes coordonnées que segment de base)
+        base_segments = tollways_data.get('segments', [])
+        for seg in optimized_segments:
+            for idx, base_seg in enumerate(base_segments):
+                # On suppose que les segments ont 'start' et 'end' (coordonnées [lon, lat] ou [lat, lon])
+                seg_start = seg.get('start') or seg.get('start_coord')
+                seg_end = seg.get('end') or seg.get('end_coord')
+                base_start = base_seg.get('start_coord') if 'start_coord' in base_seg else None
+                base_end = base_seg.get('end_coord') if 'end_coord' in base_seg else None
+                # Si les coordonnées sont identiques (tolérance stricte)
+                if seg_start == base_start and seg_end == base_end:
+                    seg['reuse_base_segment'] = True
+                    seg['base_segment_index'] = idx
+                    break
+                else:
+                    seg['reuse_base_segment'] = False
+
         # Appliquer la logique des segments gratuits optimisée
         final_segments = self._apply_free_segments_logic(optimized_segments, selected_tolls)
-        
+
         print(f"✅ {len(final_segments)} segments optimisés créés")
         return final_segments
     
@@ -727,36 +744,56 @@ class IntelligentSegmentationStrategyV2Optimized:
         
         return len(closed_tolls) >= 2
     
-    def _calculate_segments_routes(self, segments: List[Dict]) -> List[Dict]:
+    def _calculate_segments_routes(self, segments: List[Dict], base_route_response: Dict = None, tollways_data: Dict = None) -> List[Dict]:
         """
         Calcule les routes pour chaque segment optimisé.
+        Si un segment est marqué 'reuse_base_segment', on réutilise la portion de la route de base.
         
         Args:
             segments: Segments à calculer
-            
+            base_route_response: Réponse ORS de la route de base (pour réutilisation)
+            tollways_data: Données des segments tollways (pour indexation)
+        
         Returns:
             List[Dict]: Segments avec routes calculées
         """
         print("🛣️ Calcul des routes par segment...")
-        
         calculated_segments = []
-        
+        base_coords = None
+        if base_route_response:
+            base_coords = RouteUtils.extract_route_coordinates(base_route_response)
+        base_segments = tollways_data.get('segments', []) if tollways_data else []
+
         for i, segment in enumerate(segments):
             print(f"   Segment {i+1}/{len(segments)}...")
-            
-            # Adapter le format du segment si nécessaire
+            if segment.get('reuse_base_segment') and base_coords and base_segments:
+                idx = segment.get('base_segment_index')
+                if idx is not None and idx < len(base_segments):
+                    base_seg = base_segments[idx]
+                    start_idx = base_seg.get('start_waypoint')
+                    end_idx = base_seg.get('end_waypoint')
+                    # Extraire portion de la route de base
+                    segment_coords = base_coords[start_idx:end_idx+1]
+                    route_result = {
+                        'geometry': segment_coords,
+                        'start': segment.get('start'),
+                        'end': segment.get('end'),
+                        'segment_type': segment.get('segment_type'),
+                        'description': segment.get('description', 'Segment réutilisé'),
+                        'reused': True
+                    }
+                    calculated_segments.append(route_result)
+                    print(f"   ♻️ Segment {i+1} réutilisé depuis la route de base")
+                    continue
+            # Sinon, calcul classique
             adapted_segment = self._adapt_segment_format(segment)
-            
-            # Calculer la route pour ce segment
             route_result = self.route_calculator.calculate_segment_route(adapted_segment)
-            
             if route_result:
                 calculated_segments.append(route_result)
                 print(f"   ✅ Segment {i+1} calculé")
             else:
                 print(f"   ❌ Échec segment {i+1}")
                 return None  # Échec global si un segment échoue
-        
         print(f"✅ {len(calculated_segments)} segments calculés")
         return calculated_segments
     
@@ -778,33 +815,35 @@ class IntelligentSegmentationStrategyV2Optimized:
         # Regrouper les segments consécutifs d'évitement
         optimized = []
         i = 0
-        
+        last_end = None
         while i < len(segments):
             current_segment = segments[i]
-            
-            if current_segment.get('type') == 'avoid_tolls':
+            # Vérification de la continuité des coordonnées
+            current_start = current_segment.get('start') or current_segment.get('start_coord')
+            if last_end is not None and current_start != last_end:
+                print(f"   ⚠️ Segment {i} ignoré : début {current_start} ne correspond pas à la fin précédente {last_end}")
+                i += 1
+                continue
+            if current_segment.get('segment_type') == 'avoid_tolls':
                 # Regrouper tous les segments d'évitement consécutifs
                 avoidance_group = [current_segment]
                 j = i + 1
-                
-                while j < len(segments) and segments[j].get('type') == 'avoid_tolls':
+                while j < len(segments) and segments[j].get('segment_type') == 'avoid_tolls':
                     avoidance_group.append(segments[j])
                     j += 1
-                
                 if len(avoidance_group) > 1:
-                    # Fusionner les segments d'évitement consécutifs
                     merged_segment = self._merge_avoidance_segments(avoidance_group)
                     optimized.append(merged_segment)
                     print(f"   🔗 {len(avoidance_group)} segments d'évitement fusionnés")
+                    last_end = merged_segment.get('end') or merged_segment.get('end_coord')
                 else:
                     optimized.append(current_segment)
-                
+                    last_end = current_segment.get('end') or current_segment.get('end_coord')
                 i = j
             else:
-                # Segment normal
                 optimized.append(current_segment)
+                last_end = current_segment.get('end') or current_segment.get('end_coord')
                 i += 1
-        
         print(f"   ✅ {len(optimized)} segments après optimisation")
         return optimized
     
@@ -832,7 +871,7 @@ class IntelligentSegmentationStrategyV2Optimized:
             
             if global_route:
                 return {
-                    'type': 'avoid_tolls',
+                    'segment_type': 'avoid_tolls',
                     'strategy': 'merged_avoidance',
                     'start': first['start_coord'],
                     'end': last['end_coord'],
@@ -907,15 +946,15 @@ class IntelligentSegmentationStrategyV2Optimized:
             Dict: Segment adapté avec les clés attendues
         """
         # Si le segment a déjà le bon format, le retourner tel quel
-        if all(key in segment for key in ['start', 'end', 'type', 'description']):
+        if all(key in segment for key in ['start', 'end', 'segment_type', 'description']):
             return segment
         
         # Sinon, essayer d'adapter le format
         adapted = {
             'start': segment.get('start_coord', segment.get('start', [0, 0])),
             'end': segment.get('end_coord', segment.get('end', [0, 0])),
-            'type': segment.get('type', segment.get('segment_type', 'normal')),
-            'description': segment.get('description', f"Segment {segment.get('type', 'normal')} {segment.get('id', 'inconnu')}")
+            'segment_type': segment.get('segment_type', segment.get('type', 'normal')),
+            'description': segment.get('description', f"Segment {segment.get('segment_type', 'normal')} {segment.get('id', 'inconnu')}")
         }
         
         print(f"   🔧 Segment adapté : {adapted['description']}")

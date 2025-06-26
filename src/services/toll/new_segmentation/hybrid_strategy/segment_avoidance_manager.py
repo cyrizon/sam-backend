@@ -144,7 +144,7 @@ class SegmentAvoidanceManager:
                 segment_coords = self._extract_segment_coordinates(segment, route_coords)
                 if segment_coords:
                     normal_segment = {
-                        'type': 'normal',
+                        'segment_type': 'normal',
                         'start': segment_coords[0],
                         'end': segment_coords[-1],
                         'start_coord': segment_coords[0],
@@ -216,7 +216,7 @@ class SegmentAvoidanceManager:
             
             if avoidance_route:
                 return {
-                    'type': 'avoid_tolls',
+                    'segment_type': 'avoid_tolls',
                     'strategy': 'end_to_end',
                     'start': start_coord,
                     'end': end_coord,
@@ -252,7 +252,7 @@ class SegmentAvoidanceManager:
             
             if avoidance_route:
                 return {
-                    'type': 'avoid_tolls',
+                    'segment_type': 'avoid_tolls',
                     'strategy': 'start_to_end',
                     'start': start_coord,
                     'end': end_coord,
@@ -293,7 +293,7 @@ class SegmentAvoidanceManager:
                 
                 if avoidance_route:
                     return {
-                        'type': 'avoid_tolls',
+                        'segment_type': 'avoid_tolls',
                         'strategy': 'exit_to_entrance',
                         'start': exit_coord,
                         'end': entrance_coord,
@@ -591,7 +591,7 @@ class SegmentAvoidanceManager:
             
             if avoidance_route:
                 return {
-                    'type': 'avoid_tolls',
+                    'segment_type': 'avoid_tolls',
                     'strategy': 'grouped_avoidance',
                     'start': start_coord,
                     'end': end_coord,

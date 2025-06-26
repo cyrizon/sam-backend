@@ -34,7 +34,7 @@ class SegmentRouteCalculator:
         Returns:
             Dict: Route calculée ou None si échec
         """
-        segment_type = segment['type']
+        segment_type = segment['segment_type']
         coordinates = [segment['start'], segment['end']]
         description = segment['description']
         
