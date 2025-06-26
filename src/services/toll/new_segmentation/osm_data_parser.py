@@ -24,6 +24,8 @@ class MotorwayJunction:
     coordinates: List[float]  # [lon, lat]
     properties: Dict
     linked_motorway_links: List['MotorwayLink'] = field(default_factory=list)  # Chaîne de liens associés
+    toll: bool = False  # Indique si la sortie possède un péage
+    toll_station: Optional['MatchedToll'] = None  # Référence vers le péage s'il existe
     
     def distance_to(self, point: List[float]) -> float:
         """Calcule la distance à un point en km."""
@@ -207,7 +209,7 @@ class OSMDataParser:
                 operator = properties.get('operator')
                 if not operator or operator.strip() == '':
                     # Exclure les péages sans opérateur (souvent obsolètes ou non-officiels)
-                    print(f"   🚫 Péage {properties.get('name', 'Sans nom')} exclu : pas d'opérateur")
+                    # print(f"   🚫 Péage {properties.get('name', 'Sans nom')} exclu : pas d'opérateur")
                     return
                 
                 # Déterminer le type de péage
@@ -223,7 +225,7 @@ class OSMDataParser:
                     properties=properties
                 )
                 self.toll_stations.append(station)
-                print(f"   ✅ Péage {properties.get('name', 'Sans nom')} inclus : opérateur '{operator}'")
+                # print(f"   ✅ Péage {properties.get('name', 'Sans nom')} inclus : opérateur '{operator}'")
     
     def _is_toll_station(self, properties: Dict) -> bool:
         """
@@ -407,7 +409,10 @@ class OSMDataParser:
             
             # Effectuer le matching avec les données CSV
             matched_tolls = matcher.match_osm_tolls_with_csv(osm_tolls_dict, max_distance_km=5.0)
-            
+
+            # Appel de la fonction pour lier les junctions aux péages de sortie
+            self.link_junctions_with_tolls(matched_tolls)
+
             # Associer les résultats du matching aux toll_stations
             self._associate_csv_matches(matched_tolls)
             
@@ -454,12 +459,65 @@ class OSMDataParser:
                 
                 role_str = f"({match.csv_role})" if match.csv_role else "(role inconnue)"
                 csv_name_display = match.csv_name or "Nom CSV manquant"
-                print(f"   ✅ {toll_station.name or 'Sans nom'} → {csv_name_display} {role_str}")
+                # print(f"   ✅ {toll_station.name or 'Sans nom'} → {csv_name_display} {role_str}")
                 
             else:
                 # Péage non matché - sera considéré comme fermé (csv_role='F')
                 toll_station.csv_match = None
                 unmatched_count += 1
-                print(f"   🔍 {toll_station.name or 'Sans nom'} → Non matché (considéré fermé)")
+                # print(f"   🔍 {toll_station.name or 'Sans nom'} → Non matché (considéré fermé)")
         
         print(f"   📊 Résultats matching : {matched_count} matchés, {unmatched_count} non-matchés")
+    
+    def link_junctions_with_tolls(self, matched_tolls: list, max_distance_m: float = 2.0):
+        """
+        Pour chaque motorway_junction, cherche un péage sur une de ses motorway_links (<2m de la polyligne).
+        Si trouvé, met à jour les attributs toll et toll_station.
+        """
+        for junction in getattr(self, 'motorway_junctions', []):
+            found = False
+            for link in getattr(junction, 'linked_motorway_links', []):
+                for toll in matched_tolls:
+                    dist = self._distance_point_to_polyline_meters(toll.osm_coordinates, getattr(link, 'coordinates', []))
+                    if dist < max_distance_m:
+                        junction.toll = True
+                        junction.toll_station = toll
+                        found = True
+                        break
+                if found:
+                    break
+            if not found:
+                junction.toll = False
+                junction.toll_station = None
+        # Affiche le nombre de sorties avec péage
+        n_exit_tolls = sum(1 for j in getattr(self, 'motorway_junctions', []) if j.toll)
+        print(f"[OSMDataParser] Nombre de sorties avec péage : {n_exit_tolls}")
+    
+    def _distance_point_to_polyline_meters(self, pt, polyline):
+        """
+        Calcule la distance minimale (en mètres) entre un point pt et une polyligne (liste de [lon, lat]).
+        """
+        import math
+        min_dist = float('inf')
+        for i in range(len(polyline) - 1):
+            seg_a = polyline[i]
+            seg_b = polyline[i + 1]
+            # Adapté de _distance_point_to_segment_meters
+            lon1, lat1 = math.radians(seg_a[0]), math.radians(seg_a[1])
+            lon2, lat2 = math.radians(seg_b[0]), math.radians(seg_b[1])
+            lonp, latp = math.radians(pt[0]), math.radians(pt[1])
+            R = 6371000.0
+            x1, y1 = R * lon1 * math.cos((lat1+lat2)/2), R * lat1
+            x2, y2 = R * lon2 * math.cos((lat1+lat2)/2), R * lat2
+            xp, yp = R * lonp * math.cos((lat1+lat2)/2), R * latp
+            dx, dy = x2 - x1, y2 - y1
+            if dx == 0 and dy == 0:
+                dist = math.hypot(xp - x1, yp - y1)
+            else:
+                t = ((xp - x1) * dx + (yp - y1) * dy) / (dx*dx + dy*dy)
+                t = max(0, min(1, t))
+                x_proj, y_proj = x1 + t * dx, y1 + t * dy
+                dist = math.hypot(xp - x_proj, yp - y_proj)
+            if dist < min_dist:
+                min_dist = dist
+        return min_dist

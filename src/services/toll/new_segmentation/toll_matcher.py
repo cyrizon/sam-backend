@@ -148,8 +148,8 @@ class TollMatcher:
                 
                 matched_tolls.append(matched_toll)
                 
-                print(f"   ✅ {osm_toll.get('name', 'Péage')} → {best_match.get('name_base', 'Nom CSV manquant')} "
-                      f"({min_distance:.0f}m, {best_match.get('role', '')}-système)")
+                # print(f"   ✅ {osm_toll.get('name', 'Péage')} → {best_match.get('name_base', 'Nom CSV manquant')} "
+                #       f"({min_distance:.0f}m, {best_match.get('role', '')}-système)")
             else:
                 # Péage OSM sans équivalent CSV
                 unmatched_toll = MatchedToll(
@@ -165,7 +165,7 @@ class TollMatcher:
                 )
                 
                 matched_tolls.append(unmatched_toll)
-                print(f"   ⚠️ {osm_toll.get('name', 'Péage')} → Aucun équivalent CSV trouvé")
+                # print(f"   ⚠️ {osm_toll.get('name', 'Péage')} → Aucun équivalent CSV trouvé")
         
         return matched_tolls
     
