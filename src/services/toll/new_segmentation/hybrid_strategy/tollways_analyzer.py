@@ -254,6 +254,9 @@ class TollwaysAnalyzer:
                 
                 # Si les deux péages les plus proches sont fermés
                 if closest_before['is_closed_system'] and closest_after['is_closed_system']:
+                    # Correction : marquer ce segment comme payant
+                    free_segment['segment']['is_toll'] = True
+                    free_segment['segment']['segment_type'] = 'toll'
                     fake_free_segments.append({
                         'segment': free_segment,
                         'peage_before': closest_before['toll'],

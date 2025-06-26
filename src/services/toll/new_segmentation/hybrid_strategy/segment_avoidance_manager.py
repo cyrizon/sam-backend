@@ -58,18 +58,76 @@ class SegmentAvoidanceManager:
         print(f"   🔍 DEBUG: type(segments_to_avoid) = {type(segments_to_avoid)}")
         print(f"   🔍 DEBUG: len(tollways_segments) = {len(tollways_segments)}")
         
+        # Regrouper les segments consécutifs à éviter
+        avoidance_groups = self._group_consecutive_segments_to_avoid(segments_to_avoid)
+        print(f"   📊 {len(avoidance_groups)} groupe(s) d'évitement détecté(s)")
+        
         avoidance_segments = []
         current_position = start_coord
+        processed_segments = set()  # Pour éviter les doublons
+        covered_indices = set()     # Pour éviter d'ajouter des segments normaux déjà couverts
+        for group in avoidance_groups:
+            covered_indices.update(range(group[0], group[-1]+1))
         
         for i, segment in enumerate(tollways_segments):
+            if i in processed_segments:
+                print(f"   ⏭️ Segment {i} déjà traité, ignoré")
+                continue
+            
+            # Correction : ne pas ajouter de segment normal si déjà couvert par un évitement groupé
+            if i not in segments_to_avoid and i in covered_indices:
+                print(f"   ⏭️ Segment {i} normal déjà couvert par un évitement groupé, ignoré")
+                processed_segments.add(i)
+                continue
+            
             print(f"   🔍 DEBUG: Segment {i}, à éviter ? {i in segments_to_avoid}")
-            if i in segments_to_avoid:  # Comparer l'index, pas l'objet segment
-                # Segment à éviter → Créer un segment d'évitement
+            
+            # Vérifier si ce segment est dans un groupe d'évitement
+            avoidance_group = self._find_avoidance_group_for_segment(i, avoidance_groups)
+            
+            if avoidance_group and i == avoidance_group[0]:  # Premier segment du groupe
+                # Créer un évitement groupé pour tous les segments consécutifs
+                print(f"   🚫 Évitement groupé segments {avoidance_group[0]} à {avoidance_group[-1]}")
+                
+                avoidance_segment = self._create_grouped_avoidance_segment(
+                    avoidance_group, tollways_segments, route_coords, segments_to_avoid
+                )
+                
+                if avoidance_segment:
+                    avoidance_segments.append(avoidance_segment)
+                    current_position = avoidance_segment['end_coord']
+                    print(f"      ✅ Évitement groupé créé avec succès")
+                    # Marquer tous les segments du groupe comme traités
+                    processed_segments.update(avoidance_group)
+                else:
+                    print(f"      ❌ Évitement groupé échoué, segments traités individuellement")
+                    # Fallback : traiter individuellement
+                    for seg_idx in avoidance_group:
+                        segment_to_avoid = tollways_segments[seg_idx]
+                        prev_free = self._find_previous_free_segment(tollways_segments, seg_idx, segments_to_avoid)
+                        next_free = self._find_next_free_segment(tollways_segments, seg_idx, segments_to_avoid)
+                        
+                        single_avoidance = self._create_single_avoidance_segment(
+                            segment_to_avoid, prev_free, next_free, route_coords
+                        )
+                        if single_avoidance:
+                            avoidance_segments.append(single_avoidance)
+                            current_position = single_avoidance['end_coord']
+                        
+                        # Marquer ce segment comme traité
+                        processed_segments.add(seg_idx)
+                
+            elif avoidance_group:
+                # Segment déjà traité dans le groupe, passer
+                print(f"   ⏭️ Segment {i} déjà traité dans groupe, ignoré")
+                continue
+                
+            elif i in segments_to_avoid:
+                # Segment individuel à éviter (pas dans un groupe)
                 print(f"   🚫 Évitement segment {i} : {segment['start_waypoint']}-{segment['end_waypoint']}")
                 
-                # Trouver le segment gratuit précédent et suivant
-                prev_free_segment = self._find_previous_free_segment(tollways_segments, i)
-                next_free_segment = self._find_next_free_segment(tollways_segments, i)
+                prev_free_segment = self._find_previous_free_segment(tollways_segments, i, segments_to_avoid)
+                next_free_segment = self._find_next_free_segment(tollways_segments, i, segments_to_avoid)
                 
                 avoidance_segment = self._create_single_avoidance_segment(
                     segment, prev_free_segment, next_free_segment, route_coords
@@ -78,6 +136,8 @@ class SegmentAvoidanceManager:
                 if avoidance_segment:
                     avoidance_segments.append(avoidance_segment)
                     current_position = avoidance_segment['end_coord']
+                
+                processed_segments.add(i)
                 
             else:
                 # Segment normal → Garder tel quel
@@ -95,6 +155,8 @@ class SegmentAvoidanceManager:
                     }
                     avoidance_segments.append(normal_segment)
                     current_position = normal_segment['end_coord']
+                
+                processed_segments.add(i)
         
         print(f"   ✅ {len(avoidance_segments)} segments d'évitement créés")
         return avoidance_segments
@@ -245,19 +307,61 @@ class SegmentAvoidanceManager:
             print(f"         ⚠️ Erreur stratégie 3 : {e}")
         
         return None
-    
-    def _find_previous_free_segment(self, segments: List[Dict], current_index: int) -> Optional[Dict]:
-        """Trouve le segment gratuit précédent."""
+
+    def _find_previous_free_segment(self, segments: List[Dict], current_index: int, segments_to_avoid: List[int] = None) -> Optional[Dict]:
+        """
+        Trouve le segment gratuit précédent.
+        
+        Args:
+            segments: Liste des segments
+            current_index: Index du segment courant
+            segments_to_avoid: Liste des indices de segments à éviter (faux segments gratuits inclus)
+        """
+        segments_to_avoid = segments_to_avoid or []
+        
         for i in range(current_index - 1, -1, -1):
-            if not segments[i]['is_toll']:  # Segment gratuit si NOT is_toll
+            # Segment gratuit ET pas dans la liste à éviter
+            if not segments[i]['is_toll'] and i not in segments_to_avoid:
+                return segments[i]
+        return None
+
+    def _find_next_free_segment(self, segments: List[Dict], current_index: int, segments_to_avoid: List[int] = None) -> Optional[Dict]:
+        """
+        Trouve le segment gratuit suivant.
+        
+        Args:
+            segments: Liste des segments
+            current_index: Index du segment courant
+            segments_to_avoid: Liste des indices de segments à éviter (faux segments gratuits inclus)
+        """
+        segments_to_avoid = segments_to_avoid or []
+        
+        for i in range(current_index + 1, len(segments)):
+            # Segment gratuit ET pas dans la liste à éviter
+            if not segments[i]['is_toll'] and i not in segments_to_avoid:
                 return segments[i]
         return None
     
-    def _find_next_free_segment(self, segments: List[Dict], current_index: int) -> Optional[Dict]:
-        """Trouve le segment gratuit suivant."""
+    def _find_previous_free_segment_index(self, segments: List[Dict], current_index: int, segments_to_avoid: List[int] = None) -> Optional[int]:
+        """
+        Trouve l'index du segment gratuit précédent (pour debug).
+        """
+        segments_to_avoid = segments_to_avoid or []
+        
+        for i in range(current_index - 1, -1, -1):
+            if not segments[i]['is_toll'] and i not in segments_to_avoid:
+                return i
+        return None
+
+    def _find_next_free_segment_index(self, segments: List[Dict], current_index: int, segments_to_avoid: List[int] = None) -> Optional[int]:
+        """
+        Trouve l'index du segment gratuit suivant (pour debug).
+        """
+        segments_to_avoid = segments_to_avoid or []
+        
         for i in range(current_index + 1, len(segments)):
-            if not segments[i]['is_toll']:  # Segment gratuit si NOT is_toll
-                return segments[i]
+            if not segments[i]['is_toll'] and i not in segments_to_avoid:
+                return i
         return None
     
     def _extract_segment_coordinates(self, segment: Dict, route_coords: List[List[float]]) -> List[List[float]]:
@@ -303,21 +407,41 @@ class SegmentAvoidanceManager:
     
     def _find_first_entrance_in_segment(self, segment_coords: List[List[float]]) -> Optional[List[float]]:
         """
-        Trouve la DEUXIÈME motorway_junction dans un segment et retourne ses coordonnées directement.
+        Trouve une junction d'entrée dans un segment et retourne ses coordonnées directement.
         
-        Logique :
-        - Première junction = Sortie + Entrée proche (souvent après la sortie) ❌
-        - Deuxième junction = Entrée plus loin → ORS peut calculer un itinéraire valide ✅
-        - On prend directement le point junction (pas le point final de motorway_link)
+        IMPORTANT: Ce segment doit être un segment GRATUIT, pas un segment à éviter.
+        Les coordonnées retournées doivent être sur la route principale pour que ORS puisse calculer.
         """
         if not segment_coords:
             return None
         
+        print(f"         🔍 Recherche d'entrée dans segment de {len(segment_coords)} points")
+        
         # Chercher toutes les motorway_junctions sur la route du segment
         from src.services.osm_data_cache import osm_data_cache
         
-        # Trouver les junctions sur ce segment de route
-        junctions_on_segment = osm_data_cache._osm_parser.find_junctions_near_route(segment_coords, max_distance_km=1.0)
+        # Trouver les junctions dans un rayon élargi d'abord
+        junctions_candidate = osm_data_cache._osm_parser.find_junctions_near_route(segment_coords, max_distance_km=1.0)
+        
+        # Filtrer strictement : garder seulement celles à moins de 10m de la route
+        junctions_on_segment = []
+        for junction in junctions_candidate:
+            junction_coords = junction.coordinates
+            min_distance_m = float('inf')
+            
+            # Trouver la distance minimale à la route
+            for route_point in segment_coords:
+                distance_m = self._calculate_distance_meters(junction_coords, route_point)
+                min_distance_m = min(min_distance_m, distance_m)
+            
+            # Garder seulement si vraiment proche de la route (pas sur l'autre sens)
+            if min_distance_m <= 10.0:  # 10m max au lieu de 1km
+                junctions_on_segment.append(junction)
+                print(f"         ✅ Junction gardée : {junction.properties.get('name', 'sans nom')} à {min_distance_m:.1f}m")
+            else:
+                print(f"         ❌ Junction écartée : {junction.properties.get('name', 'sans nom')} à {min_distance_m:.1f}m (trop loin)")
+        
+        print(f"         📊 {len(junctions_on_segment)}/{len(junctions_candidate)} junctions gardées après filtrage strict")
         
         if len(junctions_on_segment) < 2:
             if len(junctions_on_segment) == 1:
@@ -336,3 +460,151 @@ class SegmentAvoidanceManager:
         
         print(f"         ✅ Entrée trouvée : {entrance_junction.properties.get('name', 'sans nom')} → {entrance_coords}")
         return entrance_coords
+    
+    def _calculate_distance_meters(self, coord1: List[float], coord2: List[float]) -> float:
+        """
+        Calcule la distance entre deux points en mètres.
+        
+        Args:
+            coord1: Premier point [lon, lat]
+            coord2: Deuxième point [lon, lat]
+            
+        Returns:
+            float: Distance en mètres
+        """
+        import math
+        
+        lat1, lon1 = math.radians(coord1[1]), math.radians(coord1[0])
+        lat2, lon2 = math.radians(coord2[1]), math.radians(coord2[0])
+        
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        
+        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+        c = 2 * math.asin(math.sqrt(a))
+        
+        return 6371000.0 * c  # Rayon de la Terre en mètres
+    
+    def _group_consecutive_segments_to_avoid(self, segments_to_avoid: List[int]) -> List[List[int]]:
+        """
+        Regroupe les segments consécutifs à éviter.
+        
+        Args:
+            segments_to_avoid: Liste des indices de segments à éviter
+            
+        Returns:
+            List[List[int]]: Groupes de segments consécutifs
+        """
+        if not segments_to_avoid:
+            return []
+        
+        # Trier les indices
+        sorted_segments = sorted(segments_to_avoid)
+        groups = []
+        current_group = [sorted_segments[0]]
+        
+        for i in range(1, len(sorted_segments)):
+            if sorted_segments[i] == sorted_segments[i-1] + 1:
+                # Segment consécutif, ajouter au groupe actuel
+                current_group.append(sorted_segments[i])
+            else:
+                # Gap détecté, commencer un nouveau groupe
+                groups.append(current_group)
+                current_group = [sorted_segments[i]]
+        
+        # Ajouter le dernier groupe
+        groups.append(current_group)
+        
+        # Debug
+        for i, group in enumerate(groups):
+            if len(group) > 1:
+                print(f"      📦 Groupe {i+1}: segments {group[0]}-{group[-1]} ({len(group)} segments)")
+            else:
+                print(f"      📦 Groupe {i+1}: segment {group[0]} (individuel)")
+        
+        return groups
+    
+    def _find_avoidance_group_for_segment(self, segment_index: int, avoidance_groups: List[List[int]]) -> Optional[List[int]]:
+        """
+        Trouve le groupe d'évitement contenant un segment donné.
+        
+        Args:
+            segment_index: Index du segment
+            avoidance_groups: Groupes d'évitement
+            
+        Returns:
+            List[int]: Groupe contenant le segment, ou None
+        """
+        for group in avoidance_groups:
+            if segment_index in group:
+                return group
+        return None
+    
+    def _create_grouped_avoidance_segment(
+        self,
+        avoidance_group: List[int],
+        tollways_segments: List[Dict],
+        route_coords: List[List[float]],
+        segments_to_avoid: List[int]
+    ) -> Optional[Dict]:
+        """
+        Crée un segment d'évitement pour un groupe de segments consécutifs.
+        
+        Args:
+            avoidance_group: Indices des segments à éviter (consécutifs)
+            tollways_segments: Tous les segments tollways
+            route_coords: Coordonnées de la route
+            segments_to_avoid: Tous les segments à éviter (pour éviter les faux segments gratuits)
+            
+        Returns:
+            Dict: Segment d'évitement groupé ou None
+        """
+        if not avoidance_group:
+            return None
+        
+        first_segment_idx = avoidance_group[0]
+        last_segment_idx = avoidance_group[-1]
+        
+        print(f"      🔗 Création évitement groupé : segments {first_segment_idx} à {last_segment_idx}")
+        
+        # Trouver le segment gratuit avant le premier et après le dernier
+        # En évitant les faux segments gratuits qui sont aussi dans segments_to_avoid
+        prev_free_segment = self._find_previous_free_segment(tollways_segments, first_segment_idx, segments_to_avoid)
+        next_free_segment = self._find_next_free_segment(tollways_segments, last_segment_idx, segments_to_avoid)
+        
+        if not prev_free_segment or not next_free_segment:
+            print(f"      ❌ Pas de vrais segments gratuits adjacents trouvés")
+            prev_idx = self._find_previous_free_segment_index(tollways_segments, first_segment_idx, segments_to_avoid)
+            next_idx = self._find_next_free_segment_index(tollways_segments, last_segment_idx, segments_to_avoid)
+            print(f"      📍 Segment gratuit précédent : {prev_idx}, suivant : {next_idx}")
+            return None
+        
+        # Stratégie groupée : Fin du segment gratuit précédent → Début du segment gratuit suivant
+        try:
+            start_coord = route_coords[prev_free_segment['end_waypoint']]
+            end_coord = route_coords[next_free_segment['start_waypoint']]
+            
+            print(f"      🎯 Évitement groupé : {start_coord} → {end_coord}")
+            
+            # Calculer route sans péage
+            avoidance_route = self.ors.get_route_avoid_tollways([start_coord, end_coord])
+            
+            if avoidance_route:
+                return {
+                    'type': 'avoid_tolls',
+                    'strategy': 'grouped_avoidance',
+                    'start': start_coord,
+                    'end': end_coord,
+                    'start_coord': start_coord,
+                    'end_coord': end_coord,
+                    'route': avoidance_route,
+                    'avoided_segments': avoidance_group,
+                    'description': f"Évitement groupé segments {first_segment_idx}-{last_segment_idx}"
+                }
+            else:
+                print(f"      ❌ Impossible de calculer route d'évitement groupée")
+                
+        except Exception as e:
+            print(f"      ❌ Erreur évitement groupé : {e}")
+        
+        return None
