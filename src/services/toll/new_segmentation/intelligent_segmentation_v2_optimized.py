@@ -266,17 +266,20 @@ class IntelligentSegmentationStrategyV2Optimized:
             tolls_on_segments.extend(segment_tolls)
         
         # Filtrage strict : garder seulement les péages à moins de 1m de la route
-        print("🎯 Filtrage strict des péages (distance < 1m)...")
+        print("🎯 Filtrage strict des péages (distance < 1m, point-segment)...")
         strict_tolls = []
         for toll in tolls_on_segments:
             min_distance_m = float('inf')
-            for coord in route_coords:
-                dist_m = self._calculate_distance_meters(
-                    [toll.osm_coordinates[1], toll.osm_coordinates[0]], 
-                    [coord[1], coord[0]]
-                )
-                min_distance_m = min(min_distance_m, dist_m)
-            
+            closest_pair = (None, None)
+            pt = toll.osm_coordinates  # [lon, lat]
+            for i in range(len(route_coords) - 1):
+                seg_a = route_coords[i]
+                seg_b = route_coords[i+1]
+                dist = self._distance_point_to_segment_meters(pt, seg_a, seg_b)
+                if dist < min_distance_m:
+                    min_distance_m = dist
+                    closest_pair = (seg_a, seg_b)
+            print(f"   [DEBUG] {toll.effective_name} @ {pt} | plus proche segment: {closest_pair[0]} -> {closest_pair[1]} | min_distance={min_distance_m:.2f}m")
             if min_distance_m <= 1.0:  # 1m max
                 strict_tolls.append(toll)
                 print(f"   ✅ {toll.effective_name} : {min_distance_m:.1f}m")
@@ -367,7 +370,7 @@ class IntelligentSegmentationStrategyV2Optimized:
         max_distance_km = 2.0  # Distance max pour considérer un péage sur le segment
         
         for toll in prematched_tolls:
-            toll_coords = toll.osm_coordinates or toll.csv_coordinates
+            toll_coords = toll.osm_coordinates #or toll.csv_coordinates
             if not toll_coords:
                 continue
             
@@ -949,6 +952,31 @@ class IntelligentSegmentationStrategyV2Optimized:
         
         return 6371000.0 * c  # Rayon de la Terre en mètres
     
+    def _distance_point_to_segment_meters(self, pt, seg_a, seg_b):
+        """
+        Calcule la distance minimale (en mètres) entre un point pt et un segment [seg_a, seg_b] (coordonnées [lon, lat]).
+        Utilise une projection simple sur le plan local (approximation suffisante pour <1km).
+        """
+        import math
+        # Convertir en radians
+        lon1, lat1 = math.radians(seg_a[0]), math.radians(seg_a[1])
+        lon2, lat2 = math.radians(seg_b[0]), math.radians(seg_b[1])
+        lonp, latp = math.radians(pt[0]), math.radians(pt[1])
+        # Convertir en coordonnées cartésiennes locales (approximation)
+        R = 6371000.0
+        x1, y1 = R * lon1 * math.cos((lat1+lat2)/2), R * lat1
+        x2, y2 = R * lon2 * math.cos((lat1+lat2)/2), R * lat2
+        xp, yp = R * lonp * math.cos((lat1+lat2)/2), R * latp
+        # Calcul du projeté
+        dx, dy = x2 - x1, y2 - y1
+        if dx == 0 and dy == 0:
+            # Segment dégénéré
+            return math.hypot(xp - x1, yp - y1)
+        t = ((xp - x1) * dx + (yp - y1) * dy) / (dx*dx + dy*dy)
+        t = max(0, min(1, t))
+        x_proj, y_proj = x1 + t * dx, y1 + t * dy
+        return math.hypot(xp - x_proj, yp - y_proj)
+
     def _adapt_segment_format(self, segment: Dict) -> Dict:
         """
         Adapte le format d'un segment pour le SegmentRouteCalculator.
