@@ -142,6 +142,29 @@ class IntelligentSegmentationStrategyV2Optimized:
             print("✅ Segmentation V2 Optimisée réussie")
             return final_route
     
+    def _merge_small_tollway_segments(self, segments: List[Dict], min_waypoints: int = 50) -> List[Dict]:
+        """
+        Fusionne les petits segments tollways (écart de waypoints < min_waypoints) avec le segment précédent payant.
+        """
+        if not segments:
+            return []
+        merged_segments = []
+        for i, seg in enumerate(segments):
+            start_wp = seg.get('start_waypoint')
+            end_wp = seg.get('end_waypoint')
+            n_wp = None
+            if start_wp is not None and end_wp is not None:
+                n_wp = end_wp - start_wp
+            if n_wp is not None and n_wp < min_waypoints and i > 0:
+                prev = merged_segments[-1]
+                if prev.get('is_toll'):
+                    print(f"   🔗 Fusion du petit segment tollway {i} (waypoints {n_wp}) avec le précédent payant (fusion précoce)")
+                    prev['end_waypoint'] = seg.get('end_waypoint', prev.get('end_waypoint'))
+                    prev['segment_type'] = prev.get('segment_type', 'toll')
+                    continue  # ne pas ajouter ce segment
+            merged_segments.append(seg)
+        return merged_segments
+
     def _get_base_route_with_tollways(self, coordinates: List[List[float]]) -> Tuple[Optional[Dict], Optional[Dict]]:
         """
         Obtient la route de base avec les segments tollways.
@@ -150,22 +173,19 @@ class IntelligentSegmentationStrategyV2Optimized:
             Tuple[route_response, tollways_data]: Réponse ORS complète et données tollways
         """
         print("🛣️ Étape 1 : Route de base + segments tollways...")
-
         response = self.ors.get_base_route(coordinates, include_tollways=True)
         if not response or "features" not in response or not response["features"]:
             print("❌ Échec obtention route de base")
             return None, None
-
         base_feature = response["features"][0]
         properties = base_feature.get("properties", {})
-
-        # Extraire segments tollways à partir des propriétés
         tollways_data = self._extract_tollways_segments(properties)
         if not tollways_data:
             print("⚠️ Aucun segment tollway trouvé")
             return response, {'segments': []}
-
-        print(f"✅ Route de base obtenue avec {len(tollways_data['segments'])} segments tollways")
+        # Fusionner les petits segments tollways dès le départ
+        tollways_data['segments'] = self._merge_small_tollway_segments(tollways_data['segments'], min_waypoints=50)
+        print(f"✅ Route de base obtenue avec {len(tollways_data['segments'])} segments tollways (après fusion petits segments)")
         return response, tollways_data
 
     def _extract_tollways_segments(self, properties: Dict) -> Optional[Dict]:
@@ -800,12 +820,6 @@ class IntelligentSegmentationStrategyV2Optimized:
     def _optimize_final_assembly(self, segments: List[Dict]) -> List[Dict]:
         """
         Optimise l'assemblage final des segments pour éviter les redondances.
-        
-        Args:
-            segments: Segments bruts créés
-            
-        Returns:
-            List[Dict]: Segments optimisés et assemblés
         """
         if not segments:
             return []
@@ -844,7 +858,7 @@ class IntelligentSegmentationStrategyV2Optimized:
                 optimized.append(current_segment)
                 last_end = current_segment.get('end') or current_segment.get('end_coord')
                 i += 1
-        print(f"   ✅ {len(optimized)} segments après optimisation")
+        print(f"   ✅ {len(optimized)} segments après optimisation finale")
         return optimized
     
     def _merge_avoidance_segments(self, avoidance_segments: List[Dict]) -> Dict:
