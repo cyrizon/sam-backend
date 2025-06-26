@@ -77,7 +77,7 @@ class RouteCalculator:
     def _locate_tolls_with_tracking(self, route, operation_suffix):
         """Localise les péages avec tracking des performances."""
         with performance_tracker.measure_operation(f"{Config.Operations.LOCATE_TOLLS}_{operation_suffix}"):
-            return locate_tolls(route, Config.get_barriers_csv_path(), buffer_m=Config.TOLL_DETECTION_BUFFER_M)["on_route"]
+            return locate_tolls(route, buffer_m=1.0, veh_class="c1")["on_route"]
     
     def _avoid_tolls_and_recalculate(self, coordinates, unwanted_tolls, part_name):
         """Évite les péages indésirables et recalcule la route."""
@@ -112,7 +112,7 @@ class RouteCalculator:
     def locate_and_cost_tolls(self, route, veh_class, operation_name=Config.Operations.LOCATE_TOLLS):
         """Localise les péages et calcule leurs coûts avec cache intelligent optimisé."""
         with performance_tracker.measure_operation(operation_name):
-            tolls_dict = locate_tolls(route, Config.get_barriers_csv_path(), buffer_m=Config.TOLL_DETECTION_BUFFER_M)
+            tolls_dict = locate_tolls(route, buffer_m=1.0, veh_class="c1")
             tolls_on_route = tolls_dict["on_route"]
             # Utiliser le cache intelligent qui respecte les séquences de péages fermés
             add_marginal_cost_smart_cached(tolls_on_route, veh_class)

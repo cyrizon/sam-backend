@@ -100,11 +100,11 @@ class IntelligentSegmentationStrategyV2Optimized:
             # CAS SPÉCIAUX : optimisations directes
             if len(tolls_on_segments) < target_tolls:
                 print(f"⚠️ Pas assez de péages ({len(tolls_on_segments)} < {target_tolls})")
-                return self.special_cases.format_base_route_as_result(base_route_response)
+                return self.special_cases.format_base_route_as_result(base_route_response, target_tolls)
             
             if len(tolls_on_segments) == target_tolls:
                 print(f"✅ Nombre exact de péages trouvé")
-                return self.special_cases.format_base_route_as_result(base_route_response)
+                return self.special_cases.format_base_route_as_result(base_route_response, target_tolls)
             
             # Étape 3 : Sélectionner péages cibles (prioriser système ouvert)
             selected_tolls = self._select_target_tolls_optimized(tolls_on_segments, target_tolls)
@@ -119,7 +119,7 @@ class IntelligentSegmentationStrategyV2Optimized:
             
             if not segments:
                 print("❌ Échec segmentation optimisée, fallback route de base")
-                return self.special_cases.format_base_route_as_result(base_route_response)
+                return self.special_cases.format_base_route_as_result(base_route_response, target_tolls)
             
             # Étape 5 : Calcul des routes pour chaque segment
             print("🛣️ Étape 5 : Calcul des routes par segment...")
@@ -127,7 +127,7 @@ class IntelligentSegmentationStrategyV2Optimized:
             
             if not calculated_segments:
                 print("❌ Échec calcul des segments")
-                return self.special_cases.format_base_route_as_result(base_route_response)
+                return self.special_cases.format_base_route_as_result(base_route_response, target_tolls)
             
             # Étape 6 : Assemblage final optimisé
             print("🔧 Étape 6 : Assemblage final optimisé...")
@@ -137,7 +137,7 @@ class IntelligentSegmentationStrategyV2Optimized:
             
             if not final_route:
                 print("❌ Échec assemblage final")
-                return self.special_cases.format_base_route_as_result(base_route_response)
+                return self.special_cases.format_base_route_as_result(base_route_response, target_tolls)
             
             print("✅ Segmentation V2 Optimisée réussie")
             return final_route

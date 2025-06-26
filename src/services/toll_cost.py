@@ -24,12 +24,13 @@ def add_marginal_cost(
 ) -> List[Dict]:
     """
     Ajoute le champ `cost` à chaque dict selon le format virtual_edges.
-    - Si id commence par APRR_O : péage ouvert, coût = (id, id)
-    - Si id commence par APRR_F : péage fermé, coût à la sortie (entrée précédente ➜ sortie)
+    - Si csv_id commence par APRR_O : péage ouvert, coût = (csv_id, csv_id)
+    - Si csv_id commence par APRR_F : péage fermé, coût à la sortie (entrée précédente ➜ sortie)
+    Fallback sur id si csv_id absent.
     """
     prev_entry = None
     for t in tolls:
-        rid = t["id"]
+        rid = t.get("csv_id") or t.get("id")
         cost = 0.0        # Rôle déduit de l'id
         print(f"Calcul du coût pour le péage {rid} ({veh_class})")
         if rid.startswith("APRR_O"):

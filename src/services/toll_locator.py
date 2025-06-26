@@ -16,6 +16,8 @@ import pandas as pd
 from shapely.geometry import Point, LineString
 from shapely.strtree import STRtree
 from pyproj import Transformer
+from src.services.osm_data_cache import osm_data_cache
+import unicodedata
 
 # ────────────────────────────────────────────────────────────────────────────
 # Préparation des données (barriers.csv)
@@ -49,91 +51,144 @@ def _get_barriers_from_cache():
     from src.services.toll_data_cache import toll_data_cache
     return toll_data_cache.barriers_df, toll_data_cache.spatial_index
 
+def _normalize_name(name):
+    # Normalisation simple pour le fallback par nom
+    if not isinstance(name, str):
+        return ""
+    name = name.lower()
+    name = unicodedata.normalize('NFD', name).encode('ascii', 'ignore').decode('utf-8')
+    return name.replace('-', ' ').replace('_', ' ').strip()
+
 # ────────────────────────────────────────────────────────────────────────────
 # Fonction publique
 # ────────────────────────────────────────────────────────────────────────────
 def locate_tolls(
     ors_geojson: dict,
-    csv_path: str | Path = "data/barriers.csv",
-    buffer_m: float = 120,
+    buffer_m: float = 1.0,  # <1m strict
+    veh_class: str = None,  # Optionnel : si fourni, ajoute le coût
 ) -> Dict[str, List[Dict]]:
     """
-    Renvoie la liste *ordonnée le long de la route* des péages
-    rencontrés dans un rayon de `buffer_m` mètres.
-
-    Résultat :  [
-        {"id": "APRR_O012", "longitude": 7.21, "latitude": 48.05, "role": "O"},
-        ...
-    ]
+    Renvoie la liste ordonnée des péages OSM croisés par la route (distance point-segment <1m).
+    Fallback par nom si aucun péage détecté par coordonnées.
+    Enrichit chaque péage avec csv_id et csv_role si possible (pour calcul coût).
+    Si veh_class est fourni, ajoute le champ cost à chaque péage.
     """
-    from shapely.geometry import shape  # import léger
-
+    from shapely.geometry import shape
     # 1) Géométrie ORS → LineString WGS84
     route_line = shape(ors_geojson["features"][0]["geometry"])
-    # 2) Buffer en Web Mercator
-    wgs_to_3857 = Transformer.from_crs(_WGS84, _WEBM, always_xy=True).transform
-    route_3857 = LineString([wgs_to_3857(*coord) for coord in route_line.coords])
-    buf = route_3857.buffer(buffer_m)    # 3) Barrières dans la zone - VERSION OPTIMISÉE avec cache global
-    barriers_df, barriers_tree = _get_barriers_from_cache()
-    hits = barriers_tree.query(buf)
-
-    # Filtrage précis : ne garder que les points vraiment dans le buffer
-    mask = [barriers_df.loc[i, "_geom3857"].within(buf) for i in hits]
-    filtered_hits = [i for i, m in zip(hits, mask) if m]
-
-    # Affichage des péages proches (dans un buffer plus large mais hors buffer principal)
-    near_buf = route_3857.buffer(500)
-    near_hits = barriers_tree.query(near_buf)
-    near_mask = [
-        (barriers_df.loc[i, "_geom3857"].within(near_buf) and not barriers_df.loc[i, "_geom3857"].within(buf))
-        for i in near_hits
-    ]
-    nearby = [i for i, m in zip(near_hits, near_mask) if m]
-    if nearby:
-        # Conversion des coordonnées projetées vers WGS84
-        to_wgs84 = Transformer.from_crs(_WEBM, _WGS84, always_xy=True).transform
-        coords = [
-            to_wgs84(geom.x, geom.y)
-            for geom in barriers_df.loc[nearby, "_geom3857"]
-        ]
-        df_nearby = barriers_df.loc[nearby].copy()
-        df_nearby["longitude"], df_nearby["latitude"] = zip(*coords)
-
-    # 4) Tri selon l’avancement sur le tronçon
-    project = route_3857.project
-    sel = (
-        barriers_df.loc[filtered_hits]
-        .assign(_proj=barriers_df.loc[filtered_hits, "_geom3857"].apply(project))
-        .sort_values("_proj")
-    )
-
-    # Conversion des coordonnées projetées vers WGS84
-    to_wgs84 = Transformer.from_crs(_WEBM, _WGS84, always_xy=True).transform
-    coords = [
-        to_wgs84(geom.x, geom.y)
-        for geom in sel["_geom3857"]
-    ]
-    if coords:
-        sel["longitude"], sel["latitude"] = zip(*coords)
-    else:
-        sel["longitude"], sel["latitude"] = [], []    # Pour les péages proches (déjà convertis plus haut)
-    nearby_list = []
-    if nearby:
-        df_nearby = barriers_df.loc[nearby].copy()
-        coords_nearby = [
-            to_wgs84(geom.x, geom.y)
-            for geom in df_nearby["_geom3857"]
-        ]
-        if coords_nearby:
-            df_nearby["longitude"], df_nearby["latitude"] = zip(*coords_nearby)
+    # 2) Charger les péages OSM depuis le cache global (déjà initialisé)
+    tolls = osm_data_cache.toll_stations
+    # 3) Calculer la distance point-segment pour chaque péage
+    detected = []
+    for toll in tolls:
+        # Supporte TollStation (objet) ou dict
+        if hasattr(toll, "coordinates"):
+            lon, lat = toll.coordinates
+            name = getattr(toll, "name", "")
+            role = getattr(toll, "toll_type", getattr(toll, "role", ""))
+            id_ = getattr(toll, "feature_id", getattr(toll, "id", "osm"))
+            # --- Enrichissement OSM→CSV ---
+            csv_id = None
+            csv_role = None
+            if hasattr(toll, "csv_match") and toll.csv_match:
+                csv_id = toll.csv_match.get("id")
+                csv_role = toll.csv_match.get("role")
+            else:
+                csv_id = getattr(toll, "csv_id", None)
+                csv_role = getattr(toll, "csv_role", None)
         else:
-            df_nearby["longitude"], df_nearby["latitude"] = [], []
-        nearby_list = df_nearby[["id", "longitude", "latitude", "role"]].to_dict(orient="records")
-
-    return {
-        "on_route": sel[["id", "longitude", "latitude", "role"]].to_dict(orient="records"),
-        "nearby": nearby_list
-    }
+            lon = toll.get("lon")
+            lat = toll.get("lat")
+            name = toll.get("name", "")
+            role = toll.get("role", "")
+            id_ = toll.get("id", "osm")
+            csv_id = toll.get("csv_id")
+            csv_role = toll.get("csv_role")
+        pt = Point(lon, lat)
+        dist = route_line.distance(pt)
+        if dist < buffer_m / 111139:  # 1m en degrés approx.
+            toll_dict = {
+                "id": id_,
+                "longitude": lon,
+                "latitude": lat,
+                "name": name,
+                "role": role,
+                "csv_id": csv_id,
+                "csv_role": csv_role,
+                "distance": dist * 111139
+            }
+            print(f"[TOLL DEBUG] {toll_dict}")
+            detected.append(toll_dict)
+    # 4) Fallback par nom si aucun péage détecté
+    if not detected:
+        route_names = set()
+        for toll in tolls:
+            if hasattr(toll, "name"):
+                route_names.add(_normalize_name(getattr(toll, "name", "")))
+            elif isinstance(toll, dict) and "name" in toll:
+                route_names.add(_normalize_name(toll["name"]))
+        for toll in tolls:
+            if hasattr(toll, "name"):
+                name = getattr(toll, "name", "")
+                lon, lat = toll.coordinates
+                role = getattr(toll, "toll_type", getattr(toll, "role", ""))
+                id_ = getattr(toll, "feature_id", getattr(toll, "id", "osm"))
+                csv_id = getattr(toll, "csv_id", None)
+                csv_role = getattr(toll, "csv_role", None)
+                if _normalize_name(name) in route_names:
+                    detected.append({
+                        "id": id_,
+                        "longitude": lon,
+                        "latitude": lat,
+                        "name": name,
+                        "role": role,
+                        "csv_id": csv_id,
+                        "csv_role": csv_role,
+                        "distance": None
+                    })
+            elif isinstance(toll, dict):
+                name = toll.get("name", "")
+                lon = toll.get("lon")
+                lat = toll.get("lat")
+                role = toll.get("role", "")
+                id_ = toll.get("id", "osm")
+                csv_id = toll.get("csv_id")
+                csv_role = toll.get("csv_role")
+                if _normalize_name(name) in route_names:
+                    detected.append({
+                        "id": id_,
+                        "longitude": lon,
+                        "latitude": lat,
+                        "name": name,
+                        "role": role,
+                        "csv_id": csv_id,
+                        "csv_role": csv_role,
+                        "distance": None
+                    })
+    # 5) Tri par avancement sur la route
+    def project(toll):
+        pt = Point(toll["longitude"], toll["latitude"])
+        return route_line.project(pt)
+    detected = sorted(detected, key=project)
+    # 6) Ajout du coût si demandé
+    if veh_class:
+        from src.services.toll_cost import add_marginal_cost
+        detected = add_marginal_cost(detected, veh_class)
+    
+    # Déduplication par csv_id (ou id si pas de csv_id)
+    unique = {}
+    for toll in detected:
+        key = toll["csv_id"] if toll["csv_id"] else toll["id"]
+        if key not in unique:
+            # Met à jour le champ role avec csv_role si présent
+            toll["role"] = toll["csv_role"] if toll["csv_role"] else toll["role"]
+            unique[key] = toll
+    detected = list(unique.values())
+    
+    print(
+        [{"id": t["id"], "name": t["name"], "cost": t.get("cost")} for t in detected]
+    )
+    return {"on_route": detected, "nearby": []}
 
 def get_all_open_tolls_by_proximity(
     ors_geojson: dict,

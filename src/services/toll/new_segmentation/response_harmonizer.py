@@ -81,8 +81,7 @@ class ResponseHarmonizer:
             from src.services.toll_locator import locate_tolls
             from src.services.toll_cost import add_marginal_cost
             
-            csv_path = os.path.join(os.path.dirname(__file__), "../../../data/barriers.csv")
-            tolls_dict = locate_tolls(route, csv_path, buffer_m=120)
+            tolls_dict = locate_tolls(route, buffer_m=1.0, veh_class="c1")
             detailed_tolls = add_marginal_cost(tolls_dict["on_route"], veh_class=veh_class)
             total_toll_cost = sum(t.get("cost", 0) for t in detailed_tolls)
             

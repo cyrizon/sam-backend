@@ -120,7 +120,7 @@ class AbsoluteBudgetStrategy:
             result_manager.update_with_route(base_route_data, float('inf'))
             
             # Localiser tous les péages disponibles pour optimisation
-            tolls_dict = locate_tolls(base_route, Config.get_barriers_csv_path())
+            tolls_dict = locate_tolls(base_route, buffer_m=1.0)
             tolls_on_route = tolls_dict["on_route"]
             tolls_nearby = tolls_dict["nearby"]
             

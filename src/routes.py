@@ -3,7 +3,6 @@ import os
 from flask import jsonify, request
 from flask_cors import CORS
 from pathlib import Path
-from src.services.tolls_finder import find_tolls_on_route
 from src.services.smart_route import SmartRouteService
 from src.services.toll_locator import locate_tolls
 import requests
@@ -40,11 +39,6 @@ def register_routes(app):
                 print("Données GeoJSON manquantes ou invalides :", geojson_data)
                 return jsonify({"error": "No data provided"}), 400
 
-            csv_path = os.path.join(os.path.dirname(__file__), "../data/barriers.csv")
-            if not os.path.exists(csv_path):
-                print("Fichier CSV des péages introuvable :", csv_path)
-                return jsonify({"error": "CSV file not found"}), 404
-
             # Si c'est une liste, on traite chaque trajet séparément
             if isinstance(geojson_data, list):
                 results = []
@@ -56,8 +50,7 @@ def register_routes(app):
                         traj_data = {"type": "FeatureCollection", "features": [traj]}
                     else:
                         continue  # Ignore format inconnu
-                    tolls_dict = locate_tolls(traj_data, csv_path, buffer_m=120)
-                    # Tu peux choisir de retourner on_route ou les deux listes
+                    tolls_dict = locate_tolls(traj_data, buffer_m=1.0, veh_class="c1")
                     results.append(tolls_dict["on_route"])
                 return jsonify(results)
             else:
@@ -68,7 +61,7 @@ def register_routes(app):
                     geojson_data = {"type": "FeatureCollection", "features": [geojson_data]}
                 else:
                     return jsonify({"error": "Invalid GeoJSON format"}), 400
-                tolls_dict = locate_tolls(geojson_data, csv_path, buffer_m=120)
+                tolls_dict = locate_tolls(geojson_data, buffer_m=1.0, veh_class="c1")
                 return jsonify([tolls_dict["on_route"]])
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -114,8 +107,7 @@ def register_routes(app):
             cost = None
             toll_count = None
             if route_geojson:
-                csv_path = os.path.join(os.path.dirname(__file__), "../data/barriers.csv")
-                tolls_dict = locate_tolls(route_geojson, csv_path, buffer_m=120)
+                tolls_dict = locate_tolls(route_geojson, buffer_m=1.0, veh_class="c1")
                 from src.services.toll_cost import add_marginal_cost
                 tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
                 cost = sum(t.get("cost", 0) for t in tolls)

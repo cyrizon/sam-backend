@@ -53,7 +53,7 @@ class BudgetRouteCalculator:
     def locate_and_cost_tolls(self, route, veh_class, operation_name="locate_tolls_budget"):
         """Localise les péages et calcule leurs coûts avec tracking budget."""
         with performance_tracker.measure_operation(operation_name):
-            tolls_dict = locate_tolls(route, Config.get_barriers_csv_path(), buffer_m=TollConfig.TOLL_DETECTION_BUFFER_M)
+            tolls_dict = locate_tolls(route, buffer_m=1.0)
             tolls_on_route = tolls_dict["on_route"]
             add_marginal_cost(tolls_on_route, veh_class)
             return tolls_dict

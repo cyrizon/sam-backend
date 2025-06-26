@@ -59,8 +59,7 @@ class SegmentationSpecialCases:
                     from src.services.toll_locator import locate_tolls
                     from src.services.toll_cost import add_marginal_cost
                     
-                    csv_path = os.path.join(os.path.dirname(__file__), "../../../data/barriers.csv")
-                    tolls_dict = locate_tolls(toll_free_route, csv_path, buffer_m=120)
+                    tolls_dict = locate_tolls(toll_free_route, buffer_m=1.0, veh_class="c1")
                     detailed_tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
                     total_toll_cost = sum(t.get("cost", 0) for t in detailed_tolls)
                     
@@ -97,13 +96,14 @@ class SegmentationSpecialCases:
             print(f"❌ Erreur lors de la récupération de la route sans péages : {e}")
             return None
     
-    def format_base_route_as_result(self, base_route: Dict) -> Dict:
+    def format_base_route_as_result(self, base_route: Dict, target_tolls: int = None) -> Dict:
         """
         Cas spécial : Formate la route de base comme résultat final.
         Utilisé quand l'utilisateur demande plus de péages qu'il n'y en a sur la route.
         
         Args:
             base_route: Route de base ORS
+            target_tolls: Nombre de péages demandés (pour homogénéité de la réponse)
             
         Returns:
             dict: Route de base formatée
@@ -142,8 +142,7 @@ class SegmentationSpecialCases:
             from src.services.toll_locator import locate_tolls
             from src.services.toll_cost import add_marginal_cost
             
-            csv_path = os.path.join(os.path.dirname(__file__), "../../../data/barriers.csv")
-            tolls_dict = locate_tolls(base_route, csv_path, buffer_m=120)
+            tolls_dict = locate_tolls(base_route, buffer_m=1.0, veh_class="c1")
             detailed_tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
             total_toll_cost = sum(t.get("cost", 0) for t in detailed_tolls)
             
@@ -179,14 +178,15 @@ class SegmentationSpecialCases:
         
         return {
             'route': cleaned_route,  # Route nettoyée sans duplications
-            'target_tolls': None,  # Pas respecté, on retourne la route principale
+            'target_tolls': target_tolls,  # Toujours égal à la demande utilisateur
             'found_solution': 'base_route_fallback',
             'respects_constraint': False,
             'strategy_used': 'base_route_return',
             'distance': RouteUtils.extract_distance(base_route),
             'duration': RouteUtils.extract_duration(base_route),
             'instructions': instructions,  # Utiliser les instructions récupérées
-            'cost': total_toll_cost,  # Coût total des péages            'toll_count': len(detailed_tolls),  # Nombre de péages
+            'cost': total_toll_cost,  # Coût total des péages
+            'toll_count': len(detailed_tolls),  # Nombre de péages
             'tolls': detailed_tolls,  # Détails des péages
             'segments': {
                 'count': 1,  # Une seule route (pas de segmentation)
