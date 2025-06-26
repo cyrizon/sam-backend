@@ -85,7 +85,7 @@ La refactorisation est entièrement rétrocompatible :
 ```python
 from src.services.toll.new_segmentation.intelligent_segmentation_strategy_v2 import IntelligentSegmentationStrategyV2
 
-strategy = IntelligentSegmentationStrategyV2(ors_service, 'data/osm_export.geojson')
+strategy = IntelligentSegmentationStrategyV2(ors_service, 'data/osm_export_toll.geojson')
 result = strategy.find_route_with_exact_tolls(coordinates, target_tolls=2)
 ```
 

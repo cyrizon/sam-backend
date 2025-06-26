@@ -72,7 +72,7 @@ def test_with_real_ors_route():
     mock_ors.get_route_avoid_tollways.side_effect = mock_avoid_tollways
     
     # Créer la stratégie avec le vrai fichier OSM
-    strategy = IntelligentSegmentationStrategyV2(mock_ors, 'data/osm_export.geojson')
+    strategy = IntelligentSegmentationStrategyV2(mock_ors, 'data/osm_export_toll.geojson')
     
     print(f"\n🧠 Test de la stratégie avec 1 péage demandé...")
     print(f"📍 Recherche de la sortie 6.1 à [6.766417, 47.4650316]")

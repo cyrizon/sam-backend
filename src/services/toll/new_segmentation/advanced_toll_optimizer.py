@@ -276,7 +276,7 @@ class TollOptimizerFactory:
         # Chercher les données OSM
         osm_file_paths = [
             config.get('osm_data_file'),
-            'data/osm_export.geojson',
+            'data/osm_export_toll.geojson',
             'data/export.geojson',
             os.path.join(os.path.dirname(__file__), '../../../data/osm_export.geojson')
         ]

@@ -36,7 +36,7 @@ def test_selestat_dijon_2_tolls():
         ors_service = ORSService()
         strategy = IntelligentSegmentationStrategyV2(
             ors_service=ors_service,
-            osm_data_file="data/osm_export.geojson"  # Utiliser le fichier OSM GeoJSON
+            osm_data_file="data/osm_export_toll.geojson"  # Utiliser le fichier OSM GeoJSON
         )
         
         # Test avec 2 péages exactement
@@ -94,7 +94,7 @@ def test_edge_cases():
         ors_service = ORSService()
         strategy = IntelligentSegmentationStrategyV2(
             ors_service=ors_service,
-            osm_data_file="data/osm_export.geojson"  # Utiliser le fichier OSM GeoJSON
+            osm_data_file="data/osm_export_toll.geojson"  # Utiliser le fichier OSM GeoJSON
         )
         
         # Test 1 : 0 péage (route toll-free)
