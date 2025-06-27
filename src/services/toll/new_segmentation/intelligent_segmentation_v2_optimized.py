@@ -110,7 +110,9 @@ class IntelligentSegmentationStrategyV2Optimized:
             selected_tolls = self._select_target_tolls_optimized(tolls_on_segments, target_tolls)
             if not selected_tolls:
                 return None
-            
+            # Optimisation sortie système fermé (remplacement du dernier péage fermé si besoin)
+            selected_tolls = self._optimize_exit_for_closed_system(selected_tolls, tolls_on_segments, route_coords)
+
             # Étape 4 : Segmentation intelligente basée sur tollways
             print("🏗️ Étape 4 : Segmentation intelligente optimisée...")
             segments = self._create_optimized_segments(
@@ -1001,3 +1003,127 @@ class IntelligentSegmentationStrategyV2Optimized:
         
         print(f"   🔧 Segment adapté : {adapted['description']}")
         return adapted
+
+    def _optimize_exit_for_closed_system(
+        self,
+        selected_tolls: List[MatchedToll],
+        tolls_on_segments: List[MatchedToll],
+        route_coords: List[List[float]]
+    ) -> List[MatchedToll]:
+        """
+        Optimise la sélection de sortie pour les systèmes fermés :
+        - Cherche la dernière sortie motorway_junction à péage (csv_role == 'F')
+          située entre le dernier et l'avant-dernier péage fermé sélectionné (même système),
+          à moins de 1 km du dernier péage fermé sélectionné (distance directe),
+          puis vérifie la distance au segment [péage précédent, péage actuel] (<1km).
+        """
+        print("🔄 Optimisation de la sortie pour les systèmes fermés...")
+        if not selected_tolls or not tolls_on_segments or len(selected_tolls) < 2:
+            print("   ⛔ Pas assez de péages sélectionnés pour optimisation.")
+            return selected_tolls
+
+        closed_selected = [t for t in selected_tolls if t.csv_role == 'F' and t.csv_id]
+        print(f"   ➡️ Péages fermés sélectionnés : {[t.effective_name for t in closed_selected]}")
+        if len(closed_selected) < 2:
+            print("   ⛔ Moins de 2 péages fermés sélectionnés.")
+            return selected_tolls
+
+        last_closed = closed_selected[-1]
+        prev_closed = closed_selected[-2]
+        system_prefix = last_closed.csv_id.split('_')[0] if '_' in last_closed.csv_id else last_closed.csv_id
+        print(f"   🔎 Système autoroutier ciblé : {system_prefix}")
+
+        if not hasattr(self.osm_parser, 'motorway_junctions'):
+            print("   ⛔ Pas de motorway_junctions dans osm_parser.")
+            return selected_tolls
+        junctions = [j for j in self.osm_parser.motorway_junctions if hasattr(j, 'toll') and j.toll and hasattr(j, 'toll_station') and j.toll_station and j.toll_station.csv_id and (j.toll_station.csv_id.split('_')[0] if '_' in j.toll_station.csv_id else j.toll_station.csv_id) == system_prefix]
+        print(f"   🔗 Junctions à péage du système : {len(junctions)}")
+
+        coord_last = last_closed.osm_coordinates
+        coord_prev = prev_closed.osm_coordinates
+        if not coord_last or not coord_prev:
+            print("   ⛔ Coordonnées manquantes pour les péages fermés.")
+            return selected_tolls
+
+        # 1. Filtrer les junctions à moins de 5km du dernier péage fermé sélectionné
+        close_junctions = []
+        for j in junctions:
+            j_coord = getattr(j, 'coordinates', None)
+            if not j_coord:
+                continue
+            dist = self._calculate_distance_meters(j_coord, coord_last)
+            if dist <= 5000.0:
+                close_junctions.append((j, dist))
+        print(f"   📍 Junctions à <5km du dernier péage : {len(close_junctions)}")
+        for j, dist in close_junctions:
+            print(f"      - {j.node_id} à {dist:.1f}m")
+
+        if not close_junctions:
+            print("   ⛔ Aucune junction à <5km du dernier péage.")
+            return selected_tolls
+
+        # 2. Garder celles qui sont entre le péage précédent et le péage actuel (ordre sur la route)
+        def find_index(coord):
+            min_dist = float('inf')
+            idx = 0
+            for i, pt in enumerate(route_coords):
+                d = self._calculate_distance_meters(coord, pt)
+                if d < min_dist:
+                    min_dist = d
+                    idx = i
+            return idx
+        idx_last = find_index(coord_last)
+        idx_prev = find_index(coord_prev)
+        idx_start, idx_end = min(idx_last, idx_prev), max(idx_last, idx_prev)
+
+        between_junctions = []
+        for j, dist in close_junctions:
+            j_coord = getattr(j, 'coordinates', None)
+            j_idx = find_index(j_coord)
+            if idx_start < j_idx < idx_end:
+                between_junctions.append((j, dist, j_idx))
+        print(f"   🛣️ Junctions entre les deux péages sur la route : {len(between_junctions)}")
+        for j, dist, j_idx in between_junctions:
+            print(f"      - {j.node_id} à {dist:.1f}m (index route {j_idx})")
+
+        if not between_junctions:
+            print("   ⛔ Aucune junction entre les deux péages sur la route.")
+            return selected_tolls
+
+        # 3. Pour celles qui restent, vérifier la distance au segment [coord_prev, coord_last] (<1km)
+        final_candidates = []
+        for j, dist, j_idx in between_junctions:
+            j_coord = getattr(j, 'coordinates', None)
+            seg_dist = self._distance_point_to_segment_meters(j_coord, coord_prev, coord_last)
+            if seg_dist <= 1000.0:
+                final_candidates.append((j, dist, j_idx, seg_dist))
+        print(f"   🏁 Junctions à <1km du segment [péage précédent, péage actuel] : {len(final_candidates)}")
+        for j, dist, j_idx, seg_dist in final_candidates:
+            print(f"      - {j.node_id} à {dist:.1f}m (index route {j_idx}), dist au segment = {seg_dist:.1f}m")
+
+        if not final_candidates:
+            print("   ⛔ Aucune junction à <1km du segment.")
+            return selected_tolls
+
+        # 4. Prendre la dernière (la plus proche du dernier péage fermé sélectionné sur la route)
+        final_candidates.sort(key=lambda x: x[2], reverse=(idx_last > idx_prev))
+        candidate = final_candidates[0][0]
+        print(f"   ✅ Junction retenue : {candidate.node_id}")
+
+        # Remplacer les coordonnées du péage par la fin de la dernière motorway_link liée à la junction
+        if getattr(candidate, 'linked_motorway_links', None):
+            last_link = candidate.linked_motorway_links[-1]
+            if last_link and getattr(last_link, 'coordinates', None):
+                end_coord = last_link.get_end_point()
+                if candidate.toll_station:
+                    print("      Coordonnées du péage sélectionné :", getattr(candidate.toll_station, 'osm_coordinates', None))
+                    candidate.toll_station.osm_coordinates = end_coord
+                    print("      Coordonnées mises à jour :", getattr(candidate.toll_station, 'osm_coordinates', None))
+
+        new_selected = selected_tolls.copy()
+        for i in range(len(new_selected)-1, -1, -1):
+            if new_selected[i] == last_closed:
+                new_selected[i] = candidate.toll_station
+                print(f"   🔄 Optimisation sortie système fermé : remplacement de {last_closed.effective_name} par {candidate.toll_station.effective_name} (coord={getattr(candidate.toll_station, 'osm_coordinates', None)})")
+                break
+        return new_selected

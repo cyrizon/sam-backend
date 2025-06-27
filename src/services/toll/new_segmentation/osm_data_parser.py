@@ -492,6 +492,28 @@ class OSMDataParser:
         # Affiche le nombre de sorties avec péage
         n_exit_tolls = sum(1 for j in getattr(self, 'motorway_junctions', []) if j.toll)
         print(f"[OSMDataParser] Nombre de sorties avec péage : {n_exit_tolls}")
+
+        # Affichage détaillé pour la jonction de test à péage
+        from src.services.toll.new_segmentation.linking.junction_linker import JunctionLinker
+        linker = JunctionLinker()
+        test_junction_id = "621758529"
+        test_junction = linker.find_junction_by_id(self.motorway_junctions, test_junction_id)
+        if test_junction:
+            print(f"\n🔍 Junction de test à péage : {test_junction.node_id}")
+            print(f"   📍 Coordonnées : {test_junction.coordinates}")
+            print(f"   🔗 Nombre de links liés : {len(test_junction.linked_motorway_links)}")
+            print(f"   🚦 Péage détecté : {test_junction.toll}")
+            if test_junction.toll_station:
+                ts = test_junction.toll_station
+                print(f"   🏷️ Péage associé : {getattr(ts, 'effective_name', getattr(ts, 'name', None))}")
+                print(f"      - OSM ID : {getattr(ts, 'osm_id', getattr(ts, 'feature_id', None))}")
+                print(f"      - csv_role : {getattr(ts, 'csv_role', None)}")
+                print(f"      - Coordonnées (osm_coordinates) : {getattr(ts, 'osm_coordinates', getattr(ts, 'coordinates', None))}")
+            if test_junction.linked_motorway_links:
+                last_link = test_junction.linked_motorway_links[-1]
+                print(f"   ➡️ Fin de la dernière motorway_link liée : {last_link.get_end_point()}")
+        else:
+            print(f"\n❌ Junction de test {test_junction_id} non trouvée pour affichage péage")
     
     def _distance_point_to_polyline_meters(self, pt, polyline):
         """
