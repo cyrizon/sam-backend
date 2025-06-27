@@ -536,6 +536,7 @@ class IntelligentSegmentationStrategyV2Optimized:
         # --- SCINDAGE AUTOMATIQUE SUR PÉAGE DE SORTIE (AVANT ANALYSE) ---
         exit_tolls = [t for t in selected_tolls if getattr(t, 'is_exit', False)]
         segments_to_remove = []  # Segments à supprimer après scindage de sortie
+        continuation_segments = []  # Segments de continuation à créer
         
         if exit_tolls:
             print(f"🚦 Scindage automatique demandé pour {len(exit_tolls)} péage(s) de sortie : {[t.effective_name for t in exit_tolls]}")
@@ -576,13 +577,26 @@ class IntelligentSegmentationStrategyV2Optimized:
                             
                             # Marquer le segment APRÈS le péage de sortie pour suppression
                             segments_to_remove.append(i+1)
+                            
+                            # Créer un segment de continuation de la sortie vers la suite
+                            original_end = seg2['end_waypoint']
+                            continuation_segment = {
+                                'start_waypoint': min_idx,
+                                'end_waypoint': original_end,
+                                'properties': {'toll': False}  # Segment de continuation non-payant
+                            }
+                            continuation_segments.append((i+1, continuation_segment))
+                            print(f"   🔗 Segment de continuation créé : {min_idx} → {original_end}")
                             break
         
-        # Supprimer les segments après péages de sortie (en ordre inverse pour ne pas décaler les indices)
-        for idx in sorted(segments_to_remove, reverse=True):
+        # Supprimer les segments après péages de sortie et insérer les segments de continuation
+        for idx, continuation_seg in reversed(continuation_segments):
             if idx < len(tollways_data['segments']):
                 removed_seg = tollways_data['segments'].pop(idx)
                 print(f"   🗑️ Segment {idx} supprimé (après péage de sortie): waypoints {removed_seg['start_waypoint']}-{removed_seg['end_waypoint']}")
+                # Insérer le segment de continuation à la même position
+                tollways_data['segments'].insert(idx, continuation_seg)
+                print(f"   ➕ Segment de continuation inséré à l'index {idx}: waypoints {continuation_seg['start_waypoint']}-{continuation_seg['end_waypoint']}")
         
         # --- FIN SCINDAGE AUTOMATIQUE ---
 
