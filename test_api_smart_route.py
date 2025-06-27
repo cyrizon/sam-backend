@@ -123,7 +123,7 @@ def test_smart_route_tolls_mock():
                 }
         
         # Initialiser le cache
-        from src.services.toll_data_cache import toll_data_cache
+        from src.cache import toll_data_cache
         if not toll_data_cache._initialized:
             toll_data_cache.initialize()
         # Créer l'optimiseur

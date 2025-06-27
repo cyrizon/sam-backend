@@ -10,7 +10,7 @@ import json
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.services.toll.new_segmentation.intelligent_segmentation_strategy_v2 import IntelligentSegmentationStrategyV2
-from src.services.toll_data_cache import toll_data_cache
+from src.cache import toll_data_cache
 from unittest.mock import MagicMock
 
 def test_with_real_ors_route():

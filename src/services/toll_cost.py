@@ -15,7 +15,7 @@ def _get_edges_from_cache():
     Récupère les données virtual_edges depuis le cache global.
     RÉSOUT LE PROBLÈME : Plus de rechargement de 305KB à chaque import !
     """
-    from src.services.toll_data_cache import toll_data_cache
+    from src.cache import toll_data_cache
     return toll_data_cache.virtual_edges_df
 
 def add_marginal_cost(

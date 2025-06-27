@@ -12,7 +12,7 @@ Responsabilité unique :
 """
 
 from typing import List, Dict, Tuple
-from src.services.toll.new_segmentation.toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 
 
 class TollwaysAnalyzer:
@@ -46,7 +46,7 @@ class TollwaysAnalyzer:
         }
         
         for i, segment in enumerate(tollways_segments):
-            if segment['is_toll']:
+            if segment.get('is_toll', False):
                 # Trouver quels péages sont dans ce segment
                 tolls_in_segment = self._find_tolls_in_segment(segment, tolls_on_route, route_coords)
                 

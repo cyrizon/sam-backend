@@ -6,8 +6,8 @@ Module pour valider les sorties d'autoroute et leurs capacités d'évitement des
 """
 
 from typing import List, Dict, Optional
-from ..toll_matcher import MatchedToll
-from ..osm_data_parser import OSMDataParser
+from src.cache.models.matched_toll import MatchedToll
+from src.cache.parsers.osm_parser import OSMParser
 from .geographic_utils import calculate_distance_km
 
 
@@ -16,7 +16,7 @@ class ExitValidator:
     Classe pour valider les sorties d'autoroute et tester leur efficacité pour éviter les péages.
     """
     
-    def __init__(self, osm_parser: OSMDataParser):
+    def __init__(self, osm_parser: OSMParser):
         """
         Initialise le validateur avec les données OSM.
         

@@ -11,7 +11,7 @@ import os
 # Ajouter le chemin du projet
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from src.services.toll.new_segmentation.osm_data_parser import OSMDataParser
+from src.cache.parsers.osm_parser import OSMParser
 
 
 def test_linking():
@@ -30,7 +30,7 @@ def test_linking():
         return
 
     # Créer le parser et charger les données
-    parser = OSMDataParser(geojson_path)
+    parser = OSMParser(geojson_path)
 
     print("⏳ Chargement et parsing en cours...")
     success = parser.load_and_parse()

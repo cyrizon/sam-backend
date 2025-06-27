@@ -4,7 +4,7 @@ Test de la détection des péages fermés vs ouverts
 """
 
 from src.services.toll.new_segmentation.hybrid_strategy.tollways_analyzer import TollwaysAnalyzer
-from src.services.toll.new_segmentation.toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 
 def test_closed_system_detection():
     """Test de la détection des systèmes fermés vs ouverts."""

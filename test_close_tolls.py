@@ -6,7 +6,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.services.toll.new_segmentation.toll_segment_builder import TollSegmentBuilder
-from src.services.toll.new_segmentation.toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 
 
 def test_close_tolls():

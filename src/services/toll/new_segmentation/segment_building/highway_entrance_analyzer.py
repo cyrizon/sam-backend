@@ -8,7 +8,7 @@ logiques entre des points donnés.
 """
 
 from typing import List, Optional, Dict
-from ..toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 import math
 
 

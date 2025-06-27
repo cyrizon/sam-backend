@@ -1,15 +1,15 @@
 """
-junction_linker.py
-------------------
+Junction Linker
+---------------
 
-Module pour associer les motorway_junctions avec leurs chaînes de motorway_links.
-
-Responsabilité : orchestrer le processus de liaison des éléments OSM.
+Module for linking motorway_junctions with their motorway_link chains.
+Refactored from linking/junction_linker.py with updated imports.
 """
 
 from typing import List
-from src.services.toll.new_segmentation.osm_data_parser import MotorwayJunction, MotorwayLink
-from src.services.toll.new_segmentation.linking.link_finder import LinkFinder
+from ..models.motorway_junction import MotorwayJunction
+from ..models.motorway_link import MotorwayLink
+from src.cache.linking.link_finder import LinkFinder
 
 
 class JunctionLinker:

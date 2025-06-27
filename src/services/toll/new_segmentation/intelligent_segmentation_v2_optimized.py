@@ -25,7 +25,7 @@ Algorithme optimisé :
 from typing import List, Dict, Optional, Tuple
 from .toll_segment_builder import TollSegmentBuilder
 from .segment_route_calculator import SegmentRouteCalculator
-from .toll_matcher import TollMatcher, MatchedToll, convert_osm_tolls_to_matched_format
+from src.cache.parsers.toll_matcher import TollMatcher, MatchedToll, convert_osm_tolls_to_matched_format
 from .toll_deduplicator import TollDeduplicator
 from .intelligent_segmentation_helpers import SegmentationSpecialCases, RouteUtils
 from .route_assembler import RouteAssembler
@@ -33,7 +33,7 @@ from .polyline_intersection import filter_tolls_on_route_strict
 from .hybrid_strategy.tollways_analyzer import TollwaysAnalyzer
 from .hybrid_strategy.segment_avoidance_manager import SegmentAvoidanceManager
 from benchmark.performance_tracker import performance_tracker
-from src.services.osm_data_cache import osm_data_cache
+from src.cache import osm_data_cache
 
 
 class IntelligentSegmentationStrategyV2Optimized:
@@ -223,8 +223,8 @@ class IntelligentSegmentationStrategyV2Optimized:
         return {
             'segments': segments,
             'total_segments': len(segments),
-            'toll_segments': sum(1 for s in segments if s['is_toll']),
-            'free_segments': sum(1 for s in segments if not s['is_toll'])
+            'toll_segments': sum(1 for s in segments if s.get('is_toll', False)),
+            'free_segments': sum(1 for s in segments if not s.get('is_toll', False))
         }
     
     def _identify_prematched_tolls_on_segments(
@@ -259,7 +259,9 @@ class IntelligentSegmentationStrategyV2Optimized:
         tolls_on_segments = []
 
         for segment in segments:
-            print(f"   Segment {segment['start_waypoint']} à {segment['end_waypoint']} (toll: {segment['is_toll']})")
+            # FIX: Accéder correctement à l'attribut is_toll
+            is_toll = segment.get('is_toll', False)  # Utiliser .get() pour éviter KeyError
+            print(f"   Segment {segment['start_waypoint']} à {segment['end_waypoint']} (toll: {is_toll})")
             
             # Extraire les coordonnées du segment
             start_idx = segment['start_waypoint']

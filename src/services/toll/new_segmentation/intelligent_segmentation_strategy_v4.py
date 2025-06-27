@@ -23,7 +23,7 @@ Règles respectées :
 
 from typing import List, Dict, Optional, Tuple
 from src.services.toll.new_segmentation.intelligent_segmentation_helpers import SegmentationSpecialCases, RouteUtils
-from src.services.toll.new_segmentation.toll_matcher import TollMatcher, MatchedToll, convert_osm_tolls_to_matched_format
+from src.cache.parsers.toll_matcher import TollMatcher, MatchedToll, convert_osm_tolls_to_matched_format
 from src.services.toll.new_segmentation.toll_deduplicator import TollDeduplicator
 from src.services.toll.new_segmentation.polyline_intersection import filter_tolls_on_route_strict
 from src.services.toll.new_segmentation.exit_optimization import ExitOptimizationManager
@@ -31,7 +31,7 @@ from src.services.toll.new_segmentation.segment_route_calculator import SegmentR
 from src.services.toll.new_segmentation.route_assembler import RouteAssembler
 from src.services.toll.new_segmentation.hybrid_strategy import HybridSegmenter
 from benchmark.performance_tracker import performance_tracker
-from src.services.osm_data_cache import osm_data_cache
+from src.cache import osm_data_cache
 
 
 class IntelligentSegmentationStrategyV4:

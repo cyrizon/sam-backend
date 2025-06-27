@@ -15,7 +15,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.services.toll.new_segmentation.intelligent_segmentation_v2_optimized import IntelligentSegmentationStrategyV2Optimized
-from src.services.osm_data_cache import osm_data_cache
+from src.cache import osm_data_cache
 from unittest.mock import Mock
 
 
@@ -117,7 +117,7 @@ def test_prematched_tolls_logic():
     strategy = IntelligentSegmentationStrategyV2Optimized(mock_ors)
     
     # Simuler des péages pré-matchés
-    from src.services.toll.new_segmentation.toll_matcher import MatchedToll
+    from src.cache.models.matched_toll import MatchedToll
     
     prematched_tolls = [
         MatchedToll(
@@ -170,7 +170,7 @@ def test_free_segments_logic():
     ]
     
     # Simuler des péages fermés
-    from src.services.toll.new_segmentation.toll_matcher import MatchedToll
+    from src.cache.models.matched_toll import MatchedToll
     
     closed_tolls = [
         MatchedToll(

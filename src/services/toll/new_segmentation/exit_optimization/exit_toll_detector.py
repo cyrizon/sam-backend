@@ -17,8 +17,9 @@ Ce module détecte ces nouveaux péages pour les comptabiliser correctement.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
-from ..toll_matcher import MatchedToll, TollMatcher
-from ..osm_data_parser import OSMDataParser
+from src.cache.models.matched_toll import MatchedToll
+from src.cache.parsers.toll_matcher import TollMatcher
+from src.cache.parsers.osm_parser import OSMParser
 
 
 class ExitTollDetector:
@@ -26,7 +27,7 @@ class ExitTollDetector:
     Détecte les péages sur les nouvelles routes calculées après utilisation d'une sortie.
     """
     
-    def __init__(self, osm_data_parser: OSMDataParser, toll_matcher: TollMatcher):
+    def __init__(self, osm_data_parser: OSMParser, toll_matcher: TollMatcher):
         """
         Initialise le détecteur.
         
@@ -174,7 +175,7 @@ class ExitTollDetector:
             List: Péages au format MatchedToll
         """
         # Utiliser la fonction existante du module toll_matcher
-        from ..toll_matcher import convert_osm_tolls_to_matched_format
+        from src.cache.parsers.toll_matcher import convert_osm_tolls_to_matched_format
         return convert_osm_tolls_to_matched_format(osm_tolls)
     
     def validate_exit_toll_replacement(

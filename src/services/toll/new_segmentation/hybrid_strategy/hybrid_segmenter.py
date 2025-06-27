@@ -15,7 +15,7 @@ Responsabilité unique :
 from typing import List, Dict, Optional
 from src.services.toll.new_segmentation.hybrid_strategy.tollways_analyzer import TollwaysAnalyzer
 from src.services.toll.new_segmentation.hybrid_strategy.segment_avoidance_manager import SegmentAvoidanceManager
-from src.services.toll.new_segmentation.toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 
 
 class HybridSegmenter:
@@ -34,7 +34,7 @@ class HybridSegmenter:
         self.exit_optimizer = exit_optimizer
         
         if osm_parser is None:
-            from src.services.osm_data_cache import osm_data_cache
+            from src.cache import osm_data_cache
             self.osm_parser = osm_data_cache._osm_parser
         else:
             self.osm_parser = osm_parser

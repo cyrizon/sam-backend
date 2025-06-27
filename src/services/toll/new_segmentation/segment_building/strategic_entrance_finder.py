@@ -8,7 +8,7 @@ tout en atteignant d'autres péages de manière logique.
 """
 
 from typing import List, Optional
-from ..toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 from .highway_entrance_analyzer import HighwayEntranceAnalyzer
 
 

@@ -11,7 +11,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.services.toll.new_segmentation.intelligent_segmentation_v2_optimized import IntelligentSegmentationStrategyV2Optimized
-from src.services.osm_data_cache import osm_data_cache
+from src.cache import osm_data_cache
 from src.services.ors_service import ORSService
 
 

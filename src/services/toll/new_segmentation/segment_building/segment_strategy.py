@@ -7,7 +7,7 @@ Responsabilité : déterminer comment construire les segments selon les règles 
 """
 
 from typing import List, Dict
-from ..toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 from .toll_positioning import TollPositioning
 from .strategic_entrance_finder import StrategicEntranceFinder
 from .exit_finder import ExitFinder

@@ -15,7 +15,7 @@ Responsabilité unique :
 """
 
 from typing import List, Dict, Optional, Tuple
-from src.services.toll.new_segmentation.toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 
 
 class SegmentAvoidanceManager:
@@ -321,7 +321,7 @@ class SegmentAvoidanceManager:
         
         for i in range(current_index - 1, -1, -1):
             # Segment gratuit ET pas dans la liste à éviter
-            if not segments[i]['is_toll'] and i not in segments_to_avoid:
+            if not segments[i].get('is_toll', False) and i not in segments_to_avoid:
                 return segments[i]
         return None
 
@@ -338,7 +338,7 @@ class SegmentAvoidanceManager:
         
         for i in range(current_index + 1, len(segments)):
             # Segment gratuit ET pas dans la liste à éviter
-            if not segments[i]['is_toll'] and i not in segments_to_avoid:
+            if not segments[i].get('is_toll', False) and i not in segments_to_avoid:
                 return segments[i]
         return None
     
@@ -349,7 +349,7 @@ class SegmentAvoidanceManager:
         segments_to_avoid = segments_to_avoid or []
         
         for i in range(current_index - 1, -1, -1):
-            if not segments[i]['is_toll'] and i not in segments_to_avoid:
+            if not segments[i].get('is_toll', False) and i not in segments_to_avoid:
                 return i
         return None
 
@@ -360,7 +360,7 @@ class SegmentAvoidanceManager:
         segments_to_avoid = segments_to_avoid or []
         
         for i in range(current_index + 1, len(segments)):
-            if not segments[i]['is_toll'] and i not in segments_to_avoid:
+            if not segments[i].get('is_toll', False) and i not in segments_to_avoid:
                 return i
         return None
     
@@ -384,7 +384,7 @@ class SegmentAvoidanceManager:
         
         # Réutiliser le code de détection de sorties existant
         from src.services.toll.new_segmentation.exit_optimization.motorway_exit_finder import MotorwayExitFinder
-        from src.services.osm_data_cache import osm_data_cache
+        from src.cache import osm_data_cache
         
         exit_finder = MotorwayExitFinder(osm_data_cache._osm_parser)
         
@@ -418,7 +418,7 @@ class SegmentAvoidanceManager:
         print(f"         🔍 Recherche d'entrée dans segment de {len(segment_coords)} points")
         
         # Chercher toutes les motorway_junctions sur la route du segment
-        from src.services.osm_data_cache import osm_data_cache
+        from src.cache import osm_data_cache
         
         # Trouver les junctions dans un rayon élargi d'abord
         junctions_candidate = osm_data_cache._osm_parser.find_junctions_near_route(segment_coords, max_distance_km=1.0)

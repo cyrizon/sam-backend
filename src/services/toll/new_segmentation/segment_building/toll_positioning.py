@@ -7,7 +7,7 @@ Responsabilité : gérer les relations spatiales entre péages (avant, après, e
 """
 
 from typing import List
-from ..toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 
 
 class TollPositioning:

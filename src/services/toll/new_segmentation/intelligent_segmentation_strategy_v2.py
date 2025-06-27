@@ -20,7 +20,7 @@ Algorithme en 9 étapes :
 from typing import List, Dict, Optional
 from .toll_segment_builder import TollSegmentBuilder
 from .segment_route_calculator import SegmentRouteCalculator
-from .toll_matcher import TollMatcher, MatchedToll, convert_osm_tolls_to_matched_format
+from src.cache.parsers.toll_matcher import TollMatcher, MatchedToll, convert_osm_tolls_to_matched_format
 from .toll_deduplicator import TollDeduplicator
 from .intelligent_segmentation_helpers import SegmentationSpecialCases, RouteUtils
 from .segmentation_point_finder import SegmentationPointFinder
@@ -29,7 +29,7 @@ from .route_assembler import RouteAssembler
 from .polyline_intersection import filter_tolls_on_route_strict
 from .exit_optimization import ExitOptimizationManager
 from benchmark.performance_tracker import performance_tracker
-from src.services.osm_data_cache import osm_data_cache
+from src.cache import osm_data_cache
 
 
 class IntelligentSegmentationStrategyV2:

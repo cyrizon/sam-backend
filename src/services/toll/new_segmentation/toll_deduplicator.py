@@ -7,7 +7,7 @@ Responsable d'éliminer les doublons et de garder les péages les plus proches d
 """
 
 from typing import List
-from .toll_matcher import MatchedToll
+from src.cache.parsers.toll_matcher import MatchedToll
 from .intelligent_segmentation_helpers import RouteUtils
 
 

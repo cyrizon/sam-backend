@@ -8,7 +8,7 @@ Responsable de l'assemblage final et du formatage des résultats.
 
 import os
 from typing import List, Dict
-from .toll_matcher import MatchedToll
+from src.cache.parsers.toll_matcher import MatchedToll
 from .intelligent_segmentation_helpers import RouteUtils
 from .response_harmonizer import ResponseHarmonizer
 

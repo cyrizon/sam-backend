@@ -7,7 +7,7 @@ Responsabilité : localiser les points d'entrée et de sortie autour des péages
 """
 
 from typing import List, Dict, Tuple, Optional
-from .toll_matcher import MatchedToll
+from src.cache.parsers.toll_matcher import MatchedToll
 
 
 class TollEntranceExitFinder:

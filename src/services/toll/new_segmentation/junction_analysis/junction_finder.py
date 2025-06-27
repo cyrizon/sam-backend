@@ -6,7 +6,7 @@ Module pour trouver les motorway_junctions sur une route.
 """
 
 from typing import List, Dict
-from ..osm_data_parser import OSMDataParser
+from src.cache.parsers.osm_parser import OSMParser
 from ..polyline_intersection import point_to_polyline_distance
 from .geographic_utils import calculate_distance_km
 
@@ -16,7 +16,7 @@ class JunctionFinder:
     Classe pour trouver les motorway_junctions qui sont sur une route donnée.
     """
     
-    def __init__(self, osm_parser: OSMDataParser):
+    def __init__(self, osm_parser: OSMParser):
         """
         Initialise le finder avec les données OSM.
         

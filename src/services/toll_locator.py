@@ -16,7 +16,7 @@ import pandas as pd
 from shapely.geometry import Point, LineString
 from shapely.strtree import STRtree
 from pyproj import Transformer
-from src.services.osm_data_cache import osm_data_cache
+from src.cache import osm_data_cache
 import unicodedata
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ def _ensure_barriers(csv_path):
 
 def _get_barriers_from_cache():
     """Récupère les barrières depuis le cache global"""
-    from src.services.toll_data_cache import toll_data_cache
+    from src.cache import toll_data_cache
     return toll_data_cache.barriers_df, toll_data_cache.spatial_index
 
 def _normalize_name(name):
@@ -77,6 +77,7 @@ def locate_tolls(
     # 1) Géométrie ORS → LineString WGS84
     route_line = shape(ors_geojson["features"][0]["geometry"])
     # 2) Charger les péages OSM depuis le cache global (déjà initialisé)
+    from src.cache import osm_data_cache
     tolls = osm_data_cache.toll_stations
     # 3) Calculer la distance point-segment pour chaque péage
     detected = []

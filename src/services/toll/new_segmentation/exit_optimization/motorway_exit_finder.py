@@ -5,7 +5,7 @@ motorway_exit_finder.py
 Module spécialisé pour trouver les sorties d'autoroute optimales (motorway_junction).
 
 Responsabilité unique :
-- Utiliser les classes existantes d'OSMDataParser
+- Utiliser les classes existantes d'OSMParser
 - Filtrer les sorties pertinentes (avec référence, pas d'aires de repos)
 - Sélectionner la sortie la plus proche pour l'optimisation
 
@@ -17,7 +17,8 @@ Avantages par rapport aux péages :
 """
 
 from typing import List, Optional
-from ..osm_data_parser import OSMDataParser, MotorwayJunction
+from src.cache.parsers.osm_parser import OSMParser
+from src.cache.models.motorway_junction import MotorwayJunction
 
 
 class MotorwayExitFinder:
@@ -25,7 +26,7 @@ class MotorwayExitFinder:
     Trouve les sorties d'autoroute optimales en utilisant les données OSM existantes.
     """
     
-    def __init__(self, osm_data_parser: OSMDataParser):
+    def __init__(self, osm_data_parser: OSMParser):
         """
         Initialise le finder avec un parser OSM.
         
@@ -168,7 +169,7 @@ class MotorwayExitFinder:
         Returns:
             List[float]: Coordonnées [lon, lat] du dernier point de la way
         """
-        from src.services.osm_data_cache import osm_data_cache
+        from src.cache import osm_data_cache
         
         junction_coords = junction_data['coordinates']
         

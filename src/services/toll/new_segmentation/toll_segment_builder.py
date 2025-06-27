@@ -7,7 +7,7 @@ Responsabilité : orchestrer la construction des segments en évitant les péage
 """
 
 from typing import List, Dict, Optional
-from .toll_matcher import MatchedToll
+from src.cache.parsers.toll_matcher import MatchedToll
 from .toll_entrance_exit_finder import TollEntranceExitFinder
 from .motorway_junction_analyzer import MotorwayJunctionAnalyzer
 from .segment_building import SegmentStrategy, SegmentBuilders

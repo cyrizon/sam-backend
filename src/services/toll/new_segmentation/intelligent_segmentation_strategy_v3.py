@@ -19,14 +19,14 @@ Algorithme :
 
 from typing import List, Dict, Optional, Tuple
 from .intelligent_segmentation_helpers import SegmentationSpecialCases, RouteUtils
-from .toll_matcher import TollMatcher, MatchedToll, convert_osm_tolls_to_matched_format
+from src.cache.parsers.toll_matcher import TollMatcher, MatchedToll, convert_osm_tolls_to_matched_format
 from .toll_deduplicator import TollDeduplicator
 from .polyline_intersection import filter_tolls_on_route_strict
 from .exit_optimization import ExitOptimizationManager
 from .segment_route_calculator import SegmentRouteCalculator
 from .route_assembler import RouteAssembler
 from benchmark.performance_tracker import performance_tracker
-from src.services.osm_data_cache import osm_data_cache
+from src.cache import osm_data_cache
 
 
 class IntelligentSegmentationStrategyV3:
@@ -246,7 +246,7 @@ class TollwaysAnalyzer:
         }
         
         for i, segment in enumerate(tollways_segments):
-            if segment['is_toll']:
+            if segment.get('is_toll', False):
                 # Trouver quels péages sont dans ce segment
                 tolls_in_segment = self._find_tolls_in_segment(segment, tolls_on_route, route_coords)
                 

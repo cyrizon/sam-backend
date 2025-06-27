@@ -1,8 +1,9 @@
 """
-osm_csv_match_reporter.py
+Report Generator Utilities
 -------------------------
 
-Utilitaires pour générer un rapport JSON des correspondances OSM/CSV pour les péages.
+Utilities for generating OSM/CSV matching reports.
+Moved from osm_csv_match_reporter.py
 """
 
 import json
@@ -18,6 +19,7 @@ def write_osm_csv_match_report(
     Génère deux rapports JSON :
     - matched_path : péages OSM matchés avec le CSV
     - unmatched_path : péages OSM non matchés
+    
     Args:
         toll_stations: Liste d'objets TollStation (ou dict équivalent)
         matched_path: Chemin du fichier de sortie pour les matchés
@@ -25,6 +27,7 @@ def write_osm_csv_match_report(
     """
     matched = []
     unmatched = []
+    
     for toll in toll_stations:
         entry = {
             "osm_id": getattr(toll, "feature_id", None),
@@ -36,6 +39,7 @@ def write_osm_csv_match_report(
             "csv_coordinates": None,
             "distance_m": None
         }
+        
         csv_match = getattr(toll, "csv_match", None)
         if csv_match:
             entry["csv_id"] = csv_match.get("id")
@@ -46,8 +50,12 @@ def write_osm_csv_match_report(
             matched.append(entry)
         else:
             unmatched.append(entry)
+    
     with open(matched_path, "w", encoding="utf-8") as f:
         json.dump(matched, f, ensure_ascii=False, indent=2)
+    
     with open(unmatched_path, "w", encoding="utf-8") as f:
         json.dump(unmatched, f, ensure_ascii=False, indent=2)
-    print(f"📝 Rapport OSM/CSV : {len(matched)} matchés → {matched_path}, {len(unmatched)} non-matchés → {unmatched_path}")
+    
+    print(f"📝 Rapport OSM/CSV : {len(matched)} matchés → {matched_path}, "
+          f"{len(unmatched)} non-matchés → {unmatched_path}")

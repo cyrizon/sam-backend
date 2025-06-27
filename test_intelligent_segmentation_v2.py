@@ -13,7 +13,7 @@ from src.services.ors_service import ORSService
 
 # Initialiser le cache des barrières
 try:
-    from src.services.toll_data_cache import toll_data_cache
+    from src.cache import toll_data_cache
     toll_data_cache.initialize()
     print("✅ Cache des péages initialisé")
 except Exception as e:

@@ -12,8 +12,8 @@ Responsabilité :
 """
 
 from typing import List, Dict, Optional
-from .toll_matcher import MatchedToll
-from .osm_data_parser import OSMDataParser
+from src.cache.parsers.toll_matcher import MatchedToll
+from src.cache.parsers.osm_parser import OSMParser
 from .junction_analysis.junction_finder import JunctionFinder
 from .junction_analysis.junction_filter import JunctionFilter
 from .junction_analysis.exit_validator import ExitValidator
@@ -24,7 +24,7 @@ class MotorwayJunctionAnalyzer:
     Analyse les motorway_junctions pour trouver les vraies sorties d'autoroute.
     """
     
-    def __init__(self, osm_parser: OSMDataParser):
+    def __init__(self, osm_parser: OSMParser):
         """
         Initialise l'analyzeur avec les données OSM.
         

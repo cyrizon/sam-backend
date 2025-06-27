@@ -1,15 +1,15 @@
 """
-link_finder.py
---------------
+Link Finder
+-----------
 
-Module pour trouver les liens entre motorway_junctions et motorway_links.
-
-Responsabilité : recherche et association des éléments OSM par proximité.
+Module for finding links between motorway_junctions and motorway_links.
+Refactored from linking/link_finder.py with updated imports.
 """
 
 from typing import List, Optional
-from src.services.toll.new_segmentation.osm_data_parser import MotorwayJunction, MotorwayLink
-from src.services.toll.new_segmentation.linking.distance_calculator import is_within_distance
+from ..models.motorway_junction import MotorwayJunction
+from ..models.motorway_link import MotorwayLink
+from src.cache.linking.distance_calculator import is_within_distance
 
 
 class LinkFinder:

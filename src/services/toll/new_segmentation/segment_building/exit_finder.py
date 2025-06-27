@@ -7,7 +7,7 @@ Responsabilité : trouver les meilleures sorties après les péages pour éviter
 """
 
 from typing import List, Optional
-from ..toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 
 
 class ExitFinder:

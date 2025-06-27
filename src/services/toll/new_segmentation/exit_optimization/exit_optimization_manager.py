@@ -21,9 +21,9 @@ Architecture :
 from typing import List, Optional
 from src.services.toll.new_segmentation.exit_optimization.motorway_exit_finder import MotorwayExitFinder
 from src.services.toll.new_segmentation.exit_optimization.exit_toll_detector import ExitTollDetector
-from src.services.toll.new_segmentation.toll_matcher import MatchedToll
-from src.services.toll.new_segmentation.osm_data_parser import OSMDataParser, MotorwayJunction
-from src.services.toll.new_segmentation.toll_matcher import TollMatcher
+from src.cache.models.matched_toll import MatchedToll
+from src.cache.parsers.osm_parser import OSMParser, MotorwayJunction
+from src.cache.parsers.toll_matcher import TollMatcher
 
 
 class ExitOptimizationManager:
@@ -31,7 +31,7 @@ class ExitOptimizationManager:
     Gestionnaire principal pour l'optimisation des sorties d'autoroute.
     """
     
-    def __init__(self, osm_data_parser: OSMDataParser, toll_matcher: TollMatcher, ors_service):
+    def __init__(self, osm_data_parser: OSMParser, toll_matcher: TollMatcher, ors_service):
         """
         Initialise le gestionnaire avec les services nécessaires.
         
@@ -427,5 +427,5 @@ class ExitOptimizationManager:
 
     def _calculate_distance(self, point1: List[float], point2: List[float]) -> float:
         """Calcule la distance entre deux points en km."""
-        from src.services.toll.new_segmentation.osm_data_parser import calculate_distance
+        from src.cache.utils.geographic_utils import calculate_distance
         return calculate_distance(point1, point2)

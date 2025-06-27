@@ -7,8 +7,8 @@ Responsable de l'identification des sorties et motorway_links.
 """
 
 from typing import List, Optional
-from .osm_data_parser import OSMDataParser, MotorwayJunction, MotorwayLink
-from .toll_matcher import MatchedToll
+from src.cache.parsers.osm_parser import OSMParser, MotorwayJunction, MotorwayLink
+from src.cache.parsers.toll_matcher import MatchedToll
 import math
 
 
@@ -18,7 +18,7 @@ class SegmentationPointFinder:
     pour la stratégie intelligente V2.
     """
     
-    def __init__(self, osm_parser: OSMDataParser):
+    def __init__(self, osm_parser: OSMParser):
         """
         Initialise le finder avec le parser OSM.
         
@@ -274,7 +274,7 @@ class SegmentationPointFinder:
         print("   🔄 Utilisation des coordonnées de la sortie comme point de segmentation")
         
         # Créer un motorway_link fictif basé sur la sortie
-        from .osm_data_parser import MotorwayLink
+        from src.cache.parsers.osm_parser import MotorwayLink
         
         # Créer un objet simple avec l'attribut coordinates attendu
         class FallbackLink:

@@ -14,8 +14,8 @@ Responsabilité :
 
 from typing import List, Dict, Optional, Tuple
 import math
-from .toll_matcher import MatchedToll
-from .osm_data_parser import OSMDataParser
+from src.cache.parsers.toll_matcher import MatchedToll
+from src.cache.parsers.osm_parser import OSMParser
 from .polyline_intersection import point_to_polyline_distance, calculate_distance
 
 
@@ -50,7 +50,7 @@ class MotorwayJunctionAnalyzer:
     Analyse les motorway_junctions pour trouver les vraies sorties d'autoroute.
     """
     
-    def __init__(self, osm_parser: OSMDataParser):
+    def __init__(self, osm_parser: OSMParser):
         """
         Initialise l'analyzeur avec les données OSM.
         

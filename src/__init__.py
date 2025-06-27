@@ -16,11 +16,11 @@ def create_app():
     app.config.from_object(config)
 
     print("🚀 Initialisation du cache global des péages...")
-    from src.services.toll_data_cache import toll_data_cache
+    from src.cache import toll_data_cache
     toll_data_cache.initialize()
 
     print("🚦 Initialisation du cache global OSM...")
-    from src.services.osm_data_cache import osm_data_cache
+    from src.cache import osm_data_cache
     osm_data_cache.initialize()
 
     # Enregistrer les routes

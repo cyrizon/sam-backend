@@ -1,10 +1,9 @@
 """
-distance_calculator.py
----------------------
+Distance Calculator
+------------------
 
-Module pour calculer les distances entre points géographiques.
-
-Responsabilité : calculs de distance précis en mètres.
+Module for calculating distances between geographic points.
+Moved from linking/distance_calculator.py
 """
 
 import math

@@ -6,7 +6,7 @@ Module pour filtrer les junctions selon leur position par rapport aux péages.
 """
 
 from typing import List, Dict
-from ..toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 from .geographic_utils import find_route_position
 
 

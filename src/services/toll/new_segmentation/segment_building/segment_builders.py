@@ -7,7 +7,7 @@ Responsabilité : créer différents types de segments selon les contextes spéc
 """
 
 from typing import List, Dict
-from ..toll_matcher import MatchedToll
+from src.cache.models.matched_toll import MatchedToll
 from .toll_positioning import TollPositioning
 from .exit_finder import ExitFinder
 
