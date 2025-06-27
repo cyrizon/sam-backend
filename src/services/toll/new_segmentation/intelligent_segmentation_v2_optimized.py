@@ -133,6 +133,16 @@ class IntelligentSegmentationStrategyV2Optimized:
             
             # Étape 6 : Assemblage final optimisé
             print("🔧 Étape 6 : Assemblage final optimisé...")
+            # DEBUG PRINT: Afficher tous les attributs des péages sélectionnés juste avant l'assemblage final
+            print("\n[DEBUG] selected_tolls avant assemblage final:")
+            for t in selected_tolls:
+                print({
+                    'id': getattr(t, 'osm_id', getattr(t, 'id', None)),
+                    'csv_id': getattr(t, 'csv_id', None),
+                    'name': getattr(t, 'effective_name', getattr(t, 'name', None)),
+                    'coords': getattr(t, 'osm_coordinates', getattr(t, 'coordinates', None)),
+                    'role': getattr(t, 'role', None),
+                })
             final_route = self.route_assembler.assemble_final_route_multi(
                 calculated_segments, target_tolls, selected_tolls
             )
@@ -514,24 +524,9 @@ class IntelligentSegmentationStrategyV2Optimized:
     ) -> List[Dict]:
         """
         Crée les segments optimisés basés sur l'analyse des tollways.
-        
-        LOGIQUE OPTIMISÉE :
-        - Utilise les motorway_junctions + motorway_links liés
-        - Pas de recherche géographique inutile
-        - Segments gratuits : pas d'usage entre deux péages fermés
-        
-        Args:
-            coordinates: [départ, arrivée]
-            tollways_data: Données des segments tollways
-            tolls_on_segments: Tous les péages sur segments
-            selected_tolls: Péages sélectionnés
-            route_coords: Coordonnées de la route
-            
-        Returns:
-            List[Dict]: Segments optimisés
+        Ajoute le scindage automatique à la position exacte du péage de sortie (is_exit=True).
         """
         print("🏗️ Création segments optimisés...")
-        
         print("\n🟦 DEBUG: Péages transmis à l'analyseur de segments (tous sur la route, <1m, après déduplication):")
         for t in tolls_on_segments:
             print(f"   - {t.effective_name} | {t.csv_role} | {t.osm_coordinates}")
@@ -543,16 +538,47 @@ class IntelligentSegmentationStrategyV2Optimized:
             tolls_on_segments,  # TOUS les péages détectés sur la route
             route_coords
         )
-        
+
+        # --- SCINDAGE AUTOMATIQUE SUR PÉAGE DE SORTIE ---
+        # On cherche les péages de sortie sélectionnés
+        exit_tolls = [t for t in selected_tolls if getattr(t, 'is_exit', False)]
+        if exit_tolls:
+            print(f"🚦 Scindage automatique demandé pour {len(exit_tolls)} péage(s) de sortie : {[t.effective_name for t in exit_tolls]}")
+            # Pour chaque péage de sortie, on cherche le segment qui le contient et on scinde à sa position exacte
+            for exit_toll in exit_tolls:
+                # Trouver l'index du point le plus proche du péage sur la polyligne de la route
+                min_dist = float('inf')
+                min_idx = None
+                for idx, pt in enumerate(route_coords):
+                    d = self._calculate_distance_meters(pt, exit_toll.osm_coordinates)
+                    if d < min_dist:
+                        min_dist = d
+                        min_idx = idx
+                if min_idx is not None:
+                    print(f"   ➡️ Péage {exit_toll.effective_name} : coupure à l'index {min_idx} (distance {min_dist:.1f}m)")
+                    # Trouver le segment tollway qui contient ce point
+                    for seg in tollways_data['segments']:
+                        if seg['start_waypoint'] < min_idx < seg['end_waypoint']:
+                            # Scinder le segment en deux à min_idx
+                            seg1 = seg.copy()
+                            seg2 = seg.copy()
+                            seg1['end_waypoint'] = min_idx
+                            seg2['start_waypoint'] = min_idx
+                            # On remplace le segment original par les deux nouveaux
+                            idx_seg = tollways_data['segments'].index(seg)
+                            tollways_data['segments'].pop(idx_seg)
+                            tollways_data['segments'].insert(idx_seg, seg2)
+                            tollways_data['segments'].insert(idx_seg, seg1)
+                            print(f"   ✂️ Segment {idx_seg} scindé en deux à l'index {min_idx}")
+                            break
+        # --- FIN SCINDAGE AUTOMATIQUE ---
+
         # Identifier les segments à éviter
         segments_indices_to_avoid = self._identify_segments_to_avoid(analysis, selected_tolls)
-        
-        # Debug : afficher les indices à éviter
         for index in segments_indices_to_avoid:
             print(f"   📝 Segment {index} ajouté à la liste d'évitement")
-        
         print(f"🎯 {len(segments_indices_to_avoid)} segments seront évités sur {len(segments_indices_to_avoid)} identifiés")
-        
+
         # Créer les segments d'évitement avec logique optimisée
         avoidance_segments = self.avoidance_manager.create_avoidance_segments(
             tollways_data['segments'],
@@ -561,30 +587,23 @@ class IntelligentSegmentationStrategyV2Optimized:
             coordinates[0],
             coordinates[1]
         )
-        
+
         # Optimiser l'assemblage final pour éviter les redondances
         optimized_segments = self._optimize_final_assembly(avoidance_segments)
-
-        # Marquage des segments réutilisables (mêmes coordonnées que segment de base)
         base_segments = tollways_data.get('segments', [])
         for seg in optimized_segments:
             for idx, base_seg in enumerate(base_segments):
-                # On suppose que les segments ont 'start' et 'end' (coordonnées [lon, lat] ou [lat, lon])
                 seg_start = seg.get('start') or seg.get('start_coord')
                 seg_end = seg.get('end') or seg.get('end_coord')
                 base_start = base_seg.get('start_coord') if 'start_coord' in base_seg else None
                 base_end = base_seg.get('end_coord') if 'end_coord' in base_seg else None
-                # Si les coordonnées sont identiques (tolérance stricte)
                 if seg_start == base_start and seg_end == base_end:
                     seg['reuse_base_segment'] = True
                     seg['base_segment_index'] = idx
                     break
                 else:
                     seg['reuse_base_segment'] = False
-
-        # Appliquer la logique des segments gratuits optimisée
         final_segments = self._apply_free_segments_logic(optimized_segments, selected_tolls)
-
         print(f"✅ {len(final_segments)} segments optimisés créés")
         return final_segments
     
@@ -607,14 +626,14 @@ class IntelligentSegmentationStrategyV2Optimized:
         segments_to_avoid = []
         
         # Étape 1 : Segments avec péages non-sélectionnés
+        # Correction : éviter un segment payant uniquement s'il ne contient AUCUN péage sélectionné
         for segment_info in analysis['segments_with_tolls']:
             segment_toll_ids = {toll.osm_id for toll in segment_info['tolls']}
-            
-            # Si le segment contient des péages non-sélectionnés, l'éviter
-            if not segment_toll_ids.issubset(selected_toll_ids):
+            # Si le segment ne contient aucun péage sélectionné, l'éviter
+            if not segment_toll_ids.intersection(selected_toll_ids):
                 segments_to_avoid.append(segment_info['segment_index'])
                 toll_names = [toll.effective_name for toll in segment_info['tolls']]
-                print(f"   🚫 Segment {segment_info['segment_index']} à éviter (péages non-sélectionnés: {toll_names})")
+                print(f"   🚫 Segment {segment_info['segment_index']} à éviter (aucun péage sélectionné parmi: {toll_names})")
         
         # Étape 2 : Identifier les "faux segments gratuits" dans les systèmes fermés
         false_free_segments = self._identify_false_free_segments(analysis, selected_tolls)

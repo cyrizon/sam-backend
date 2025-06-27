@@ -111,6 +111,38 @@ class TollwaysAnalyzer:
             if start_waypoint <= toll_position <= end_waypoint:
                 tolls_in_segment.append(toll)
         
+        # Ajout : inclure les selected_tolls non détectés sur la route mais proches du segment
+        for sel_toll in getattr(self, 'selected_tolls', []):
+            if sel_toll not in tolls_in_segment:
+                pt = sel_toll.osm_coordinates
+                min_dist = float('inf')
+                for i in range(start_waypoint, end_waypoint):
+                    seg_a = route_coords[i]
+                    seg_b = route_coords[i+1]
+                    # Calcul distance point-segment (approx. WGS84)
+                    from math import radians, cos, sin, sqrt, atan2
+                    def haversine(lon1, lat1, lon2, lat2):
+                        R = 6371000
+                        dlon = radians(lon2 - lon1)
+                        dlat = radians(lat2 - lat1)
+                        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+                        c = 2 * atan2(sqrt(a), sqrt(1-a))
+                        return R * c
+                    # Distance point-segment
+                    def point_segment_dist(p, a, b):
+                        # Projection du point p sur le segment ab
+                        from numpy import array, dot
+                        pa = array([p[0]-a[0], p[1]-a[1]])
+                        ba = array([b[0]-a[0], b[1]-a[1]])
+                        t = max(0, min(1, dot(pa, ba) / dot(ba, ba) if dot(ba, ba) != 0 else 0))
+                        proj = [a[0]+t*ba[0], a[1]+t*ba[1]]
+                        return haversine(p[0], p[1], proj[0], proj[1])
+                    dist = point_segment_dist(pt, seg_a, seg_b)
+                    if dist < min_dist:
+                        min_dist = dist
+                if min_dist < 1000:
+                    tolls_in_segment.append(sel_toll)
+        
         return tolls_in_segment
     
     def _find_toll_position_on_route(

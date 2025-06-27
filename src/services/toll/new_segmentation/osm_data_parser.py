@@ -410,8 +410,8 @@ class OSMDataParser:
             # Effectuer le matching avec les données CSV
             matched_tolls = matcher.match_osm_tolls_with_csv(osm_tolls_dict, max_distance_km=5.0)
 
-            # Appel de la fonction pour lier les junctions aux péages de sortie
-            self.link_junctions_with_tolls(matched_tolls)
+            # RÉCUPÉRER la liste matched_tolls mise à jour après l'appel à link_junctions_with_tolls
+            matched_tolls = self.link_junctions_with_tolls(matched_tolls)
 
             # Associer les résultats du matching aux toll_stations
             self._associate_csv_matches(matched_tolls)
@@ -473,27 +473,36 @@ class OSMDataParser:
         """
         Pour chaque motorway_junction, cherche un péage sur une de ses motorway_links (<2m de la polyligne).
         Si trouvé, met à jour les attributs toll et toll_station.
+        Met à jour is_exit=True sur le MatchedToll correspondant et retourne la nouvelle liste matched_tolls.
         """
+        def toll_is_on_link(toll, link):
+            # Utilise uniquement osm_coordinates (plus juste et toujours présent)
+            polyline = link.coordinates
+            pt = toll.osm_coordinates
+            min_dist = self._distance_point_to_polyline_meters(pt, polyline)
+            return min_dist <= max_distance_m
+
         for junction in getattr(self, 'motorway_junctions', []):
             found = False
             for link in getattr(junction, 'linked_motorway_links', []):
                 for toll in matched_tolls:
-                    dist = self._distance_point_to_polyline_meters(toll.osm_coordinates, getattr(link, 'coordinates', []))
-                    if dist < max_distance_m:
-                        junction.toll = True
-                        junction.toll_station = toll
-                        found = True
-                        break
+                    # On vérifie que le péage a bien des osm_coordinates (toujours le cas normalement)
+                    if hasattr(toll, 'osm_coordinates') and toll.osm_coordinates:
+                        if toll_is_on_link(toll, link):
+                            junction.toll = True
+                            junction.toll_station = toll
+                            toll.is_exit = True
+                            found = True
+                            break
                 if found:
                     break
             if not found:
                 junction.toll = False
                 junction.toll_station = None
-        # Affiche le nombre de sorties avec péage
+
         n_exit_tolls = sum(1 for j in getattr(self, 'motorway_junctions', []) if j.toll)
         print(f"[OSMDataParser] Nombre de sorties avec péage : {n_exit_tolls}")
 
-        # Affichage détaillé pour la jonction de test à péage
         from src.services.toll.new_segmentation.linking.junction_linker import JunctionLinker
         linker = JunctionLinker()
         test_junction_id = "621758529"
@@ -504,17 +513,14 @@ class OSMDataParser:
             print(f"   🔗 Nombre de links liés : {len(test_junction.linked_motorway_links)}")
             print(f"   🚦 Péage détecté : {test_junction.toll}")
             if test_junction.toll_station:
-                ts = test_junction.toll_station
-                print(f"   🏷️ Péage associé : {getattr(ts, 'effective_name', getattr(ts, 'name', None))}")
-                print(f"      - OSM ID : {getattr(ts, 'osm_id', getattr(ts, 'feature_id', None))}")
-                print(f"      - csv_role : {getattr(ts, 'csv_role', None)}")
-                print(f"      - Coordonnées (osm_coordinates) : {getattr(ts, 'osm_coordinates', getattr(ts, 'coordinates', None))}")
+                print(f"   🏷️ Péage associé : {getattr(test_junction.toll_station, 'effective_name', None)} (is_exit={getattr(test_junction.toll_station, 'is_exit', None)})")
             if test_junction.linked_motorway_links:
-                last_link = test_junction.linked_motorway_links[-1]
-                print(f"   ➡️ Fin de la dernière motorway_link liée : {last_link.get_end_point()}")
+                print(f"   ➡️ Premier link : {test_junction.linked_motorway_links[0].way_id}")
         else:
             print(f"\n❌ Junction de test {test_junction_id} non trouvée pour affichage péage")
-    
+
+        return matched_tolls
+
     def _distance_point_to_polyline_meters(self, pt, polyline):
         """
         Calcule la distance minimale (en mètres) entre un point pt et une polyligne (liste de [lon, lat]).
