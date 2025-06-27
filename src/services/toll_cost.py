@@ -32,13 +32,13 @@ def add_marginal_cost(
     for t in tolls:
         rid = t.get("csv_id") or t.get("id")
         cost = 0.0        # Rôle déduit de l'id
-        print(f"Calcul du coût pour le péage {rid} ({veh_class})")
+        # print(f"Calcul du coût pour le péage {rid} ({veh_class})")
         if rid.startswith("APRR_O"):
             # Péage ouvert : coût fixe (entrée = sortie)
             try:
                 edges_df = _get_edges_from_cache()
                 cost = edges_df.loc[(rid, rid)][veh_class]
-                print(f"Coût fixe pour {rid} : {cost}")
+                # print(f"Coût fixe pour {rid} : {cost}")
             except KeyError:
                 cost = 0.0
             prev_entry = None  # On repart de zéro
@@ -48,7 +48,7 @@ def add_marginal_cost(
                 try:
                     edges_df = _get_edges_from_cache()
                     cost = edges_df.loc[(prev_entry, rid)][veh_class]
-                    print(f"Coût pour {prev_entry} ➜ {rid} : {cost}")
+                    # print(f"Coût pour {prev_entry} ➜ {rid} : {cost}")
                 except KeyError:
                     cost = 0.0
                 prev_entry = None
