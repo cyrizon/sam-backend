@@ -535,6 +535,8 @@ class IntelligentSegmentationStrategyV2Optimized:
 
         # --- SCINDAGE AUTOMATIQUE SUR PÉAGE DE SORTIE (AVANT ANALYSE) ---
         exit_tolls = [t for t in selected_tolls if getattr(t, 'is_exit', False)]
+        segments_to_remove = []  # Segments à supprimer après scindage de sortie
+        
         if exit_tolls:
             print(f"🚦 Scindage automatique demandé pour {len(exit_tolls)} péage(s) de sortie : {[t.effective_name for t in exit_tolls]}")
             for exit_toll in exit_tolls:
@@ -557,18 +559,31 @@ class IntelligentSegmentationStrategyV2Optimized:
                             seg['end_waypoint'] += 1
                 if min_idx is not None:
                     print(f"   ➡️ Péage {exit_toll.effective_name} : coupure à l'index {min_idx} (distance {min_dist:.1f}m)")
-                    for seg in tollways_data['segments']:
+                    for i, seg in enumerate(tollways_data['segments']):
                         if seg['start_waypoint'] < min_idx < seg['end_waypoint']:
                             seg1 = seg.copy()
                             seg2 = seg.copy()
                             seg1['end_waypoint'] = min_idx
                             seg2['start_waypoint'] = min_idx
-                            idx_seg = tollways_data['segments'].index(seg)
-                            tollways_data['segments'].pop(idx_seg)
-                            tollways_data['segments'].insert(idx_seg, seg2)
-                            tollways_data['segments'].insert(idx_seg, seg1)
-                            print(f"   ✂️ Segment {idx_seg} scindé en deux à l'index {min_idx}")
+                            
+                            # Remplacer le segment original par les deux nouveaux
+                            tollways_data['segments'].pop(i)
+                            tollways_data['segments'].insert(i, seg2)
+                            tollways_data['segments'].insert(i, seg1)
+                            
+                            print(f"   ✂️ Segment {i} scindé en deux à l'index {min_idx}")
+                            print(f"   🗑️ Segment après péage de sortie sera supprimé (index {i+1})")
+                            
+                            # Marquer le segment APRÈS le péage de sortie pour suppression
+                            segments_to_remove.append(i+1)
                             break
+        
+        # Supprimer les segments après péages de sortie (en ordre inverse pour ne pas décaler les indices)
+        for idx in sorted(segments_to_remove, reverse=True):
+            if idx < len(tollways_data['segments']):
+                removed_seg = tollways_data['segments'].pop(idx)
+                print(f"   🗑️ Segment {idx} supprimé (après péage de sortie): waypoints {removed_seg['start_waypoint']}-{removed_seg['end_waypoint']}")
+        
         # --- FIN SCINDAGE AUTOMATIQUE ---
 
         # Analyser les segments tollways vs TOUS les péages détectés sur la route
