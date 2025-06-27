@@ -20,9 +20,11 @@ def test_integration_with_real_services():
     print("🔧 Test intégration V2 Optimisée avec services réels")
     
     try:
-        # Initialiser le cache OSM (requis pour les péages pré-matchés)
+        # Initialiser le cache OSM avec le nouveau système de cache (requis pour les péages pré-matchés)
         print("📁 Initialisation cache OSM...")
-        osm_data_cache.initialize()
+        import os
+        osm_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "data", "osm_export_toll.geojson")
+        osm_data_cache.load_osm_data_with_cache(osm_file_path)
         
         # Initialiser le service ORS
         print("🛣️ Initialisation service ORS...")
@@ -83,8 +85,10 @@ def test_prematched_tolls_validation():
     print("🔍 Validation des péages pré-matchés")
     
     try:
-        # Initialiser le cache OSM
-        osm_data_cache.initialize()
+        # Initialiser le cache OSM avec le nouveau système de cache
+        import os
+        osm_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "data", "osm_export_toll.geojson")
+        osm_data_cache.load_osm_data_with_cache(osm_file_path)
         
         # Vérifier que le parser OSM a bien les péages
         osm_parser = osm_data_cache._osm_parser
@@ -131,8 +135,10 @@ def test_performance_comparison():
         import time
         from src.services.toll.new_segmentation.intelligent_segmentation_strategy_v2 import IntelligentSegmentationStrategyV2
         
-        # Initialiser les services
-        osm_data_cache.initialize()
+        # Initialiser les services avec le nouveau système de cache
+        import os
+        osm_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "data", "osm_export_toll.geojson")
+        osm_data_cache.load_osm_data_with_cache(osm_file_path)
         ors_service = ORSService()
         
         # Coordonnées de test

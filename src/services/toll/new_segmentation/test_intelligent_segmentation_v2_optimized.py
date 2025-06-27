@@ -23,8 +23,10 @@ def test_v2_optimized_basic():
     """Test de base de la stratégie V2 optimisée."""
     print("🧪 Test V2 Optimisée - Fonctionnement de base")
     
-    # Initialiser le cache OSM (requis)
-    osm_data_cache.initialize()
+    # Initialiser le cache OSM avec le nouveau système de cache
+    import os
+    osm_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "data", "osm_export_toll.geojson")
+    osm_data_cache.load_osm_data_with_cache(osm_file_path)
     
     # Mock du service ORS
     mock_ors = Mock()
@@ -110,8 +112,10 @@ def test_prematched_tolls_logic():
     """Test de la logique des péages pré-matchés."""
     print("🧪 Test logique péages pré-matchés")
     
-    # Initialiser le cache OSM
-    osm_data_cache.initialize()
+    # Initialiser le cache OSM avec le nouveau système de cache
+    import os
+    osm_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "data", "osm_export_toll.geojson")
+    osm_data_cache.load_osm_data_with_cache(osm_file_path)
     
     mock_ors = Mock()
     strategy = IntelligentSegmentationStrategyV2Optimized(mock_ors)

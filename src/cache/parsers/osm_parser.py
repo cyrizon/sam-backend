@@ -32,6 +32,7 @@ class OSMParser:
         self.motorway_junctions: List[MotorwayJunction] = []
         self.motorway_links: List[MotorwayLink] = []
         self.toll_stations: List[TollStation] = []
+        self.matched_tolls: List = []  # Stocker les péages matchés OSM/CSV
     
     def load_and_parse(self) -> bool:
         """
@@ -227,6 +228,10 @@ class OSMParser:
             ]
             
             matched_tolls = matcher.match_osm_tolls_with_csv(osm_tolls_dict)
+            
+            # Stocker les matched tolls pour le cache
+            self.matched_tolls = matched_tolls
+            
             self._associate_csv_matches(matched_tolls)
             
             # Phase 3b: Linking des péages avec les junctions

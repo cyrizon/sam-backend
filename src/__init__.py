@@ -15,13 +15,18 @@ def create_app():
     config = Config().dev_config if env == "dev" else Config().production_config
     app.config.from_object(config)
 
-    print("🚀 Initialisation du cache global des péages...")
-    from src.cache import toll_data_cache
-    toll_data_cache.initialize()
-
-    print("🚦 Initialisation du cache global OSM...")
+    print(" Initialisation du cache global OSM avec sérialisation...")
     from src.cache import osm_data_cache
-    osm_data_cache.initialize()
+    
+    # Charger le cache OSM depuis le disque ou créer s'il n'existe pas
+    # (Le cache des péages sera automatiquement initialisé si nécessaire)
+    osm_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "osm_export_toll.geojson")
+    success = osm_data_cache.load_osm_data_with_cache(osm_file_path)
+    
+    if success:
+        print("✅ Cache OSM chargé avec succès")
+    else:
+        print("❌ Erreur lors du chargement du cache OSM")
 
     # Enregistrer les routes
     from src.routes import register_routes

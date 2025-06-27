@@ -16,9 +16,11 @@ def test_prematching_names():
     """Test rapide du pré-matching avec affichage des noms CSV."""
     print("🧪 Test correction pré-matching - Noms CSV")
     
-    # Initialiser le cache OSM (cela déclenchera le pré-matching)
+    # Initialiser le cache OSM avec le nouveau système de cache (cela déclenchera le pré-matching)
     print("📁 Initialisation cache OSM...")
-    osm_data_cache.initialize()
+    import os
+    osm_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "data", "osm_export_toll.geojson")
+    osm_data_cache.load_osm_data_with_cache(osm_file_path)
     
     # Vérifier le parser
     osm_parser = osm_data_cache._osm_parser
