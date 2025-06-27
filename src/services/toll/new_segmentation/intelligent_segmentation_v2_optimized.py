@@ -111,7 +111,7 @@ class IntelligentSegmentationStrategyV2Optimized:
             if not selected_tolls:
                 return None
             # Optimisation sortie système fermé (remplacement du dernier péage fermé si besoin)
-            selected_tolls = self._optimize_exit_for_closed_system(selected_tolls, tolls_on_segments, route_coords)
+            selected_tolls, tolls_on_segments = self._optimize_exit_for_closed_system(selected_tolls, tolls_on_segments, route_coords)
 
             # Étape 4 : Segmentation intelligente basée sur tollways
             print("🏗️ Étape 4 : Segmentation intelligente optimisée...")
@@ -524,7 +524,8 @@ class IntelligentSegmentationStrategyV2Optimized:
     ) -> List[Dict]:
         """
         Crée les segments optimisés basés sur l'analyse des tollways.
-        Ajoute le scindage automatique à la position exacte du péage de sortie (is_exit=True).
+        Ajoute le scindage automatique à la position exacte du péage de sortie (is_exit=True)
+        et force le passage par ce point dans la polyligne.
         """
         print("🏗️ Création segments optimisés...")
         print("\n🟦 DEBUG: Péages transmis à l'analyseur de segments (tous sur la route, <1m, après déduplication):")
@@ -532,21 +533,11 @@ class IntelligentSegmentationStrategyV2Optimized:
             print(f"   - {t.effective_name} | {t.csv_role} | {t.osm_coordinates}")
         print(f"🟦 DEBUG: Péages sélectionnés (à utiliser): {[t.effective_name for t in selected_tolls]}")
 
-        # Analyser les segments tollways vs TOUS les péages détectés sur la route
-        analysis = self.tollways_analyzer.analyze_segments_for_tolls(
-            tollways_data['segments'],
-            tolls_on_segments,  # TOUS les péages détectés sur la route
-            route_coords
-        )
-
-        # --- SCINDAGE AUTOMATIQUE SUR PÉAGE DE SORTIE ---
-        # On cherche les péages de sortie sélectionnés
+        # --- SCINDAGE AUTOMATIQUE SUR PÉAGE DE SORTIE (AVANT ANALYSE) ---
         exit_tolls = [t for t in selected_tolls if getattr(t, 'is_exit', False)]
         if exit_tolls:
             print(f"🚦 Scindage automatique demandé pour {len(exit_tolls)} péage(s) de sortie : {[t.effective_name for t in exit_tolls]}")
-            # Pour chaque péage de sortie, on cherche le segment qui le contient et on scinde à sa position exacte
             for exit_toll in exit_tolls:
-                # Trouver l'index du point le plus proche du péage sur la polyligne de la route
                 min_dist = float('inf')
                 min_idx = None
                 for idx, pt in enumerate(route_coords):
@@ -554,17 +545,24 @@ class IntelligentSegmentationStrategyV2Optimized:
                     if d < min_dist:
                         min_dist = d
                         min_idx = idx
+                # Si le point du péage n'est pas déjà exactement sur la polyligne, on l'insère
+                if min_idx is not None and min_dist > 1.0:
+                    print(f"   ➕ Insertion du point exact du péage {exit_toll.effective_name} dans la polyligne à l'index {min_idx}")
+                    route_coords.insert(min_idx, exit_toll.osm_coordinates)
+                    # Décaler tous les start_waypoint/end_waypoint > min_idx
+                    for seg in tollways_data['segments']:
+                        if seg['start_waypoint'] > min_idx:
+                            seg['start_waypoint'] += 1
+                        if seg['end_waypoint'] >= min_idx:
+                            seg['end_waypoint'] += 1
                 if min_idx is not None:
                     print(f"   ➡️ Péage {exit_toll.effective_name} : coupure à l'index {min_idx} (distance {min_dist:.1f}m)")
-                    # Trouver le segment tollway qui contient ce point
                     for seg in tollways_data['segments']:
                         if seg['start_waypoint'] < min_idx < seg['end_waypoint']:
-                            # Scinder le segment en deux à min_idx
                             seg1 = seg.copy()
                             seg2 = seg.copy()
                             seg1['end_waypoint'] = min_idx
                             seg2['start_waypoint'] = min_idx
-                            # On remplace le segment original par les deux nouveaux
                             idx_seg = tollways_data['segments'].index(seg)
                             tollways_data['segments'].pop(idx_seg)
                             tollways_data['segments'].insert(idx_seg, seg2)
@@ -573,13 +571,40 @@ class IntelligentSegmentationStrategyV2Optimized:
                             break
         # --- FIN SCINDAGE AUTOMATIQUE ---
 
-        # Identifier les segments à éviter
+        # Analyser les segments tollways vs TOUS les péages détectés sur la route
+        # IMPORTANT: L'analyse doit être faite APRÈS le scindage pour tenir compte des nouveaux segments
+        print("🔍 Analyse des segments après scindage...")
+        analysis = self.tollways_analyzer.analyze_segments_for_tolls(
+            tollways_data['segments'],
+            tolls_on_segments,  # TOUS les péages détectés sur la route
+            route_coords
+        )
+        
+        # DEBUG : Vérifier que les péages de sortie sont bien détectés dans l'analyse
+        print("\n🟦 DEBUG: Résultats de l'analyse après scindage:")
+        for segment_info in analysis['segments_with_tolls']:
+            seg_tolls = [f"{t.effective_name}{'(EXIT)' if getattr(t, 'is_exit', False) else ''}" for t in segment_info['tolls']]
+            print(f"   - Segment {segment_info['segment_index']}: {seg_tolls}")
+        
+        exit_tolls_in_analysis = []
+        for segment_info in analysis['segments_with_tolls']:
+            for toll in segment_info['tolls']:
+                if getattr(toll, 'is_exit', False):
+                    exit_tolls_in_analysis.append((toll.effective_name, segment_info['segment_index']))
+        
+        if exit_tolls_in_analysis:
+            print(f"🚦 Péages de sortie détectés dans l'analyse: {exit_tolls_in_analysis}")
+        else:
+            print("⚠️ AUCUN péage de sortie détecté dans l'analyse !")
+            # Vérifier si les péages de sortie sont dans tolls_on_segments
+            exit_in_input = [t.effective_name for t in tolls_on_segments if getattr(t, 'is_exit', False)]
+            print(f"   🔍 Péages de sortie dans tolls_on_segments: {exit_in_input}")
+
         segments_indices_to_avoid = self._identify_segments_to_avoid(analysis, selected_tolls)
         for index in segments_indices_to_avoid:
             print(f"   📝 Segment {index} ajouté à la liste d'évitement")
         print(f"🎯 {len(segments_indices_to_avoid)} segments seront évités sur {len(segments_indices_to_avoid)} identifiés")
 
-        # Créer les segments d'évitement avec logique optimisée
         avoidance_segments = self.avoidance_manager.create_avoidance_segments(
             tollways_data['segments'],
             segments_indices_to_avoid,  # Passer les indices directement
@@ -588,7 +613,6 @@ class IntelligentSegmentationStrategyV2Optimized:
             coordinates[1]
         )
 
-        # Optimiser l'assemblage final pour éviter les redondances
         optimized_segments = self._optimize_final_assembly(avoidance_segments)
         base_segments = tollways_data.get('segments', [])
         for seg in optimized_segments:
@@ -610,30 +634,52 @@ class IntelligentSegmentationStrategyV2Optimized:
     def _identify_segments_to_avoid(self, analysis: Dict, selected_tolls: List[MatchedToll]) -> List[int]:
         """
         Identifie les segments tollways à éviter selon la logique optimisée.
+        Ne marque jamais comme 'à éviter' un segment qui contient un péage sélectionné is_exit=True.
         
-        LOGIQUE : 
-        1. Éviter les segments qui contiennent des péages non-sélectionnés
-        2. Éviter les "faux segments gratuits" dans les systèmes fermés
-        
-        Args:
-            analysis: Analyse des segments vs péages
-            selected_tolls: Péages sélectionnés à garder
-            
-        Returns:
-            List[int]: Indices des segments à éviter
+        Utilise une comparaison robuste des péages qui peut tolérer des légères modifications
+        de coordonnées après optimisation.
         """
-        selected_toll_ids = {toll.osm_id for toll in selected_tolls}
+        print(f"🔍 Analyse segments à éviter : {len(selected_tolls)} péages sélectionnés")
+        
+        # Identifier les péages de sortie
+        exit_tolls = [toll for toll in selected_tolls if getattr(toll, 'is_exit', False)]
+        print(f"   📍 {len(exit_tolls)} péages de sortie identifiés")
+        
         segments_to_avoid = []
         
-        # Étape 1 : Segments avec péages non-sélectionnés
-        # Correction : éviter un segment payant uniquement s'il ne contient AUCUN péage sélectionné
         for segment_info in analysis['segments_with_tolls']:
-            segment_toll_ids = {toll.osm_id for toll in segment_info['tolls']}
-            # Si le segment ne contient aucun péage sélectionné, l'éviter
-            if not segment_toll_ids.intersection(selected_toll_ids):
+            segment_tolls = segment_info['tolls']
+            
+            # RÈGLE 1 : Ne jamais éviter un segment qui contient un péage de sortie sélectionné
+            has_exit_toll = False
+            for segment_toll in segment_tolls:
+                if any(self._are_tolls_equivalent(segment_toll, exit_toll) for exit_toll in exit_tolls):
+                    has_exit_toll = True
+                    break
+            
+            if has_exit_toll:
+                toll_names = [toll.effective_name for toll in segment_tolls]
+                print(f"   ✅ Segment {segment_info['segment_index']} PROTÉGÉ (contient péage de sortie sélectionné: {toll_names})")
+                continue
+            
+            # RÈGLE 2 : Si le segment ne contient aucun péage sélectionné, l'éviter
+            has_selected_toll = False
+            for segment_toll in segment_tolls:
+                if any(self._are_tolls_equivalent(segment_toll, selected_toll) for selected_toll in selected_tolls):
+                    has_selected_toll = True
+                    break
+            
+            if not has_selected_toll:
                 segments_to_avoid.append(segment_info['segment_index'])
-                toll_names = [toll.effective_name for toll in segment_info['tolls']]
+                toll_names = [toll.effective_name for toll in segment_tolls]
                 print(f"   🚫 Segment {segment_info['segment_index']} à éviter (aucun péage sélectionné parmi: {toll_names})")
+            else:
+                # Debug : montrer quels péages sont sélectionnés dans ce segment
+                matching_tolls = []
+                for segment_toll in segment_tolls:
+                    if any(self._are_tolls_equivalent(segment_toll, selected_toll) for selected_toll in selected_tolls):
+                        matching_tolls.append(segment_toll.effective_name)
+                print(f"   ✅ Segment {segment_info['segment_index']} CONSERVÉ (contient péages sélectionnés: {matching_tolls})")
         
         # Étape 2 : Identifier les "faux segments gratuits" dans les systèmes fermés
         false_free_segments = self._identify_false_free_segments(analysis, selected_tolls)
@@ -648,6 +694,9 @@ class IntelligentSegmentationStrategyV2Optimized:
         Un segment gratuit est "faux" s'il est entre deux péages fermés du même système,
         car on ne peut pas sortir de l'autoroute sans payer.
         
+        Utilise une comparaison géographique robuste (coordonnées) plutôt que les objets
+        qui peuvent changer après scindage.
+        
         Args:
             analysis: Analyse des segments vs péages
             selected_tolls: Péages sélectionnés
@@ -657,14 +706,21 @@ class IntelligentSegmentationStrategyV2Optimized:
         """
         false_free_segments = []
         
-        # Obtenir les péages fermés non-sélectionnés
+        # Créer un set de coordonnées des péages sélectionnés pour comparaison robuste
+        selected_toll_coords = {
+            (toll.osm_coordinates[0], toll.osm_coordinates[1]) 
+            for toll in selected_tolls
+        }
+        
+        # Obtenir les péages fermés non-sélectionnés (comparaison par coordonnées)
         all_tolls_on_route = []
         for segment_info in analysis['segments_with_tolls']:
             all_tolls_on_route.extend(segment_info['tolls'])
         
         unselected_closed_tolls = [
             toll for toll in all_tolls_on_route 
-            if toll.csv_role == 'F' and toll not in selected_tolls
+            if toll.csv_role == 'F' and 
+            (toll.osm_coordinates[0], toll.osm_coordinates[1]) not in selected_toll_coords
         ]
         
         if len(unselected_closed_tolls) < 2:
@@ -1028,7 +1084,7 @@ class IntelligentSegmentationStrategyV2Optimized:
         selected_tolls: List[MatchedToll],
         tolls_on_segments: List[MatchedToll],
         route_coords: List[List[float]]
-    ) -> List[MatchedToll]:
+    ) -> Tuple[List[MatchedToll], List[MatchedToll]]:
         """
         Optimise la sélection de sortie pour les systèmes fermés :
         - Cherche la dernière sortie motorway_junction à péage (csv_role == 'F')
@@ -1039,13 +1095,13 @@ class IntelligentSegmentationStrategyV2Optimized:
         print("🔄 Optimisation de la sortie pour les systèmes fermés...")
         if not selected_tolls or not tolls_on_segments or len(selected_tolls) < 2:
             print("   ⛔ Pas assez de péages sélectionnés pour optimisation.")
-            return selected_tolls
+            return selected_tolls, tolls_on_segments
 
         closed_selected = [t for t in selected_tolls if t.csv_role == 'F' and t.csv_id]
         print(f"   ➡️ Péages fermés sélectionnés : {[t.effective_name for t in closed_selected]}")
         if len(closed_selected) < 2:
             print("   ⛔ Moins de 2 péages fermés sélectionnés.")
-            return selected_tolls
+            return selected_tolls, tolls_on_segments
 
         last_closed = closed_selected[-1]
         prev_closed = closed_selected[-2]
@@ -1054,7 +1110,7 @@ class IntelligentSegmentationStrategyV2Optimized:
 
         if not hasattr(self.osm_parser, 'motorway_junctions'):
             print("   ⛔ Pas de motorway_junctions dans osm_parser.")
-            return selected_tolls
+            return selected_tolls, tolls_on_segments
         junctions = [j for j in self.osm_parser.motorway_junctions if hasattr(j, 'toll') and j.toll and hasattr(j, 'toll_station') and j.toll_station and j.toll_station.csv_id and (j.toll_station.csv_id.split('_')[0] if '_' in j.toll_station.csv_id else j.toll_station.csv_id) == system_prefix]
         print(f"   🔗 Junctions à péage du système : {len(junctions)}")
 
@@ -1062,7 +1118,7 @@ class IntelligentSegmentationStrategyV2Optimized:
         coord_prev = prev_closed.osm_coordinates
         if not coord_last or not coord_prev:
             print("   ⛔ Coordonnées manquantes pour les péages fermés.")
-            return selected_tolls
+            return selected_tolls, tolls_on_segments
 
         # 1. Filtrer les junctions à moins de 5km du dernier péage fermé sélectionné
         close_junctions = []
@@ -1079,7 +1135,7 @@ class IntelligentSegmentationStrategyV2Optimized:
 
         if not close_junctions:
             print("   ⛔ Aucune junction à <5km du dernier péage.")
-            return selected_tolls
+            return selected_tolls, tolls_on_segments
 
         # 2. Garder celles qui sont entre le péage précédent et le péage actuel (ordre sur la route)
         def find_index(coord):
@@ -1107,7 +1163,7 @@ class IntelligentSegmentationStrategyV2Optimized:
 
         if not between_junctions:
             print("   ⛔ Aucune junction entre les deux péages sur la route.")
-            return selected_tolls
+            return selected_tolls, tolls_on_segments
 
         # 3. Pour celles qui restent, vérifier la distance au segment [coord_prev, coord_last] (<1km)
         final_candidates = []
@@ -1122,7 +1178,7 @@ class IntelligentSegmentationStrategyV2Optimized:
 
         if not final_candidates:
             print("   ⛔ Aucune junction à <1km du segment.")
-            return selected_tolls
+            return selected_tolls, tolls_on_segments
 
         # 4. Prendre la dernière (la plus proche du dernier péage fermé sélectionné sur la route)
         final_candidates.sort(key=lambda x: x[2], reverse=(idx_last > idx_prev))
@@ -1140,9 +1196,34 @@ class IntelligentSegmentationStrategyV2Optimized:
                     print("      Coordonnées mises à jour :", getattr(candidate.toll_station, 'osm_coordinates', None))
 
         new_selected = selected_tolls.copy()
+        new_tolls_on_segments = tolls_on_segments.copy()
+        
+        # Remplacer dans selected_tolls
         for i in range(len(new_selected)-1, -1, -1):
-            if new_selected[i] == last_closed:
+            if self._are_tolls_equivalent(new_selected[i], last_closed):
                 new_selected[i] = candidate.toll_station
                 print(f"   🔄 Optimisation sortie système fermé : remplacement de {last_closed.effective_name} par {candidate.toll_station.effective_name} (coord={getattr(candidate.toll_station, 'osm_coordinates', None)})")
                 break
-        return new_selected
+        
+        # Remplacer également dans tolls_on_segments pour maintenir la cohérence
+        for i in range(len(new_tolls_on_segments)-1, -1, -1):
+            if self._are_tolls_equivalent(new_tolls_on_segments[i], last_closed):
+                new_tolls_on_segments[i] = candidate.toll_station
+                print(f"   🔄 Remplacement également dans tolls_on_segments pour cohérence")
+                break
+        
+        return new_selected, new_tolls_on_segments
+    
+    def _are_tolls_equivalent(self, toll1: MatchedToll, toll2: MatchedToll) -> bool:
+        """
+        Compare deux péages de manière robuste en utilisant les osm_id.
+        
+        Args:
+            toll1: Premier péage
+            toll2: Deuxième péage
+            
+        Returns:
+            bool: True si les péages sont équivalents
+        """
+        # Les péages ont forcément des osm_id, on compare juste ça
+        return toll1.osm_id == toll2.osm_id
