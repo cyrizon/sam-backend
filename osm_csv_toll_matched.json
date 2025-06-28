@@ -704,6 +704,22 @@
     "distance_m": 7.708542868171072
   },
   {
+    "osm_id": "way/126370225",
+    "osm_name": "Gare de péage de Chalon Centre",
+    "osm_coordinates": [
+      4.8298421,
+      46.8024904
+    ],
+    "csv_id": "APRR_F023",
+    "csv_name": "Chalon Nord",
+    "csv_role": "F",
+    "csv_coordinates": [
+      4.829865664318293,
+      46.80245333670697
+    ],
+    "distance_m": 6.573497115508182
+  },
+  {
     "osm_id": "node/131854822",
     "osm_name": "Chatillon-La Borde",
     "osm_coordinates": [
@@ -734,6 +750,22 @@
       47.939129665629984
     ],
     "distance_m": 206.99533565916107
+  },
+  {
+    "osm_id": "way/161418037",
+    "osm_name": "Thiers Ouest",
+    "osm_coordinates": [
+      3.5037643,
+      45.8599515
+    ],
+    "csv_id": "ASF__F178",
+    "csv_name": "Thiers Ouest",
+    "csv_role": "F",
+    "csv_coordinates": [
+      3.503863357095259,
+      45.859875995039374
+    ],
+    "distance_m": 16.348089714692307
   },
   {
     "osm_id": "node/173269453",
@@ -2384,6 +2416,22 @@
     "distance_m": 31.02573356425468
   },
   {
+    "osm_id": "way/884068230",
+    "osm_name": "Péage du Tunnel Maurice-Lemaire",
+    "osm_coordinates": [
+      7.1110383,
+      48.2901135
+    ],
+    "csv_id": "DIRE_O001",
+    "csv_name": "Lusse",
+    "csv_role": "O",
+    "csv_coordinates": [
+      7.0845707459681675,
+      48.29216125752242
+    ],
+    "distance_m": 2966.207761402432
+  },
+  {
     "osm_id": "node/924440768",
     "osm_name": "Saint-Denis-lès-Sens",
     "osm_coordinates": [
@@ -2462,6 +2510,22 @@
       46.2724489079215
     ],
     "distance_m": 83.3768150243027
+  },
+  {
+    "osm_id": "way/1028515579",
+    "osm_name": "Péage de Montmarault",
+    "osm_coordinates": [
+      2.9663184,
+      46.3276628
+    ],
+    "csv_id": "APRR_F072",
+    "csv_name": "Montmarault",
+    "csv_role": "F",
+    "csv_coordinates": [
+      2.966254514841353,
+      46.32770436071954
+    ],
+    "distance_m": 9.770605182675158
   },
   {
     "osm_id": "node/1034029729",

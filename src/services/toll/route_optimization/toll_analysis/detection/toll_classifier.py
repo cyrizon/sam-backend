@@ -13,7 +13,7 @@ class TollClassifier:
     """Classificateur et indexeur de péages optimisé."""
     
     # Seuils de classification (en mètres)
-    ON_ROUTE_THRESHOLD = 1.0      # Péages SUR la route
+    ON_ROUTE_THRESHOLD = 50.0      # Péages SUR la route
     AROUND_THRESHOLD = 1000.0     # Péages AUTOUR de la route
     
     @staticmethod

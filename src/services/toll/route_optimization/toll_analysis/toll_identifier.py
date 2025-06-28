@@ -11,6 +11,7 @@ from typing import List, Dict, Optional, Tuple
 from .spatial.spatial_index import SpatialIndexManager
 from .detection.distance_calculator import OptimizedDistanceCalculator  
 from .detection.toll_classifier import TollClassifier
+from .verification.shapely_verifier import ShapelyVerifier
 
 
 class TollIdentifier:
@@ -24,6 +25,7 @@ class TollIdentifier:
         self.spatial_index = SpatialIndexManager()
         self.distance_calculator = OptimizedDistanceCalculator()
         self.classifier = TollClassifier()
+        self.verifier = ShapelyVerifier()
     
     def identify_tolls_on_route(
         self, 
@@ -33,10 +35,11 @@ class TollIdentifier:
         """
         ÉTAPE 3: Identifie les péages sur la route et autour.
         
-        Processus optimisé en 3 phases :
+        Processus optimisé en 4 phases :
         1. Pré-filtrage spatial (R-tree)
         2. Calcul distances optimisé 
         3. Classification et indexation
+        4. Vérification Shapely précise
         
         Args:
             route_coordinates: Coordonnées de la route
@@ -64,7 +67,10 @@ class TollIdentifier:
             return self._create_empty_result()
         
         # Phase 3: Classification et indexation
-        return self._classify_and_index(toll_distances, tollway_segments, route_coordinates)
+        phase3_result = self._classify_and_index(toll_distances, tollway_segments, route_coordinates)
+        
+        # Phase 4: Vérification Shapely précise
+        return self._shapely_verification(phase3_result, route_coordinates, tollway_segments)
     
     def _spatial_prefiltering(self, route_coordinates: List[List[float]]) -> List:
         """
@@ -132,7 +138,7 @@ class TollIdentifier:
             route_coordinates: Coordonnées de la route
             
         Returns:
-            Résultats complets de l'identification
+            Résultats de la phase 3 (avant vérification Shapely)
         """
         print("   📊 Phase 3: Classification et indexation...")
         
@@ -147,58 +153,163 @@ class TollIdentifier:
         # Création de la liste ordonnée
         ordered_tolls = self.classifier.create_ordered_tolls_list(segments_mapping)
         
-        return self._build_complete_result(
-            classified, segments_mapping, ordered_tolls, tollway_segments
-        )
+        return {
+            'classified': classified,
+            'segments_mapping': segments_mapping,
+            'ordered_tolls': ordered_tolls
+        }
     
-    def _build_complete_result(
+    def _shapely_verification(
         self, 
-        classified: Dict, 
-        segments_mapping: Dict,
-        ordered_tolls: List[Dict],
+        phase3_result: Dict, 
+        route_coordinates: List[List[float]],
         tollway_segments: List[Dict]
     ) -> Dict:
         """
-        Construit le résultat complet de l'identification.
+        Phase 4: Vérification Shapely précise.
         
         Args:
-            classified: Péages classifiés par distance
-            segments_mapping: Mapping par segments
-            ordered_tolls: Liste ordonnée des péages
+            phase3_result: Résultats de la phase 3
+            route_coordinates: Coordonnées de la route
+            tollway_segments: Segments tollways
+            
+        Returns:
+            Résultats finaux après vérification Shapely
+        """
+        # Vérification Shapely de tous les péages
+        shapely_result = self.verifier.verify_tolls_with_shapely(
+            phase3_result['classified']['on_route'],
+            phase3_result['classified']['around'],
+            route_coordinates
+        )
+        
+        # Reconstruction des segments avec les péages vérifiés Shapely
+        verified_segments_mapping = self._rebuild_segments_mapping(
+            shapely_result['shapely_on_route'], 
+            tollway_segments, 
+            route_coordinates
+        )
+        
+        # Création liste ordonnée finale
+        final_ordered_tolls = self.classifier.create_ordered_tolls_list(verified_segments_mapping)
+        
+        return self._build_complete_result_with_shapely(
+            phase3_result, shapely_result, verified_segments_mapping, 
+            final_ordered_tolls, tollway_segments
+        )
+    
+    def _rebuild_segments_mapping(
+        self, 
+        shapely_on_route: List[Dict], 
+        tollway_segments: List[Dict],
+        route_coordinates: List[List[float]]
+    ) -> Dict:
+        """
+        Reconstruit le mapping par segments avec les péages vérifiés Shapely.
+        
+        Args:
+            shapely_on_route: Péages confirmés par Shapely
+            tollway_segments: Segments tollways
+            route_coordinates: Coordonnées route
+            
+        Returns:
+            Nouveau mapping par segments
+        """
+        # Transformer format pour compatibilité avec classifier
+        tolls_for_mapping = []
+        for toll_data in shapely_on_route:
+            toll = toll_data['toll']
+            
+            # Recalculer l'index du point le plus proche (approximatif)
+            closest_point_idx = self._find_closest_point_index(
+                toll, route_coordinates
+            )
+            
+            tolls_for_mapping.append({
+                'toll': toll,
+                'closest_point_idx': closest_point_idx,
+                'distance': toll_data['shapely_distance']
+            })
+        
+        # Utiliser le classifier pour le mapping
+        return self.classifier.index_tolls_by_segments(
+            tolls_for_mapping, tollway_segments, route_coordinates
+        )
+    
+    def _find_closest_point_index(self, toll, route_coordinates: List[List[float]]) -> int:
+        """Trouve l'index du point le plus proche sur la route."""
+        if not hasattr(toll, 'osm_coordinates') or not toll.osm_coordinates:
+            return 0
+        
+        toll_coords = toll.osm_coordinates
+        min_dist = float('inf')
+        closest_idx = 0
+        
+        for i, route_point in enumerate(route_coordinates):
+            # Distance approximative
+            dx = toll_coords[0] - route_point[0]
+            dy = toll_coords[1] - route_point[1]
+            dist = dx*dx + dy*dy  # Distance carrée suffit pour comparaison
+            
+            if dist < min_dist:
+                min_dist = dist
+                closest_idx = i
+        
+        return closest_idx
+    
+    def _build_complete_result_with_shapely(
+        self, 
+        phase3_result: Dict,
+        shapely_result: Dict,
+        verified_segments_mapping: Dict,
+        final_ordered_tolls: List[Dict],
+        tollway_segments: List[Dict]
+    ) -> Dict:
+        """
+        Construit le résultat final avec vérification Shapely.
+        
+        Args:
+            phase3_result: Résultats phase 3
+            shapely_result: Résultats vérification Shapely
+            verified_segments_mapping: Mapping final des segments
+            final_ordered_tolls: Liste ordonnée finale
             tollway_segments: Segments tollways originaux
             
         Returns:
             Résultat complet formaté
         """
-        # Extraire les péages pour compatibilité
-        tolls_on_route = [item['toll'] for item in classified['on_route']]
-        tolls_around = [item['toll'] for item in classified['around']]
+        # Extraire les péages finaux
+        final_tolls_on_route = [item['toll'] for item in shapely_result['shapely_on_route']]
+        final_tolls_around = [item['toll'] for item in shapely_result['shapely_around']]
         
         result = {
             # Données principales (ÉTAPE 3)
-            'tolls_on_route': tolls_on_route,           # < 1m de la route
-            'tolls_around': tolls_around,               # < 1km de la route  
-            'segments_mapping': segments_mapping,        # Index par segments
-            'ordered_tolls': ordered_tolls,             # Ordre sur la route
+            'tolls_on_route': final_tolls_on_route,     # Vérifiés Shapely <5m
+            'tolls_around': final_tolls_around,         # Vérifiés Shapely >=5m  
+            'segments_mapping': verified_segments_mapping,  # Index par segments
+            'ordered_tolls': final_ordered_tolls,       # Ordre sur la route
             
             # Métadonnées pour validation ÉTAPE 4
-            'total_tolls_on_route': len(tolls_on_route),
-            'total_tolls_around': len(tolls_around),
-            'segments_with_tolls': len([s for s in segments_mapping.values() if s['tolls']]),
+            'total_tolls_on_route': len(final_tolls_on_route),
+            'total_tolls_around': len(final_tolls_around),
+            'segments_with_tolls': len([s for s in verified_segments_mapping.values() if s['tolls']]),
             'tollway_segments': tollway_segments,
             
             # Statistiques pour debugging
             'detection_stats': {
-                'candidates_found': len(classified['on_route']) + len(classified['around']) + len(classified['rejected']),
-                'on_route_count': len(tolls_on_route),
-                'around_count': len(tolls_around),
-                'rejected_count': len(classified['rejected']),
+                'candidates_found': len(phase3_result['classified']['on_route']) + len(phase3_result['classified']['around']) + len(phase3_result['classified']['rejected']),
+                'phase3_on_route': len(phase3_result['classified']['on_route']),
+                'phase3_around': len(phase3_result['classified']['around']),
+                'phase3_rejected': len(phase3_result['classified']['rejected']),
+                'final_on_route': len(final_tolls_on_route),
+                'final_around': len(final_tolls_around),
                 'segments_analyzed': len(tollway_segments),
-                'segments_with_tolls': len(segments_mapping)
+                'segments_with_tolls': len(verified_segments_mapping),
+                'shapely_verification': shapely_result['verification_stats']
             }
         }
         
-        self._print_identification_summary(result)
+        self._print_identification_summary_with_shapely(result)
         return result
     
     def _create_empty_result(self) -> Dict:
@@ -214,23 +325,34 @@ class TollIdentifier:
             'tollway_segments': [],
             'detection_stats': {
                 'candidates_found': 0,
-                'on_route_count': 0,
-                'around_count': 0,
-                'rejected_count': 0,
+                'phase3_on_route': 0,
+                'phase3_around': 0,
+                'phase3_rejected': 0,
+                'final_on_route': 0,
+                'final_around': 0,
                 'segments_analyzed': 0,
-                'segments_with_tolls': 0
+                'segments_with_tolls': 0,
+                'shapely_verification': {
+                    'total_verified': 0,
+                    'confirmed_on_route': 0,
+                    'moved_to_around': 0,
+                    'promoted_to_route': 0,
+                    'shapely_errors': 0
+                }
             }
         }
     
-    def _print_identification_summary(self, result: Dict) -> None:
-        """Affiche un résumé de l'identification."""
+    def _print_identification_summary_with_shapely(self, result: Dict) -> None:
+        """Affiche un résumé complet avec vérification Shapely."""
         stats = result['detection_stats']
+        shapely_stats = stats['shapely_verification']
         
-        print(f"✅ Identification terminée:")
-        print(f"   🎯 Péages SUR la route: {stats['on_route_count']}")
-        print(f"   🔄 Péages AUTOUR: {stats['around_count']}")
+        print(f"✅ Identification terminée (avec vérification Shapely):")
+        print(f"   🎯 Péages SUR la route (final): {stats['final_on_route']}")
+        print(f"   🔄 Péages AUTOUR (final): {stats['final_around']}")
         print(f"   📊 Segments avec péages: {stats['segments_with_tolls']}")
-        print(f"   🚫 Candidats rejetés: {stats['rejected_count']}")
+        print(f"   🔍 Shapely: {shapely_stats['promoted_to_route']} promus, "
+              f"{shapely_stats['moved_to_around']} rétrogradés")
     
     def get_spatial_index_stats(self) -> Dict:
         """Retourne les statistiques de l'index spatial."""

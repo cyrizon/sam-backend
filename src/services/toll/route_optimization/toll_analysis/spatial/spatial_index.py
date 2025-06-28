@@ -17,7 +17,9 @@ class SpatialIndexManager:
     def __init__(self):
         """Initialise le gestionnaire d'index spatial."""
         self.index = None
-        self.tolls_dict = {}
+        self.tolls_dict = {}  # int_id -> MatchedToll
+        self.id_mapping = {}  # string_id -> int_id  
+        self.reverse_id_mapping = {}  # int_id -> string_id
         self._build_index()
     
     def _build_index(self) -> None:
@@ -35,6 +37,8 @@ class SpatialIndexManager:
         # Construire l'index R-tree
         self.index = rtree.index.Index()
         
+        int_id = 0  # Compteur pour les IDs entiers
+        
         for toll in matched_tolls:
             if not toll.osm_coordinates or len(toll.osm_coordinates) < 2:
                 continue
@@ -44,11 +48,18 @@ class SpatialIndexManager:
             # Bounding box ponctuelle (point = rectangle de taille 0)
             bbox = (lon, lat, lon, lat)
             
-            # Insérer dans l'index
-            self.index.insert(toll.osm_id, bbox)
+            # Mapper string ID vers int ID
+            string_id = toll.osm_id
+            self.id_mapping[string_id] = int_id
+            self.reverse_id_mapping[int_id] = string_id
             
-            # Garder référence du péage
-            self.tolls_dict[toll.osm_id] = toll
+            # Insérer dans l'index avec ID entier
+            self.index.insert(int_id, bbox)
+            
+            # Garder référence du péage avec ID entier
+            self.tolls_dict[int_id] = toll
+            
+            int_id += 1
         
         print(f"✅ Index spatial construit : {len(self.tolls_dict)} péages indexés")
     

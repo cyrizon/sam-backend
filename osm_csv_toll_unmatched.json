@@ -1872,6 +1872,19 @@
     "distance_m": null
   },
   {
+    "osm_id": "way/34309162",
+    "osm_name": null,
+    "osm_coordinates": [
+      2.0640392,
+      47.2439548
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
     "osm_id": "node/34562273",
     "osm_name": "Péage de Thun l'Évêque",
     "osm_coordinates": [
@@ -1890,6 +1903,19 @@
     "osm_coordinates": [
       3.2718163,
       50.229424
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/34606404",
+    "osm_name": "Tarbes Est",
+    "osm_coordinates": [
+      0.1083469,
+      43.2137307
     ],
     "csv_id": null,
     "csv_name": null,
@@ -2015,6 +2041,19 @@
     "distance_m": null
   },
   {
+    "osm_id": "way/36331924",
+    "osm_name": "Biriatou",
+    "osm_coordinates": [
+      -1.7492943,
+      43.341062
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
     "osm_id": "node/36675385",
     "osm_name": "Aiguebelette",
     "osm_coordinates": [
@@ -2072,6 +2111,32 @@
     "osm_coordinates": [
       2.8218092,
       42.5275875
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/38701908",
+    "osm_name": "La Ciotat",
+    "osm_coordinates": [
+      5.5907939,
+      43.2051178
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/38702195",
+    "osm_name": "Sanary-Bandol",
+    "osm_coordinates": [
+      5.7685477,
+      43.1444053
     ],
     "csv_id": null,
     "csv_name": null,
@@ -2457,11 +2522,50 @@
     "distance_m": null
   },
   {
+    "osm_id": "way/62740228",
+    "osm_name": null,
+    "osm_coordinates": [
+      5.7992623,
+      45.5768849
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/73960051",
+    "osm_name": "Tarbes Ouest",
+    "osm_coordinates": [
+      0.0236576,
+      43.2207119
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
     "osm_id": "node/73963126",
     "osm_name": "Le Mans Sud",
     "osm_coordinates": [
       0.057575,
       47.9737345
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/78097693",
+    "osm_name": "Langon",
+    "osm_coordinates": [
+      -0.2620979,
+      44.5442981
     ],
     "csv_id": null,
     "csv_name": null,
@@ -2501,6 +2605,32 @@
     "osm_coordinates": [
       0.6577159,
       47.2184528
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/86178241",
+    "osm_name": "Péage A87 La Roche-sur-Yon",
+    "osm_coordinates": [
+      -1.346096,
+      46.6727904
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/89317008",
+    "osm_name": "Péage de Manosque",
+    "osm_coordinates": [
+      5.812988,
+      43.8078574
     ],
     "csv_id": null,
     "csv_name": null,
@@ -2782,6 +2912,19 @@
     "distance_m": null
   },
   {
+    "osm_id": "way/141815115",
+    "osm_name": "Péage de Saint-Arnoult-en-Yvelines",
+    "osm_coordinates": [
+      1.9305912,
+      48.5532622
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
     "osm_id": "node/146207158",
     "osm_name": "Toulouse Nord Est",
     "osm_coordinates": [
@@ -2800,6 +2943,19 @@
     "osm_coordinates": [
       1.4276826,
       43.6582936
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/150197015",
+    "osm_name": "Gare de Péage de Manzat",
+    "osm_coordinates": [
+      2.9826702,
+      45.9539661
     ],
     "csv_id": null,
     "csv_name": null,
@@ -2860,11 +3016,76 @@
     "distance_m": null
   },
   {
+    "osm_id": "way/185771940",
+    "osm_name": "Soumoulou",
+    "osm_coordinates": [
+      -0.1999305,
+      43.2725715
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/186678127",
+    "osm_name": "Sanary-Bandol",
+    "osm_coordinates": [
+      5.7719402,
+      43.1464054
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/186744061",
+    "osm_name": "Orthez",
+    "osm_coordinates": [
+      -0.7487089,
+      43.4672166
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
     "osm_id": "node/197118807",
     "osm_name": "Luigny",
     "osm_coordinates": [
       1.0331397,
       48.2345952
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/199564233",
+    "osm_name": null,
+    "osm_coordinates": [
+      2.063389,
+      47.2439314
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/203656818",
+    "osm_name": null,
+    "osm_coordinates": [
+      2.0646886,
+      47.2436436
     ],
     "csv_id": null,
     "csv_name": null,
@@ -2891,6 +3112,19 @@
     "osm_coordinates": [
       5.4138552,
       49.1109692
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/234262875",
+    "osm_name": "Péage de Sames",
+    "osm_coordinates": [
+      -1.1868635,
+      43.5297154
     ],
     "csv_id": null,
     "csv_name": null,
@@ -5187,6 +5421,32 @@
     "distance_m": null
   },
   {
+    "osm_id": "way/323631147",
+    "osm_name": "Bonneville",
+    "osm_coordinates": [
+      6.3821173,
+      46.0730681
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/323631148",
+    "osm_name": "Bonneville",
+    "osm_coordinates": [
+      6.3829927,
+      46.07345
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
     "osm_id": "node/331251955",
     "osm_name": "Vallée de la Nièvre",
     "osm_coordinates": [
@@ -5764,6 +6024,19 @@
     "osm_coordinates": [
       0.3385008,
       49.551066
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/399112480",
+    "osm_name": "Gare Maritime du Frioul",
+    "osm_coordinates": [
+      5.3065013,
+      43.2792871
     ],
     "csv_id": null,
     "csv_name": null,
@@ -6994,6 +7267,19 @@
     "distance_m": null
   },
   {
+    "osm_id": "way/669418365",
+    "osm_name": "Redevance nordique",
+    "osm_coordinates": [
+      5.6612515,
+      46.0725501
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
     "osm_id": "node/672506884",
     "osm_name": "Vouillé",
     "osm_coordinates": [
@@ -8047,6 +8333,19 @@
     "distance_m": null
   },
   {
+    "osm_id": "way/1065414951",
+    "osm_name": "Redevance nordique",
+    "osm_coordinates": [
+      5.9876879,
+      45.6492059
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
     "osm_id": "node/1091772679",
     "osm_name": "Captieux",
     "osm_coordinates": [
@@ -8611,6 +8910,19 @@
     "osm_coordinates": [
       0.3704759,
       49.3397764
+    ],
+    "csv_id": null,
+    "csv_name": null,
+    "csv_role": null,
+    "csv_coordinates": null,
+    "distance_m": null
+  },
+  {
+    "osm_id": "way/1329310535",
+    "osm_name": "Saint-Jean-les-Deux-Jumeaux",
+    "osm_coordinates": [
+      3.0397163,
+      48.9469286
     ],
     "csv_id": null,
     "csv_name": null,

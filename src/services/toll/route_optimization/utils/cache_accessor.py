@@ -7,7 +7,7 @@ Centralise l'accès aux données OSM pré-chargées et matchées.
 """
 
 from typing import List, Optional, Dict
-from src.cache import osm_data_cache
+from src.cache.cached_osm_manager import cached_osm_data_manager
 from src.cache.parsers.toll_matcher import MatchedToll
 
 
@@ -22,13 +22,13 @@ class CacheAccessor:
         Returns:
             Liste des stations de péage OSM
         """
-        if not osm_data_cache._osm_parser:
+        if not cached_osm_data_manager.is_loaded or not cached_osm_data_manager.osm_parser:
             return []
         
-        if not hasattr(osm_data_cache._osm_parser, 'toll_stations'):
+        if not hasattr(cached_osm_data_manager.osm_parser, 'toll_stations'):
             return []
         
-        return osm_data_cache._osm_parser.toll_stations or []
+        return cached_osm_data_manager.osm_parser.toll_stations or []
     
     @staticmethod
     def get_motorway_junctions() -> List:
@@ -38,13 +38,13 @@ class CacheAccessor:
         Returns:
             Liste des junctions d'autoroute OSM
         """
-        if not osm_data_cache._osm_parser:
+        if not cached_osm_data_manager.is_loaded or not cached_osm_data_manager.osm_parser:
             return []
         
-        if not hasattr(osm_data_cache._osm_parser, 'motorway_junctions'):
+        if not hasattr(cached_osm_data_manager.osm_parser, 'motorway_junctions'):
             return []
         
-        return osm_data_cache._osm_parser.motorway_junctions or []
+        return cached_osm_data_manager.osm_parser.motorway_junctions or []
     
     @staticmethod
     def get_motorway_links() -> List:
@@ -54,13 +54,13 @@ class CacheAccessor:
         Returns:
             Liste des liens d'autoroute OSM
         """
-        if not osm_data_cache._osm_parser:
+        if not cached_osm_data_manager.is_loaded or not cached_osm_data_manager.osm_parser:
             return []
         
-        if not hasattr(osm_data_cache._osm_parser, 'motorway_links'):
+        if not hasattr(cached_osm_data_manager.osm_parser, 'motorway_links'):
             return []
         
-        return osm_data_cache._osm_parser.motorway_links or []
+        return cached_osm_data_manager.osm_parser.motorway_links or []
     
     @staticmethod
     def get_matched_tolls() -> List[MatchedToll]:
@@ -117,8 +117,9 @@ class CacheAccessor:
         Returns:
             True si le cache est disponible, False sinon
         """
-        return (osm_data_cache._osm_parser is not None and 
-                hasattr(osm_data_cache._osm_parser, 'toll_stations'))
+        return (cached_osm_data_manager.is_loaded and 
+                cached_osm_data_manager.osm_parser is not None and
+                hasattr(cached_osm_data_manager.osm_parser, 'toll_stations'))
     
     @staticmethod
     def get_cache_stats() -> Dict:
