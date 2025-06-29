@@ -4,33 +4,35 @@ Spatial Index Manager
 
 Gère l'indexation spatiale R-tree pour une détection optimisée des péages.
 Responsabilité unique : index spatial et requêtes géographiques rapides.
+Utilise le cache V2 avec TollBoothStation.
 """
 
 import rtree.index
 from typing import List, Dict, Tuple, Optional
 from ...utils.cache_accessor import CacheAccessor
+from src.cache.v2.models.toll_booth_station import TollBoothStation
 
 
 class SpatialIndexManager:
-    """Gestionnaire d'index spatial R-tree optimisé."""
+    """Gestionnaire d'index spatial R-tree optimisé pour TollBoothStation."""
     
     def __init__(self):
         """Initialise le gestionnaire d'index spatial."""
         self.index = None
-        self.tolls_dict = {}  # int_id -> MatchedToll
+        self.tolls_dict = {}  # int_id -> TollBoothStation
         self.id_mapping = {}  # string_id -> int_id  
         self.reverse_id_mapping = {}  # int_id -> string_id
         self._build_index()
     
     def _build_index(self) -> None:
-        """Construit l'index spatial R-tree à partir du cache."""
+        """Construit l'index spatial R-tree à partir du cache V2."""
         print("🗂️ Construction de l'index spatial R-tree...")
         
-        # Récupérer les péages matchés du cache
-        matched_tolls = CacheAccessor.get_matched_tolls()
+        # Récupérer les stations de péage du cache V2
+        toll_stations = CacheAccessor.get_toll_stations()
         
-        if not matched_tolls:
-            print("⚠️ Aucun péage trouvé dans le cache")
+        if not toll_stations:
+            print("⚠️ Aucune station de péage trouvée dans le cache V2")
             self.index = rtree.index.Index()
             return
         
@@ -39,11 +41,11 @@ class SpatialIndexManager:
         
         int_id = 0  # Compteur pour les IDs entiers
         
-        for toll in matched_tolls:
-            if not toll.osm_coordinates or len(toll.osm_coordinates) < 2:
+        for toll in toll_stations:
+            if not toll.coordinates or len(toll.coordinates) < 2:
                 continue
             
-            lon, lat = toll.osm_coordinates[0], toll.osm_coordinates[1]
+            lon, lat = toll.coordinates[0], toll.coordinates[1]
             
             # Bounding box ponctuelle (point = rectangle de taille 0)
             bbox = (lon, lat, lon, lat)
@@ -119,9 +121,10 @@ class SpatialIndexManager:
         return {
             'total_tolls': len(self.tolls_dict),
             'index_available': self.index is not None,
-            'matched_tolls': sum(1 for t in self.tolls_dict.values() if t.csv_id),
-            'open_system_tolls': sum(1 for t in self.tolls_dict.values() if t.csv_role == 'O'),
-            'closed_system_tolls': sum(1 for t in self.tolls_dict.values() if t.csv_role == 'F')
+            'toll_stations': len(self.tolls_dict),
+            'open_tolls': sum(1 for t in self.tolls_dict.values() if t.is_open_toll),
+            'closed_tolls': sum(1 for t in self.tolls_dict.values() if t.is_closed_toll),
+            'operators': len(set(t.operator for t in self.tolls_dict.values() if t.operator))
         }
     
     def rebuild_index(self) -> bool:

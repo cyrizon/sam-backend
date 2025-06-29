@@ -159,6 +159,16 @@ class IntelligentOptimizer:
         if optimization_mode == 'count':
             tolls_available = identification_result['total_tolls_on_route']
             
+            # Cas spécial : si on ne demande qu'1 péage et qu'on n'a que des fermés
+            # → impossible de respecter la règle (fermé doit être accompagné)
+            # → renvoyer route sans péage
+            if target_tolls == 1:
+                open_tolls = sum(1 for toll in identification_result['tolls_on_route'] 
+                               if toll.get('toll_type') == 'ouvert')
+                if open_tolls == 0:
+                    print("⚠️ 1 péage demandé mais que des fermés → route sans péage")
+                    return True
+            
             if target_tolls >= tolls_available:
                 print(f"✅ Route de base suffisante : {tolls_available} péages disponibles >= {target_tolls} demandés")
                 return True
@@ -177,9 +187,12 @@ class IntelligentOptimizer:
         route_data: Dict,
         identification_result: Dict
     ) -> Optional[Dict]:
-        """ÉTAPES 5-8: Optimisation complète."""
+        """ÉTAPES 5-8: Optimisation complète avec segmentation."""
         
-        # ÉTAPE 5: Sélection péages
+        # ÉTAPE 5: Sélection péages avec remplacement intelligent
+        # Exemple: [Ouvert,Fermé1,Fermé2,Fermé3,Fermé4] → objectif 2
+        # Enlève: Ouvert,Fermé1,Fermé2 → reste: Fermé3,Fermé4
+        # Optimise: Fermé3 → EntréeX (pour éviter de passer par Fermé3 sur route)
         selection_result = self._select_tolls(
             identification_result, target_tolls, optimization_mode
         )
@@ -187,7 +200,9 @@ class IntelligentOptimizer:
             print("❌ Échec sélection péages")
             return None
         
-        # ÉTAPE 6: Création segments
+        # ÉTAPE 6: Création segments optimisés
+        # Segment 1: [Départ → Début EntréeX] (SANS péage)
+        # Segment 2: [Début EntréeX → Arrivée] (AVEC péages: EntréeX + Fermé4)
         segments_config = self.segment_creator.create_optimized_segments(
             coordinates, selection_result['selected_tolls'],
             identification_result, selection_result
@@ -196,7 +211,9 @@ class IntelligentOptimizer:
             print("❌ Échec création segments")
             return None
         
-        # ÉTAPE 7: Calcul segments
+        # ÉTAPE 7: Calcul segments avec ORS
+        # Appel 1: Route sans péage pour segment 1
+        # Appel 2: Route avec péages pour segment 2
         calculated_segments = self.segment_calculator.calculate_segments_routes(
             segments_config, {'segments_config': segments_config}
         )
@@ -204,7 +221,8 @@ class IntelligentOptimizer:
             print("❌ Échec calcul segments")
             return None
         
-        # ÉTAPE 8: Assemblage final
+        # ÉTAPE 8: Assemblage final des segments
+        # Combine: segment1 + segment2 → route finale optimisée
         final_route = self.route_assembler.assemble_final_route(
             calculated_segments, target_tolls, selection_result['selected_tolls']
         )

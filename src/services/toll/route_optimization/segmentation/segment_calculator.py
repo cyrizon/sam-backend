@@ -33,7 +33,7 @@ class SegmentCalculator:
         ÉTAPE 7: Calcule les routes pour chaque segment via ORS.
         
         Args:
-            segments_config: Configuration des segments à calculer
+            segments_config: Configuration des segments à calculer (depuis segment_creator)
             creation_result: Résultat de la création de segments (étape 6)
             
         Returns:
@@ -50,54 +50,112 @@ class SegmentCalculator:
         for i, segment in enumerate(segments_config):
             print(f"   📍 Calcul segment {i+1}/{len(segments_config)}...")
             
-            # TODO: Implémenter le calcul réel via ORS
-            # - Analyser le type de segment (avec/sans péages)
-            # - Configurer les paramètres ORS appropriés
-            # - Gérer les waypoints et optimisations
-            # - Valider les résultats
-            
-            # Calcul temporaire simple
-            segment_route = self._calculate_simple_segment(segment)
-            
-            if segment_route:
-                calculated_segments.append(segment_route)
-            else:
-                print(f"   ❌ Échec calcul segment {i+1}")
-        
-        print(f"✅ {len(calculated_segments)} segments calculés")
-        return calculated_segments
-    
-    def _calculate_simple_segment(self, segment_config: Dict) -> Dict:
-        """
-        Calcul temporaire simple d'un segment.
-        
-        Args:
-            segment_config: Configuration du segment
-            
-        Returns:
-            Segment calculé ou None si échec
-        """
-        try:
-            start_point = segment_config.get('start_point')
-            end_point = segment_config.get('end_point')
+            # Récupérer les coordonnées début/fin
+            start_point = segment.get('start_point')
+            end_point = segment.get('end_point')
+            avoid_tolls = segment.get('avoid_tolls', False)
             
             if not start_point or not end_point:
-                return None
+                print(f"   ❌ Coordonnées manquantes pour segment {i+1}")
+                continue
             
-            # Appel ORS simple temporaire
-            route = self.ors.get_base_route([start_point, end_point])
+            try:
+                # Appeler ORS selon le flag péage
+                if avoid_tolls:
+                    # Éviter les péages
+                    print(f"     🚫 Éviter péages : {start_point} -> {end_point}")
+                    route = self.ors.get_route_avoid_tollways([start_point, end_point])
+                else:
+                    # Autoriser les péages
+                    print(f"     💰 Avec péages : {start_point} -> {end_point}")
+                    route = self.ors.get_base_route([start_point, end_point])
+                
+                if route:
+                    # Extraire les informations utiles de la réponse ORS
+                    segment_result = self._extract_segment_info(route, segment, i, avoid_tolls)
+                    calculated_segments.append(segment_result)
+                    print(f"     ✅ Segment {i+1} calculé")
+                else:
+                    print(f"     ❌ Échec ORS pour segment {i+1}")
+                    
+            except Exception as e:
+                print(f"     ❌ Erreur calcul segment {i+1}: {e}")
+        
+        print(f"✅ {len(calculated_segments)} segments calculés sur {len(segments_config)}")
+        return calculated_segments
+    
+    def _extract_segment_info(self, ors_response: Dict, segment_config: Dict, index: int, avoid_tolls: bool) -> Dict:
+        """
+        Extrait les informations utiles de la réponse ORS.
+        
+        Args:
+            ors_response: Réponse complète d'ORS
+            segment_config: Configuration du segment
+            index: Index du segment
+            avoid_tolls: Flag éviter péages
             
-            if not route:
-                return None
+        Returns:
+            Segment avec informations extraites
+        """
+        try:
+            # Extraire les données principales du premier feature
+            feature = ors_response.get('features', [{}])[0]
+            properties = feature.get('properties', {})
+            geometry = feature.get('geometry', {})
+            
+            # Informations de résumé
+            summary = properties.get('summary', {})
+            distance = summary.get('distance', 0)  # en mètres
+            duration = summary.get('duration', 0)  # en secondes
+            
+            # Informations sur les péages
+            extras = properties.get('extras', {})
+            tollways_info = extras.get('tollways', {})
+            tollways_summary = tollways_info.get('summary', [])
+            
+            # Coordonnées de la géométrie
+            coordinates = geometry.get('coordinates', [])
+            
+            # Segments détaillés
+            segments = properties.get('segments', [])
             
             return {
-                'segment_id': segment_config.get('segment_id', 0),
-                'route': route,
+                'segment_id': segment_config.get('segment_id', index),
                 'segment_type': segment_config.get('segment_type', 'direct'),
-                'has_tolls': len(segment_config.get('force_tolls', [])) > 0,
-                'calculation_method': 'simple_ors'
+                'start_point': segment_config.get('start_point'),
+                'end_point': segment_config.get('end_point'),
+                'has_tolls': not avoid_tolls,
+                'calculation_method': 'avoid_tolls' if avoid_tolls else 'with_tolls',
+                
+                # Données extraites d'ORS
+                'distance_m': distance,
+                'duration_s': duration,
+                'distance_km': round(distance / 1000, 2),
+                'duration_min': round(duration / 60, 1),
+                
+                # Géométrie complète
+                'geometry': geometry,
+                'coordinates': coordinates,
+                
+                # Informations péages
+                'tollways_info': tollways_summary,
+                'segments_detail': segments,
+                
+                # Réponse ORS complète (si besoin pour debug)
+                'ors_response': ors_response
             }
             
         except Exception as e:
-            print(f"   ❌ Erreur calcul segment : {e}")
-            return None
+            print(f"     ⚠️ Erreur extraction données ORS: {e}")
+            # Fallback avec données minimales
+            return {
+                'segment_id': segment_config.get('segment_id', index),
+                'segment_type': segment_config.get('segment_type', 'direct'),
+                'start_point': segment_config.get('start_point'),
+                'end_point': segment_config.get('end_point'),
+                'has_tolls': not avoid_tolls,
+                'calculation_method': 'avoid_tolls' if avoid_tolls else 'with_tolls',
+                'error': str(e),
+                'ors_response': ors_response
+            }
+
