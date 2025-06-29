@@ -79,8 +79,16 @@ class SelectionAnalyzer:
         Returns:
             Élément optimisé (TollBoothStation ou CompleteMotorwayLink)
         """
-        toll_type = toll.get('toll_type')
-        toll_name = toll.get('name', 'Inconnu')
+        # Gérer la nouvelle structure après Shapely
+        if 'toll' in toll and hasattr(toll['toll'], 'name'):
+            # Structure Shapely: {'toll': TollBoothStation, ...}
+            toll_station = toll['toll']
+            toll_name = toll_station.display_name
+            toll_type = 'ouvert' if toll_station.is_open_toll else 'fermé'
+        else:
+            # Format legacy ou dict direct
+            toll_type = toll.get('toll_type')
+            toll_name = toll.get('name', 'Inconnu')
         
         print(f"   🔧 Optimisation de {toll_name} ({toll_type})")
         
@@ -101,7 +109,12 @@ class SelectionAnalyzer:
     def _get_toll_booth_station(self, toll: Dict) -> Optional[TollBoothStation]:
         """Récupère la TollBoothStation correspondante."""
         try:
-            # Utiliser CacheAccessor pour récupérer les péages
+            # Cas 1: Structure Shapely avec 'toll' key contenant déjà un TollBoothStation
+            if 'toll' in toll and hasattr(toll['toll'], 'osm_id'):
+                # L'objet TollBoothStation est déjà là, le retourner directement
+                return toll['toll']
+            
+            # Cas 2: Utiliser CacheAccessor pour récupérer les péages (format legacy)
             toll_stations = CacheAccessor.get_toll_stations()
             
             osm_id = toll.get('osm_id')
@@ -149,8 +162,16 @@ class SelectionAnalyzer:
             CompleteMotorwayLink optimisé (entrée ou sortie)
         """
         try:
-            # Récupérer les liens d'entrée et de sortie proches
-            toll_coords = toll.get('coordinates', [])
+            # Récupérer les coordonnées du péage selon la structure
+            toll_coords = None
+            
+            if 'toll' in toll and hasattr(toll['toll'], 'get_coordinates'):
+                # Structure Shapely avec TollBoothStation
+                toll_coords = toll['toll'].get_coordinates()
+            else:
+                # Format legacy
+                toll_coords = toll.get('coordinates', [])
+                
             if not toll_coords:
                 return None
             
@@ -158,26 +179,60 @@ class SelectionAnalyzer:
             entry_links = CacheAccessor.get_entry_links()
             exit_links = CacheAccessor.get_exit_links()
             
-            # Trouver les liens proches
+            # Trouver les liens proches avec filtrage multi-critères
             nearby_entries = []
             nearby_exits = []
             
             for link in entry_links:
                 distance = self._calculate_distance(link.get_start_point(), toll_coords)
                 if distance < 2.0:  # Rayon de 2km
-                    nearby_entries.append(link)
+                    if self._is_valid_motorway_link(link):
+                        nearby_entries.append(link)
             
             for link in exit_links:
                 distance = self._calculate_distance(link.get_end_point(), toll_coords)
                 if distance < 2.0:  # Rayon de 2km
+                    if self._is_valid_motorway_link(link):
+                        nearby_exits.append(link)
+                if distance < 2.0:  # Rayon de 2km
                     nearby_exits.append(link)
             
-            print(f"   🔍 Liens trouvés près de {toll.get('name', 'Inconnu')}: {len(nearby_entries)} entrées, {len(nearby_exits)} sorties")
+            # Récupérer le nom pour l'affichage
+            toll_name_for_display = "Inconnu"
+            if 'toll' in toll and hasattr(toll['toll'], 'display_name'):
+                toll_name_for_display = toll['toll'].display_name
+            elif 'name' in toll:
+                toll_name_for_display = toll['name']
             
-            # Choisir le meilleur lien selon la position sur la route
-            best_link = self._choose_best_link_for_route(
-                nearby_entries, nearby_exits, route_coordinates, toll_coords
-            )
+            print(f"   🔍 Liens trouvés près de {toll_name_for_display}: {len(nearby_entries)} entrées, {len(nearby_exits)} sorties (aires exclues)")
+            
+            # Debug des liens trouvés
+            if nearby_entries:
+                print(f"       🚪 Entrées disponibles:")
+                for i, entry in enumerate(nearby_entries[:3]):  # Afficher les 3 premières
+                    dest = getattr(entry, 'destination', 'Inconnue')
+                    print(f"         {i+1}. {entry.link_id} → {dest}")
+            
+            if nearby_exits:
+                print(f"       🚪 Sorties disponibles:")
+                for i, exit_link in enumerate(nearby_exits[:3]):  # Afficher les 3 premières
+                    dest = getattr(exit_link, 'destination', 'Inconnue')
+                    print(f"         {i+1}. {exit_link.link_id} → {dest}")
+            
+            # Pour l'optimisation de péages fermés, TOUJOURS privilégier les ENTRÉES
+            # L'objectif est d'éviter le péage fermé en rejoignant l'autoroute via une entrée
+            best_link = None
+            
+            if nearby_entries:
+                # Prendre la meilleure entrée (la plus proche)
+                best_link = self._get_best_entry(nearby_entries, toll_coords)
+                print(f"   🎯 Entrée sélectionnée pour éviter le péage fermé")
+            elif nearby_exits:
+                # Si pas d'entrée, prendre une sortie (cas de secours)
+                best_link = self._get_best_exit(nearby_exits, toll_coords)
+                print(f"   ⚠️ Aucune entrée disponible, utilisation d'une sortie")
+            else:
+                print(f"   ❌ Aucun lien d'autoroute trouvé")
             
             return best_link
             
@@ -273,7 +328,16 @@ class SelectionAnalyzer:
         route_coordinates: List[List[float]]
     ) -> Optional[object]:
         """Trouve le meilleur élément correspondant par recherche générale."""
-        coordinates = toll.get('coordinates', [])
+        # Récupérer les coordonnées selon la structure
+        coordinates = None
+        
+        if 'toll' in toll and hasattr(toll['toll'], 'get_coordinates'):
+            # Structure Shapely avec TollBoothStation
+            coordinates = toll['toll'].get_coordinates()
+        else:
+            # Format legacy
+            coordinates = toll.get('coordinates', [])
+            
         if not coordinates:
             return None
             
@@ -339,3 +403,55 @@ class SelectionAnalyzer:
         
         # Conversion approximative en km (1 degré ≈ 111 km)
         return ((dx * dx + dy * dy) ** 0.5) * 111
+    
+    def _is_valid_motorway_link(self, link) -> bool:
+        """
+        Vérifie si un lien autoroutier est valide (pas une aire de service).
+        
+        Args:
+            link: CompleteMotorwayLink à vérifier
+            
+        Returns:
+            True si c'est un lien valide, False si c'est une aire
+        """
+        # Critère 1: Exclure les destinations contenant "aire"
+        if hasattr(link, 'destination') and link.destination:
+            if 'aire' in link.destination.lower():
+                return False
+        
+        # Critère 2: Calculer la longueur du lien
+        coordinates = link.get_all_coordinates()
+        if len(coordinates) < 2:
+            return False
+            
+        total_length = 0.0
+        for i in range(len(coordinates) - 1):
+            point1 = coordinates[i]
+            point2 = coordinates[i + 1]
+            segment_distance = self._calculate_distance(point1, point2)
+            total_length += segment_distance
+        
+        # Convertir en mètres (distance était en km)
+        total_length_meters = total_length * 1000
+        
+        # Critère 3: Exclure les liens trop courts (< 200m)
+        if total_length_meters < 200:
+            return False
+            
+        return True
+    
+    def _calculate_link_length_meters(self, link) -> float:
+        """Calcule la longueur d'un lien en mètres."""
+        coordinates = link.get_all_coordinates()
+        if len(coordinates) < 2:
+            return 0.0
+            
+        total_length = 0.0
+        for i in range(len(coordinates) - 1):
+            point1 = coordinates[i]
+            point2 = coordinates[i + 1]
+            segment_distance = self._calculate_distance(point1, point2)
+            total_length += segment_distance
+        
+        # Convertir en mètres (distance était en km)
+        return total_length * 1000

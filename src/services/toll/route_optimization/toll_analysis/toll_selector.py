@@ -316,6 +316,7 @@ class TollSelector:
         
         # Convertir les péages sélectionnés en objets cache V2
         for toll in selected_tolls:
+            print(toll)
             cache_element = self.selection_analyzer._optimize_toll_element(toll, route_coords)
             if cache_element:
                 optimized_elements.append(cache_element)
@@ -465,19 +466,19 @@ class TollSelector:
                 current_point = element_coords
                 
             elif element_type == 'CompleteMotorwayLink_EXIT':
-                # Sortie → trajet avec péage jusqu'à la fin de la sortie
+                # Sortie → trajet AVEC péage jusqu'à la fin de la sortie (on roule sur autoroute puis on sort)
                 exit_end = element.get_end_point()
                 segments.append({
                     'start_point': current_point,
                     'end_point': exit_end,
                     'has_toll': True,
                     'toll_info': element,
-                    'segment_reason': f'Sortie autoroute via {element.link_id}'
+                    'segment_reason': f'Sur autoroute vers sortie {element.link_id}'
                 })
                 current_point = exit_end
                 
             elif element_type == 'CompleteMotorwayLink_ENTRY':
-                # Entrée → trajet sans péage jusqu'au début de l'entrée
+                # Entrée → trajet SANS péage jusqu'au début de l'entrée (hors autoroute)
                 entry_start = element.get_start_point()
                 segments.append({
                     'start_point': current_point,
@@ -494,10 +495,15 @@ class TollSelector:
             last_element = selected_elements[-1] if selected_elements else None
             last_type = self._get_element_type(last_element) if last_element else None
             
-            # Si le dernier élément est une entrée, on continue avec péage
-            # Si c'est un péage normal, on continue avec péage aussi
-            # Seule exception : si c'est une sortie, on évite les péages
+            # Logique corrigée :
+            # - Si le dernier élément est une ENTRÉE, on continue AVEC péages (on a rejoint l'autoroute)
+            # - Si c'est un péage normal, on continue AVEC péages aussi  
+            # - Si c'est une SORTIE, on continue SANS péages (on a quitté l'autoroute)
             has_toll = last_type in ['CompleteMotorwayLink_ENTRY', 'TollBoothStation']
+            
+            # Spécial : si c'est une sortie, le segment final est SANS péages
+            if last_type == 'CompleteMotorwayLink_EXIT':
+                has_toll = False
             
             segments.append({
                 'start_point': current_point,
