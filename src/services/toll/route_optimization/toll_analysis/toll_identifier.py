@@ -278,19 +278,19 @@ class TollIdentifier:
         Returns:
             Résultat complet formaté
         """
-        # Extraire les péages finaux
-        final_tolls_on_route = [item['toll'] for item in shapely_result['shapely_on_route']]
+        # Extraire les péages finaux ORDONNÉS
+        final_tolls_on_route_ordered = [item['toll'] for item in final_ordered_tolls]
         final_tolls_around = [item['toll'] for item in shapely_result['shapely_around']]
         
         result = {
-            # Données principales (ÉTAPE 3)
-            'tolls_on_route': final_tolls_on_route,     # Vérifiés Shapely <5m
-            'tolls_around': final_tolls_around,         # Vérifiés Shapely >=5m  
-            'segments_mapping': verified_segments_mapping,  # Index par segments
-            'ordered_tolls': final_ordered_tolls,       # Ordre sur la route
+            # Données principales (ÉTAPE 3) - ORDONNÉES
+            'tolls_on_route': final_tolls_on_route_ordered,     # Vérifiés Shapely <5m ORDONNÉS
+            'tolls_around': final_tolls_around,                 # Vérifiés Shapely >=5m  
+            'segments_mapping': verified_segments_mapping,      # Index par segments
+            'ordered_tolls': final_ordered_tolls,               # Ordre sur la route
             
             # Métadonnées pour validation ÉTAPE 4
-            'total_tolls_on_route': len(final_tolls_on_route),
+            'total_tolls_on_route': len(final_tolls_on_route_ordered),
             'total_tolls_around': len(final_tolls_around),
             'segments_with_tolls': len([s for s in verified_segments_mapping.values() if s['tolls']]),
             'tollway_segments': tollway_segments,
@@ -301,7 +301,7 @@ class TollIdentifier:
                 'phase3_on_route': len(phase3_result['classified']['on_route']),
                 'phase3_around': len(phase3_result['classified']['around']),
                 'phase3_rejected': len(phase3_result['classified']['rejected']),
-                'final_on_route': len(final_tolls_on_route),
+                'final_on_route': len(final_tolls_on_route_ordered),
                 'final_around': len(final_tolls_around),
                 'segments_analyzed': len(tollway_segments),
                 'segments_with_tolls': len(verified_segments_mapping),

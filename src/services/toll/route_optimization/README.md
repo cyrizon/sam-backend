@@ -49,14 +49,18 @@ src/services/toll/route_optimization/
 ### Step 3: Toll Detection & Analysis
 **Main Module**: `toll_analysis/toll_identifier.py`
 
-3-phase detection pipeline:
+4-phase detection pipeline:
 - **Phase 1**: Spatial prefiltering (`spatial/spatial_index.py`)
 - **Phase 2**: Distance calculation (`detection/distance_calculator.py`)
 - **Phase 3**: Classification & mapping (`detection/toll_classifier.py`)
+- **Phase 4**: Shapely verification (`verification/shapely_verifier.py`)
 
 ### Step 4: Toll Selection
 **Module**: `toll_analysis/toll_selector.py`
-- Status: Awaiting specification
+- ✅ **Completed**: Selection by count with removal from end logic
+- ✅ **System constraints**: Open/closed system validation
+- ✅ **Optimization**: Automatic replacement of removed closed tolls
+- ⏳ **Budget selection**: Left empty for future implementation
 
 ### Step 5: Segment Creation  
 **Module**: `segmentation/segment_creator.py`

@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "creation_time": "2025-06-28T20:24:47.151169",
+  "source_files": {
+    "toll_booths": "data/osm/toll_booths.geojson",
+    "entries": "data/osm/motorway_entries.geojson",
+    "exits": "data/osm/motorway_exits.geojson",
+    "indeterminate": "data/osm/motorway_indeterminate.geojson"
+  },
+  "source_hashes": {
+    "toll_booths": "77083302f7fec5ed43561443fd8c22bfdcf8fafcfda383850c945ff6a48c80b9",
+    "entries": "3cb86838ba61c628cc4680788904ad9f809b584fdf0f19ae1917c05979c0806b",
+    "exits": "033c0ce3d73428e008db648155d9504713ad57f3d9f294a18938e7e450590ed9",
+    "indeterminate": "f180d2068e1f4538968db4a208214b7e9ff3ec5eda6fb8adce561c4b6f0d19ae"
+  },
+  "source_sizes": {
+    "toll_booths": 653293,
+    "entries": 6619290,
+    "exits": 321892,
+    "indeterminate": 20409940
+  },
+  "source_modified": {
+    "toll_booths": "2025-06-28T17:59:37.003474",
+    "entries": "2025-06-28T17:59:35.528946",
+    "exits": "2025-06-28T17:59:35.544597",
+    "indeterminate": "2025-06-28T17:59:36.956634"
+  },
+  "toll_booths_count": 1440,
+  "entry_links_count": 4506,
+  "exit_links_count": 404,
+  "indeterminate_links_count": 19113,
+  "complete_entry_links_count": 4506,
+  "complete_exit_links_count": 404,
+  "unlinked_indeterminate_count": 14784,
+  "toll_associations_count": 748,
+  "links_with_tolls_count": 748,
+  "linking_distance_threshold_m": 2.0,
+  "toll_detection_distance_threshold_m": 500.0,
+  "compression_enabled": true,
+  "compression_type": "lzma",
+  "cache_size": 2425820
+}

@@ -151,6 +151,10 @@ class IntelligentOptimizer:
         optimization_mode: str
     ) -> bool:
         """ÉTAPE 4: Vérifie si la route de base suffit."""
+        # Vérification centrale : aucun péage détecté sur la route de base
+        if identification_result['total_tolls_on_route'] == 0:
+            print("✅ Aucun péage détecté sur la route de base, optimisation inutile.")
+            return True
         
         if optimization_mode == 'count':
             tolls_available = identification_result['total_tolls_on_route']

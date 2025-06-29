@@ -2341,7 +2341,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 10",
         "name": "Péage de Saint-Arnoult",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "Péage de Saint-Arnoult"
       },
       "geometry": {
@@ -2398,7 +2398,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 10",
         "name": "Péage de Saint-Arnoult",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "Péage de Saint-Arnoult"
       },
       "geometry": {
@@ -3421,7 +3421,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 29",
         "name": "Péage de Dury",
-        "operator": "Sanef",
+        "operator": "SANEF",
         "operator:ref": "Péage de Dury",
         "ref": "AMIENS SUD (DURY) - A29"
       },
@@ -4005,7 +4005,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Ancenis",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "20"
       },
       "geometry": {
@@ -4157,7 +4157,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Le-Mans-ZI-Nord",
-        "operator": "cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "7"
       },
       "geometry": {
@@ -5037,7 +5037,7 @@
         "@id": "node/137501371",
         "barrier": "toll_booth",
         "highway:ref": "A 86",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "source": "Bing"
       },
       "geometry": {
@@ -5406,7 +5406,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 29",
         "name": "Péage de Dury",
-        "operator": "Sanef",
+        "operator": "SANEF",
         "operator:ref": "Péage de Dury"
       },
       "geometry": {
@@ -5547,7 +5547,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Le-Mans-ZI-Nord",
-        "operator": "cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "7"
       },
       "geometry": {
@@ -7540,7 +7540,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 63",
         "name": "Péage de Biriatou",
-        "operator": "Autoroutes du Sud de la France",
+        "operator": "ASF",
         "operator:ref": "Péage de Biriatou"
       },
       "geometry": {
@@ -7597,7 +7597,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 10",
         "name": "Poitiers Nord",
-        "operator": "Vinci",
+        "operator": "ASF",
         "operator:ref": "29"
       },
       "geometry": {
@@ -9425,7 +9425,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Ancenis",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "20"
       },
       "geometry": {
@@ -10664,7 +10664,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 4",
         "name": "Puttelange",
-        "operator": "SANEL",
+        "operator": "SANEF",
         "operator:ref": "40"
       },
       "geometry": {
@@ -10683,7 +10683,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 4",
         "name": "Puttelange",
-        "operator": "SANEL",
+        "operator": "SANEF",
         "operator:ref": "40"
       },
       "geometry": {
@@ -14563,7 +14563,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 65",
         "name": "Aire-sur-l'Adour Nord",
-        "operator": "A'LIENOR",
+        "operator": "ALIENOR",
         "operator:ref": "6",
         "source:name": "P144-0696"
       },
@@ -14719,7 +14719,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 65",
         "name": "Aire-sur-l'Adour Sud",
-        "operator": "A'LIENOR",
+        "operator": "ALIENOR",
         "operator:ref": "7"
       },
       "geometry": {
@@ -14816,7 +14816,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Ancenis",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "20"
       },
       "geometry": {
@@ -14879,7 +14879,7 @@
         "name": "Bazas",
         "note": "Bankcard only - no staff on site",
         "note:fr": "que CB",
-        "operator": "A'LIENOR",
+        "operator": "ALIENOR",
         "operator:ref": "1"
       },
       "geometry": {
@@ -14900,7 +14900,7 @@
         "name": "Bazas",
         "note": "Bankcard only - no staff on site",
         "note:fr": "que CB",
-        "operator": "A'LIENOR",
+        "operator": "ALIENOR",
         "operator:ref": "1"
       },
       "geometry": {
@@ -15286,7 +15286,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 65",
         "name": "Aire-sur-l'Adour Nord",
-        "operator": "A'LIENOR",
+        "operator": "ALIENOR",
         "operator:ref": "6",
         "source:name": "P144-0696"
       },
@@ -15767,7 +15767,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Beaupreau-saint-germain",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "19"
       },
       "geometry": {
@@ -15786,7 +15786,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Beaupreau-saint-germain",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "19"
       },
       "geometry": {
@@ -16952,7 +16952,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 65",
         "name": "Roquefort",
-        "operator": "A'LIENOR",
+        "operator": "ALIENOR",
         "operator:ref": "3"
       },
       "geometry": {
@@ -17256,7 +17256,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 65",
         "name": "Garlin",
-        "operator": "A'LIENOR",
+        "operator": "ALIENOR",
         "operator:ref": "8"
       },
       "geometry": {
@@ -19024,7 +19024,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 1",
         "name": "Senlis",
-        "operator": "Sanef",
+        "operator": "SANEF",
         "operator:ref": "8"
       },
       "geometry": {
@@ -19047,7 +19047,7 @@
         "horse": "no",
         "motor_vehicle": "yes",
         "name": "Senlis",
-        "operator": "Sanef",
+        "operator": "SANEF",
         "operator:ref": "8"
       },
       "geometry": {
@@ -20307,7 +20307,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Ancenis",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "20"
       },
       "geometry": {
@@ -20326,7 +20326,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Ancenis",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "20"
       },
       "geometry": {
@@ -20662,7 +20662,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 63",
         "name": "Péage de Biriatou",
-        "operator": "Autoroutes du Sud de la France",
+        "operator": "ASF",
         "operator:ref": "Péage de Biriatou"
       },
       "geometry": {
@@ -22348,7 +22348,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 10",
         "name": "Péage de Saint-Arnoult",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "Péage de Saint-Arnoult"
       },
       "geometry": {
@@ -22367,7 +22367,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 10",
         "name": "Péage de Saint-Arnoult",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "Péage de Saint-Arnoult"
       },
       "geometry": {
@@ -22676,7 +22676,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 4",
         "name": "Puttelange",
-        "operator": "SANEL",
+        "operator": "SANEF",
         "operator:ref": "40"
       },
       "geometry": {
@@ -22695,7 +22695,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 4",
         "name": "Puttelange",
-        "operator": "SANEL",
+        "operator": "SANEF",
         "operator:ref": "40"
       },
       "geometry": {
@@ -23647,7 +23647,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 65",
         "name": "Garlin",
-        "operator": "A'LIENOR",
+        "operator": "ALIENOR",
         "operator:ref": "8"
       },
       "geometry": {
@@ -23685,7 +23685,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Illiers-Combray",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "3.1"
       },
       "geometry": {
@@ -23704,7 +23704,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Illiers-Combray",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "3.1"
       },
       "geometry": {
@@ -24754,7 +24754,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Ancenis",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "20"
       },
       "geometry": {
@@ -24773,7 +24773,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Ancenis",
-        "operator": "Cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "20"
       },
       "geometry": {
@@ -25610,7 +25610,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 65",
         "name": "Roquefort",
-        "operator": "A'LIENOR",
+        "operator": "ALIENOR",
         "operator:ref": "3"
       },
       "geometry": {
@@ -26706,7 +26706,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Le-Mans-ZI-Nord",
-        "operator": "cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "7"
       },
       "geometry": {
@@ -26725,7 +26725,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Le-Mans-ZI-Nord",
-        "operator": "cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "7"
       },
       "geometry": {
@@ -26744,7 +26744,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Le-Mans-ZI-Nord",
-        "operator": "cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "7"
       },
       "geometry": {
@@ -26763,7 +26763,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Le-Mans-ZI-Nord",
-        "operator": "cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "7"
       },
       "geometry": {
@@ -26782,7 +26782,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 11",
         "name": "Le-Mans-ZI-Nord",
-        "operator": "cofiroute",
+        "operator": "COFIROUTE",
         "operator:ref": "7"
       },
       "geometry": {
@@ -27361,7 +27361,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 10",
         "name": "Poitiers nord",
-        "operator": "Vinci",
+        "operator": "ASF",
         "operator:ref": "29"
       },
       "geometry": {
@@ -27503,7 +27503,7 @@
         "barrier": "toll_booth",
         "highway:ref": "A 65",
         "name": "Aire-sur-l'Adour Sud",
-        "operator": "A'LIENOR",
+        "operator": "ALIENOR",
         "operator:ref": "7"
       },
       "geometry": {
