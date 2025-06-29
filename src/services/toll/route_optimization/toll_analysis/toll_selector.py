@@ -71,7 +71,8 @@ class TollSelector:
         
         result = {
             'selection_valid': True,
-            'selected_tolls': optimized_elements,
+            'selected_tolls': step1_result['selected_tolls'],  # Utiliser les péages sélectionnés, pas les optimisés
+            'optimized_elements': optimized_elements,  # Garder les éléments optimisés séparément
             'selection_count': len([e for e in optimized_elements if hasattr(e, 'osm_id')]),
             'segments': segments_structure,
             'optimization_applied': True,
@@ -110,7 +111,10 @@ class TollSelector:
     def _remove_tolls_to_match_count(self, tolls_on_route: List, target_count: int) -> Dict:
         """
         ÉTAPE 1: Supprime les péages pour respecter la demande.
-        Enlève dans l'ordre de la route : fermés d'abord, puis ouverts.
+        Règles de suppression :
+        1. Toujours essayer de supprimer les péages fermés en premier
+        2. Ne supprimer les péages ouverts que si pas assez de fermés disponibles
+        3. Ne jamais laisser un seul péage fermé isolé (minimum 2 fermés ou 0)
         
         Args:
             tolls_on_route: Péages sur la route (dans l'ordre)
@@ -139,46 +143,48 @@ class TollSelector:
                 'reason': "Tous les péages conservés"
             }
         
+        # Analyser la composition des péages
+        closed_tolls = []
+        open_tolls = []
+        
+        for i, toll in enumerate(tolls_on_route):
+            toll_type = self._extract_toll_type(toll)
+            if toll_type == 'fermé':
+                closed_tolls.append((i, toll))
+            else:
+                open_tolls.append((i, toll))
+        
+        print(f"   🔒 Péages fermés: {len(closed_tolls)}")
+        print(f"   🔓 Péages ouverts: {len(open_tolls)}")
+        
         # Calculer combien supprimer
         to_remove_count = len(tolls_on_route) - target_count
         print(f"   ➖ À supprimer: {to_remove_count} péages")
         
-        # Créer des listes de travail
-        remaining_tolls = tolls_on_route.copy()
-        removed_tolls = []
+        # Planifier la suppression selon les règles
+        removal_plan = self._plan_toll_removal(closed_tolls, open_tolls, to_remove_count, target_count)
         
-        # Supprimer dans l'ordre : fermés d'abord, puis ouverts
-        # Toujours prendre le PREMIER dans l'ordre de la route
-        for _ in range(to_remove_count):
-            if not remaining_tolls:
-                break
-                
-            # Chercher le premier fermé
-            toll_to_remove = None
-            for toll in remaining_tolls:
-                if toll.get('toll_type') == 'fermé':
-                    toll_to_remove = toll
-                    break
-            
-            # Si pas de fermé, prendre le premier ouvert
-            if toll_to_remove is None:
-                toll_to_remove = remaining_tolls[0]
-            
-            # Supprimer le péage
-            remaining_tolls.remove(toll_to_remove)
-            removed_tolls.append(toll_to_remove)
-            print(f"   ❌ Supprimé: {toll_to_remove.get('name', 'Inconnu')} ({toll_to_remove.get('toll_type')})")
-        
-        # Vérifier la règle du péage fermé isolé
-        closed_remaining = [t for t in remaining_tolls if t.get('toll_type') == 'fermé']
-        if len(closed_remaining) == 1:
-            print(f"   ⚠️ Péage fermé isolé détecté → route sans péage")
+        if not removal_plan['valid']:
+            print(f"   ⚠️ {removal_plan['reason']} → route sans péage")
             return {
                 'selection_valid': False,
                 'selected_tolls': [],
                 'removed_tolls': tolls_on_route.copy(),
-                'reason': "Péage fermé isolé évité"
+                'reason': removal_plan['reason']
             }
+        
+        # Exécuter le plan de suppression
+        remaining_tolls = tolls_on_route.copy()
+        removed_tolls = []
+        
+        # Supprimer dans l'ordre du plan
+        for toll_to_remove in removal_plan['tolls_to_remove']:
+            remaining_tolls.remove(toll_to_remove)
+            removed_tolls.append(toll_to_remove)
+            
+            toll_name = self._extract_toll_name(toll_to_remove)
+            toll_type = self._extract_toll_type(toll_to_remove)
+            print(f"   ❌ Supprimé: {toll_name} ({toll_type})")
         
         print(f"   ✅ Péages conservés: {len(remaining_tolls)}")
         return {
@@ -186,6 +192,104 @@ class TollSelector:
             'selected_tolls': remaining_tolls,
             'removed_tolls': removed_tolls,
             'reason': f"Sélection de {len(remaining_tolls)} péages"
+        }
+    
+    def _plan_toll_removal(self, closed_tolls: List, open_tolls: List, to_remove_count: int, target_count: int) -> Dict:
+        """
+        Planifie la suppression des péages selon les règles strictes :
+        1. Priorité aux péages fermés
+        2. Jamais un seul péage fermé isolé
+        3. Se rabattre sur les ouverts si nécessaire
+        
+        Args:
+            closed_tolls: Liste des péages fermés [(index, toll), ...]
+            open_tolls: Liste des péages ouverts [(index, toll), ...]
+            to_remove_count: Nombre de péages à supprimer
+            target_count: Nombre final de péages souhaité
+            
+        Returns:
+            Plan de suppression avec validation
+        """
+        print(f"   🎯 Planification suppression: {to_remove_count} péages à retirer")
+        
+        tolls_to_remove = []
+        closed_count = len(closed_tolls)
+        open_count = len(open_tolls)
+        
+        # Cas 1: Si on a que des fermés ou que des ouverts
+        if closed_count == 0:
+            # Que des ouverts, suppression simple
+            print("   📋 Que des péages ouverts → suppression directe")
+            tolls_to_remove = [toll for _, toll in open_tolls[:to_remove_count]]
+            
+        elif open_count == 0:
+            # Que des fermés, vérifier la règle d'isolement
+            remaining_closed = closed_count - to_remove_count
+            if remaining_closed == 1:
+                print("   ⚠️ Suppression laisserait 1 seul fermé → invalide")
+                return {
+                    'valid': False,
+                    'reason': "Suppression laisserait un péage fermé isolé",
+                    'tolls_to_remove': []
+                }
+            else:
+                print(f"   📋 Que des fermés, {remaining_closed} resteront → valide")
+                tolls_to_remove = [toll for _, toll in closed_tolls[:to_remove_count]]
+        
+        else:
+            # Cas mixte : fermés + ouverts
+            print("   📋 Péages mixtes → stratégie avancée")
+            
+            # Stratégie : supprimer d'abord les fermés, mais vérifier la règle d'isolement
+            max_closed_removable = closed_count
+            
+            # Si on enlève tous les fermés sauf 1, c'est interdit
+            if closed_count > 1 and (closed_count - to_remove_count) == 1:
+                # Il faut soit enlever tous les fermés, soit en laisser au moins 2
+                if to_remove_count >= closed_count:
+                    # On peut enlever tous les fermés + des ouverts
+                    closed_to_remove = closed_count
+                    open_to_remove = to_remove_count - closed_count
+                    print(f"   🔄 Enlever tous les fermés ({closed_to_remove}) + {open_to_remove} ouverts")
+                else:
+                    # On ne peut pas enlever que des fermés, il faut adapter
+                    # Option 1: enlever tous les fermés si possible
+                    if closed_count <= to_remove_count:
+                        closed_to_remove = closed_count
+                        open_to_remove = to_remove_count - closed_count
+                        print(f"   🔄 Solution: tous fermés ({closed_to_remove}) + {open_to_remove} ouverts")
+                    else:
+                        # Option 2: enlever des fermés mais en laisser au moins 2
+                        closed_to_remove = max(0, closed_count - 2)
+                        open_to_remove = to_remove_count - closed_to_remove
+                        if open_to_remove < 0:
+                            print("   ⚠️ Impossible de respecter les contraintes")
+                            return {
+                                'valid': False,
+                                'reason': "Impossible de respecter la règle du péage fermé isolé",
+                                'tolls_to_remove': []
+                            }
+                        print(f"   🔄 Solution: {closed_to_remove} fermés + {open_to_remove} ouverts (garde 2+ fermés)")
+                
+                tolls_to_remove.extend([toll for _, toll in closed_tolls[:closed_to_remove]])
+                tolls_to_remove.extend([toll for _, toll in open_tolls[:open_to_remove]])
+            
+            else:
+                # Cas normal : on peut enlever des fermés sans problème d'isolement
+                closed_to_remove = min(to_remove_count, closed_count)
+                open_to_remove = to_remove_count - closed_to_remove
+                
+                print(f"   ✅ Suppression normale: {closed_to_remove} fermés + {open_to_remove} ouverts")
+                
+                tolls_to_remove.extend([toll for _, toll in closed_tolls[:closed_to_remove]])
+                if open_to_remove > 0:
+                    tolls_to_remove.extend([toll for _, toll in open_tolls[:open_to_remove]])
+        
+        print(f"   📋 Plan validé: {len(tolls_to_remove)} péages à supprimer")
+        return {
+            'valid': True,
+            'tolls_to_remove': tolls_to_remove,
+            'reason': "Plan de suppression validé"
         }
     
     def _optimize_with_motorway_links(
@@ -463,3 +567,41 @@ class TollSelector:
                 'budget_selector': self.budget_selector is not None
             }
         }
+    
+    def _extract_toll_name(self, toll_data) -> str:
+        """Extrait le nom d'un péage depuis sa structure (Shapely ou dict)."""
+        if isinstance(toll_data, dict):
+            # Format Shapely: {'toll': TollBoothStation, ...}
+            if 'toll' in toll_data:
+                toll_station = toll_data['toll']
+                return getattr(toll_station, 'display_name', getattr(toll_station, 'nom', 'Inconnu'))
+            # Format dict direct
+            return toll_data.get('name', toll_data.get('nom', 'Inconnu'))
+        else:
+            # Objet TollBoothStation direct
+            return getattr(toll_data, 'display_name', getattr(toll_data, 'nom', 'Inconnu'))
+    
+    def _extract_toll_type(self, toll_data) -> str:
+        """Extrait le type d'un péage depuis sa structure (Shapely ou dict)."""
+        if isinstance(toll_data, dict):
+            # Format Shapely: {'toll': TollBoothStation, ...}
+            if 'toll' in toll_data:
+                toll_station = toll_data['toll']
+                return 'ouvert' if getattr(toll_station, 'is_open_toll', False) else 'fermé'
+            # Format dict direct
+            return toll_data.get('toll_type', 'fermé')
+        else:
+            # Objet TollBoothStation direct
+            return 'ouvert' if getattr(toll_data, 'is_open_toll', False) else 'fermé'
+    
+    def _extract_toll_station(self, toll_data):
+        """Extrait l'objet TollBoothStation depuis sa structure."""
+        if isinstance(toll_data, dict):
+            # Format Shapely: {'toll': TollBoothStation, ...}
+            if 'toll' in toll_data:
+                return toll_data['toll']
+            # Format dict direct - ne devrait pas arriver
+            return toll_data
+        else:
+            # Objet TollBoothStation direct
+            return toll_data

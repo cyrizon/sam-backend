@@ -81,8 +81,10 @@ class RouteAssembler:
             all_coords, total_distance, total_duration, all_instructions
         )
         
-        # Calculer les coûts de péages avec identification V2
-        toll_cost, actual_toll_count, toll_details = RouteAssembler._calculate_toll_costs(final_route)
+        # Calculer les coûts de péages basés sur les péages sélectionnés
+        toll_cost, actual_toll_count, toll_details = RouteAssembler._calculate_toll_costs_from_selected(
+            final_route, selected_tolls
+        )
         
         # Extraire les informations des péages pour toll_info
         toll_names = [toll.get('from_name', 'Péage') for toll in toll_details]
@@ -240,6 +242,92 @@ class RouteAssembler:
 
         except Exception as e:
             print(f"   ❌ Erreur calcul coûts péages : {e}")
+            return 0.0, 0, []
+    
+    @staticmethod
+    def _calculate_toll_costs_from_selected(route: Dict, selected_tolls: List = None) -> tuple:
+        """
+        Calcule les coûts de péages basés sur les péages sélectionnés plutôt que ré-identifiés.
+        
+        Args:
+            route: Route au format GeoJSON
+            selected_tolls: Liste des péages sélectionnés (TollBoothStation objects)
+            
+        Returns:
+            Tuple (coût_total, nombre_péages, détails_péages)
+        """
+        if not selected_tolls:
+            print("   💰 Aucun péage sélectionné - route sans péage")
+            return 0.0, 0, []
+        
+        try:
+            print(f"   💰 Calcul des coûts pour {len(selected_tolls)} péages sélectionnés...")
+            from ..utils.cache_accessor import CacheAccessor
+
+            # Filtrer pour ne garder que les TollBoothStation
+            toll_stations = []
+            for toll_data in selected_tolls:
+                # Les péages peuvent être soit des dicts avec 'toll', soit des objets TollBoothStation directement
+                if isinstance(toll_data, dict) and 'toll' in toll_data:
+                    toll_station = toll_data['toll']
+                elif hasattr(toll_data, 'osm_id') and hasattr(toll_data, 'name'):
+                    toll_station = toll_data
+                else:
+                    continue
+                    
+                if hasattr(toll_station, 'osm_id') and hasattr(toll_station, 'name'):
+                    toll_stations.append(toll_station)
+            
+            print(f"   ✅ {len(toll_stations)} stations de péage à traiter")
+
+            # Calcul du coût total par binômes consécutifs
+            total_cost = 0.0
+            toll_details = []
+            vehicle_category = "1"  # Peut être paramétré
+
+            if len(toll_stations) == 0:
+                return 0.0, 0, []
+            elif len(toll_stations) == 1:
+                # Un seul péage - coût fixe ou pas de coût
+                print("   ⚠️ Un seul péage - pas de binôme possible")
+                return 0.0, 1, [{
+                    'from_name': toll_stations[0].name,
+                    'to_name': toll_stations[0].name,
+                    'cost': 0.0,
+                    'operator': getattr(toll_stations[0], 'operator', 'Inconnu'),
+                    'from_coordinates': toll_stations[0].coordinates,
+                    'to_coordinates': toll_stations[0].coordinates
+                }]
+
+            # Calcul par binômes pour plusieurs péages
+            for i in range(len(toll_stations) - 1):
+                toll_from = toll_stations[i]
+                toll_to = toll_stations[i + 1]
+                
+                print(f"   💳 Binôme: {toll_from.name} → {toll_to.name}")
+                cost = CacheAccessor.calculate_toll_cost(toll_from, toll_to, vehicle_category)
+                if cost is None:
+                    cost = 0.0
+                
+                total_cost += cost
+                
+                # Ajout d'un détail pour chaque binôme
+                toll_details.append({
+                    'from_name': toll_from.name,
+                    'to_name': toll_to.name,
+                    'cost': cost,
+                    'operator': getattr(toll_from, 'operator', 'Inconnu'),
+                    'from_coordinates': toll_from.coordinates,
+                    'to_coordinates': toll_to.coordinates
+                })
+                
+                print(f"     💰 Coût: {cost}€")
+
+            print(f"   ✅ Coût total calculé: {total_cost}€ pour {len(toll_details)} binômes")
+            return total_cost, len(toll_stations), toll_details
+
+        except Exception as e:
+            print(f"   ❌ Erreur calcul coûts sélectionnés: {e}")
             return 0.0, 0, []
     
     @staticmethod
