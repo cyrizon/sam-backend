@@ -63,22 +63,22 @@ class MotorwayLinkOrchestrator:
         print("\n🔗 Étape 1: Construction des chaînes de segments indéterminés")
         chain_result = self.chain_builder.build_chains(indeterminates)
         
-        # Étape 2: Lier les entrées aux chaînes et aux sorties
-        print("🔗 Étape 2: Liaison des entrées aux chaînes et sorties")
-        entry_links, used_chains_entry, used_exits_entry = self._link_entries_to_destinations(
-            entries, chain_result.chains, exits
+        # Étape 2: Lier les entrées aux chaînes SEULEMENT
+        print("🔗 Étape 2: Liaison des entrées aux chaînes")
+        entry_links, used_chains_entry = self._link_entries_to_chains(
+            entries, chain_result.chains
         )
         
         # Étape 3: Lier les sorties aux chaînes restantes
         print("🔗 Étape 3: Liaison des sorties aux chaînes restantes")
         exit_links, used_chains_exit = self._link_exits_to_chains(
-            exits, chain_result.chains, used_exits_entry, used_chains_entry
+            exits, chain_result.chains, used_chains_entry
         )
         
         # Étape 4: Créer des liens simples pour les segments non liés
         print("🔗 Étape 4: Création de liens simples pour les segments isolés")
         simple_links = self._create_simple_links(
-            entries, exits, used_exits_entry, entry_links, exit_links
+            entries, exits, entry_links, exit_links
         )
         
         # Collecter tous les liens complets
@@ -100,36 +100,29 @@ class MotorwayLinkOrchestrator:
         
         return all_complete_links, stats
     
-    def _link_entries_to_destinations(
+    def _link_entries_to_chains(
         self,
         entries: List[MotorwayLink],
-        chains: List[CoordinateChain],
-        exits: List[MotorwayLink]
-    ) -> Tuple[List[CompleteMotorwayLink], Set[str], Set[str]]:
+        chains: List[CoordinateChain]
+    ) -> Tuple[List[CompleteMotorwayLink], Set[str]]:
         """
-        Lie les entrées aux chaînes ou directement aux sorties.
+        Lie les entrées aux chaînes SEULEMENT.
+        Logique: entry_start -> chain_end (début de l'entrée = fin de la chaîne)
         
         Returns:
-            Tuple[liens_créés, chaînes_utilisées, sorties_utilisées]
+            Tuple[liens_créés, chaînes_utilisées]
         """
         entry_links = []
         used_chains = set()
-        used_exits = set()
         
         for entry in entries:
-            # Chercher une liaison avec une chaîne
-            linked_chain = self._find_linkable_chain(entry, chains, used_chains)
+            # Chercher une chaîne qui finit où l'entrée commence
+            linked_chain = self._find_chain_for_entry(entry, chains, used_chains)
             
             if linked_chain:
-                # Chercher une sortie connectée à cette chaîne
-                connected_exit = self._find_exit_connected_to_chain(
-                    linked_chain, exits, used_exits
-                )
-                
-                segments = [entry] + linked_chain.segments
-                if connected_exit:
-                    segments.append(connected_exit)
-                    used_exits.add(connected_exit.way_id)
+                # Créer le lien complet : [CHAÎNE] + [ENTRÉE]
+                # Car on vient de la chaîne vers l'entrée
+                segments = linked_chain.segments + [entry]
                 
                 complete_link = CompleteMotorwayLink(
                     link_id=f"entry_link_{entry.way_id}",
@@ -140,36 +133,19 @@ class MotorwayLinkOrchestrator:
                 
                 entry_links.append(complete_link)
                 used_chains.add(linked_chain.chain_id)
-                
-            else:
-                # Chercher une liaison directe avec une sortie
-                connected_exit = self._find_directly_connected_exit(
-                    entry, exits, used_exits
-                )
-                
-                if connected_exit:
-                    complete_link = CompleteMotorwayLink(
-                        link_id=f"entry_direct_{entry.way_id}",
-                        link_type=LinkType.ENTRY,
-                        segments=[entry, connected_exit],
-                        destination=entry.destination
-                    )
-                    
-                    entry_links.append(complete_link)
-                    used_exits.add(connected_exit.way_id)
         
         print(f"   • Liens d'entrée créés: {len(entry_links)}")
-        return entry_links, used_chains, used_exits
-    
+        return entry_links, used_chains
+
     def _link_exits_to_chains(
         self,
         exits: List[MotorwayLink],
         chains: List[CoordinateChain],
-        used_exits: Set[str],
         used_chains: Set[str]
     ) -> Tuple[List[CompleteMotorwayLink], Set[str]]:
         """
-        Lie les sorties restantes aux chaînes restantes.
+        Lie les sorties aux chaînes restantes SEULEMENT.
+        Logique: chain_start -> exit_end (début de la chaîne = fin de la sortie)
         
         Returns:
             Tuple[liens_créés, nouvelles_chaînes_utilisées]
@@ -177,17 +153,22 @@ class MotorwayLinkOrchestrator:
         exit_links = []
         newly_used_chains = set()
         
-        available_exits = [e for e in exits if e.way_id not in used_exits]
+        # Chaînes disponibles (non utilisées par les entrées)
         available_chains = [c for c in chains if c.chain_id not in used_chains]
         
-        for exit in available_exits:
-            linked_chain = self._find_linkable_chain(exit, available_chains, newly_used_chains)
+        for exit in exits:
+            # Chercher une chaîne qui commence où la sortie finit
+            linked_chain = self._find_chain_for_exit(exit, available_chains, newly_used_chains)
             
             if linked_chain:
+                # Créer le lien complet : [SORTIE] + [CHAÎNE]
+                # Car on va de la sortie vers la chaîne
+                segments = [exit] + linked_chain.segments
+                
                 complete_link = CompleteMotorwayLink(
                     link_id=f"exit_link_{exit.way_id}",
                     link_type=LinkType.EXIT,
-                    segments=linked_chain.segments + [exit],
+                    segments=segments,
                     destination=exit.destination
                 )
                 
@@ -201,25 +182,23 @@ class MotorwayLinkOrchestrator:
         self,
         entries: List[MotorwayLink],
         exits: List[MotorwayLink],
-        used_exits: Set[str],
         entry_links: List[CompleteMotorwayLink],
         exit_links: List[CompleteMotorwayLink]
     ) -> List[CompleteMotorwayLink]:
         """Crée des liens simples pour les segments isolés."""
         simple_links = []
         
-        # Entrées utilisées dans les liens d'entrée
-        used_entries = {link.segments[0].way_id for link in entry_links}
+        # Entrées utilisées dans les liens d'entrée (maintenant c'est le dernier segment)
+        used_entries = {link.segments[-1].way_id for link in entry_links}
         
-        # Sorties utilisées dans les liens de sortie
-        used_exits_in_exit_links = {link.segments[-1].way_id for link in exit_links}
-        all_used_exits = used_exits | used_exits_in_exit_links
+        # Sorties utilisées dans les liens de sortie (maintenant c'est le premier segment)
+        used_exits_in_exit_links = {link.segments[0].way_id for link in exit_links}
         
         # Créer des liens simples pour les entrées non utilisées
         for entry in entries:
             if entry.way_id not in used_entries:
                 simple_link = CompleteMotorwayLink(
-                    link_id=f"simple_entry_{entry.way_id}",
+                    link_id=f"entry_direct_{entry.way_id}",
                     link_type=LinkType.ENTRY,
                     segments=[entry],
                     destination=entry.destination
@@ -228,9 +207,9 @@ class MotorwayLinkOrchestrator:
         
         # Créer des liens simples pour les sorties non utilisées
         for exit in exits:
-            if exit.way_id not in all_used_exits:
+            if exit.way_id not in used_exits_in_exit_links:
                 simple_link = CompleteMotorwayLink(
-                    link_id=f"simple_exit_{exit.way_id}",
+                    link_id=f"exit_direct_{exit.way_id}",
                     link_type=LinkType.EXIT,
                     segments=[exit],
                     destination=exit.destination
@@ -240,58 +219,43 @@ class MotorwayLinkOrchestrator:
         print(f"   • Liens simples créés: {len(simple_links)}")
         return simple_links
     
-    def _find_linkable_chain(
+    def _find_chain_for_entry(
         self,
-        segment: MotorwayLink,
+        entry: MotorwayLink,
         chains: List[CoordinateChain],
         used_chains: Set[str]
     ) -> Optional[CoordinateChain]:
-        """Trouve une chaîne qui peut être liée au segment."""
+        """
+        Trouve une chaîne pour une entrée.
+        Logique: entry_start -> chain_end (début de l'entrée = fin de la chaîne)
+        """
         for chain in chains:
             if chain.chain_id in used_chains:
                 continue
             
-            # Test connexion avec le début de la chaîne (segment_end -> chain_start)
-            if are_coordinates_equal(segment.get_end_point(), chain.get_start_point()):
-                return chain
-            
-            # Test connexion avec la fin de la chaîne (segment_end -> chain_end - chaîne inversée)
-            if are_coordinates_equal(segment.get_end_point(), chain.get_end_point()):
+            # Test connexion : début de l'entrée = fin de la chaîne
+            if are_coordinates_equal(entry.get_start_point(), chain.get_end_point()):
                 return chain
         
         return None
     
-    def _find_exit_connected_to_chain(
+    def _find_chain_for_exit(
         self,
-        chain: CoordinateChain,
-        exits: List[MotorwayLink],
-        used_exits: Set[str]
-    ) -> Optional[MotorwayLink]:
-        """Trouve une sortie connectée à la chaîne."""
-        for exit in exits:
-            if exit.way_id in used_exits:
+        exit: MotorwayLink,
+        chains: List[CoordinateChain],
+        used_chains: Set[str]
+    ) -> Optional[CoordinateChain]:
+        """
+        Trouve une chaîne pour une sortie.
+        Logique: chain_start -> exit_end (début de la chaîne = fin de la sortie)
+        """
+        for chain in chains:
+            if chain.chain_id in used_chains:
                 continue
             
-            # Test connexion chain_end -> exit_start
-            if are_coordinates_equal(chain.get_end_point(), exit.get_start_point()):
-                return exit
-        
-        return None
-    
-    def _find_directly_connected_exit(
-        self,
-        entry: MotorwayLink,
-        exits: List[MotorwayLink],
-        used_exits: Set[str]
-    ) -> Optional[MotorwayLink]:
-        """Trouve une sortie directement connectée à l'entrée."""
-        for exit in exits:
-            if exit.way_id in used_exits:
-                continue
-            
-            # Test connexion entry_end -> exit_start
-            if are_coordinates_equal(entry.get_end_point(), exit.get_start_point()):
-                return exit
+            # Test connexion : début de la chaîne = fin de la sortie
+            if are_coordinates_equal(chain.get_start_point(), exit.get_end_point()):
+                return chain
         
         return None
     

@@ -15,6 +15,7 @@ from ..models.link_types import LinkType
 from ..parsers.motorway_segments_parser import MotorwaySegmentsParser
 from ..linking.motorway_link_orchestrator import MotorwayLinkOrchestrator
 from ..serialization.complete_links_serializer import CompleteMotorwayLinksSerializer
+from ..services.toll_association_service import TollAssociationService
 
 
 class V2CacheManagerWithLinking(V2CacheManagerWithPricing):
@@ -41,10 +42,12 @@ class V2CacheManagerWithLinking(V2CacheManagerWithPricing):
             output_dir=cache_dir
         )
         self.links_serializer = CompleteMotorwayLinksSerializer(cache_dir)
+        self.toll_association_service = TollAssociationService(max_distance_m=2.0)
         
         # État de liaison
         self.links_built = False
         self.linking_stats: Optional[Dict[str, Any]] = None
+        self.toll_association_stats: Optional[Dict[str, Any]] = None
     
     def load_all_including_motorway_linking(self) -> bool:
         """
@@ -73,13 +76,20 @@ class V2CacheManagerWithLinking(V2CacheManagerWithPricing):
                     self.complete_motorway_links, self.linking_stats, _ = cached_data
                     self.links_built = True
                     print("🚀 Liens motorway chargés depuis le cache!")
+                    
+                    # Les péages sont déjà associés dans le cache, pas besoin de refaire l'association
+                    print("✅ Péages déjà associés depuis le cache")
                     return True
             
             # 4. Construire les liens complets (si pas de cache valide)
             if not self._build_complete_motorway_links():
                 return False
             
-            # 5. Sauvegarder dans le cache
+            # 5. Associer les péages aux liens
+            if not self._associate_tolls_to_links():
+                return False
+            
+            # 6. Sauvegarder dans le cache
             self._save_links_to_cache(source_files)
             
             print("✅ Cache V2 complet avec liaison motorway chargé avec succès")
@@ -161,6 +171,71 @@ class V2CacheManagerWithLinking(V2CacheManagerWithPricing):
             print(f"❌ Erreur lors de la construction des liens: {e}")
             return False
     
+    def _associate_tolls_to_links(self) -> bool:
+        """
+        Associe les péages aux liens complets construits.
+        
+        Returns:
+            bool: True si l'association a réussi
+        """
+        try:
+            print("\n🏪 Association des péages aux liens...")
+            
+            if not self.complete_motorway_links:
+                print("   ⚠️  Aucun lien complet à traiter pour l'association")
+                return True
+            
+            if not self.toll_booths:
+                print("   ⚠️  Aucun péage chargé pour l'association")
+                return True
+            
+            # Utiliser le service d'association
+            self.toll_association_stats = self.toll_association_service.associate_tolls_to_links(
+                self.complete_motorway_links,
+                self.toll_booths
+            )
+            
+            # Afficher un rapport détaillé
+            self.toll_association_service.print_toll_association_report(self.complete_motorway_links)
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Erreur lors de l'association des péages: {e}")
+            return False
+
+    def get_toll_association_statistics(self) -> Optional[Dict[str, Any]]:
+        """Retourne les statistiques d'association des péages."""
+        return self.toll_association_stats
+
+    def get_links_with_tolls(self) -> List[CompleteMotorwayLink]:
+        """Retourne uniquement les liens qui ont des péages associés."""
+        return self.toll_association_service.get_links_with_tolls(self.complete_motorway_links)
+
+    def get_links_by_toll_type(self, toll_type: str) -> List[CompleteMotorwayLink]:
+        """
+        Retourne les liens filtrés par type de péage.
+        
+        Args:
+            toll_type: "O" pour ouvert, "F" pour fermé
+            
+        Returns:
+            Liste des liens correspondants
+        """
+        return self.toll_association_service.get_links_by_toll_type(self.complete_motorway_links, toll_type)
+
+    def get_links_by_operator(self, operator: str) -> List[CompleteMotorwayLink]:
+        """
+        Retourne les liens filtrés par opérateur de péage.
+        
+        Args:
+            operator: Nom de l'opérateur (ex: "ASF", "APRR")
+            
+        Returns:
+            Liste des liens correspondants
+        """
+        return self.toll_association_service.get_links_by_operator(self.complete_motorway_links, operator)
+
     def get_complete_motorway_links(self) -> List[CompleteMotorwayLink]:
         """Retourne tous les liens complets construits."""
         return self.complete_motorway_links
