@@ -416,8 +416,11 @@ class SelectionAnalyzer:
         """
         # Critère 1: Exclure les destinations contenant "aire"
         if hasattr(link, 'destination') and link.destination:
-            if 'aire' in link.destination.lower():
+            dest = link.destination.lower()
+            if 'aire' in dest:
                 return False
+            # Si la destination est non null et ne contient pas 'aire', c'est une vraie entrée/sortie
+            return True
         
         # Critère 2: Calculer la longueur du lien
         coordinates = link.get_all_coordinates()
@@ -434,10 +437,10 @@ class SelectionAnalyzer:
         # Convertir en mètres (distance était en km)
         total_length_meters = total_length * 1000
         
-        # Critère 3: Exclure les liens trop courts (< 200m)
+        # Critère 3: Exclure les liens trop courts (< 200m) si pas de destination explicite
         if total_length_meters < 200:
             return False
-            
+        
         return True
     
     def _calculate_link_length_meters(self, link) -> float:

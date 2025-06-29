@@ -199,6 +199,12 @@ def test_motorway_filter():
         # Tester le filtre
         result = analyzer._is_valid_motorway_link(link)
         
+        # Debug pour comprendre le problème
+        print(f"     Debug: hasattr(destination)={hasattr(link, 'destination')}")
+        print(f"     Debug: link.destination={repr(link.destination)}")
+        if hasattr(link, 'destination') and link.destination:
+            print(f"     Debug: 'aire' in destination.lower()={'aire' in link.destination.lower()}")
+        
         # Vérifier le résultat
         status = "✅ PASS" if result == expected else "❌ FAIL"
         if result != expected:
