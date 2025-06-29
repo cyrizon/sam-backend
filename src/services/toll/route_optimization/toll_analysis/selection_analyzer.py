@@ -11,9 +11,9 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 
-from src.cache.v2.managers.v2_cache_manager_with_linking import V2CacheManagerWithLinking
 from src.cache.v2.models.toll_booth_station import TollBoothStation
 from src.cache.v2.models.complete_motorway_link import CompleteMotorwayLink, LinkType
+from ..utils.cache_accessor import CacheAccessor
 
 
 class SelectionAnalyzer:
@@ -24,13 +24,8 @@ class SelectionAnalyzer:
     
     def __init__(self):
         """Initialise l'analyseur."""
-        # Utiliser le répertoire de données par défaut
-        import os
-        current_dir = os.path.dirname(__file__)
-        data_dir = os.path.join(current_dir, '..', '..', '..', '..', 'data')
-        data_dir = os.path.abspath(data_dir)
-        
-        self.cache_manager = V2CacheManagerWithLinking(data_dir)
+        # Utiliser CacheAccessor au lieu de créer un nouveau cache manager
+        print("🔍 Selection Analyzer initialisé avec CacheAccessor")
         
     def analyze_selection_for_optimization(
         self, 
@@ -85,21 +80,36 @@ class SelectionAnalyzer:
             Élément optimisé (TollBoothStation ou CompleteMotorwayLink)
         """
         toll_type = toll.get('toll_type')
+        toll_name = toll.get('name', 'Inconnu')
         
+        print(f"   🔧 Optimisation de {toll_name} ({toll_type})")
+        
+        result = None
         if toll_type == 'ouvert':
-            return self._get_toll_booth_station(toll)
+            result = self._get_toll_booth_station(toll)
+            print(f"       → Recherche TollBoothStation: {'✅ Trouvé' if result else '❌ Non trouvé'}")
         elif toll_type == 'fermé':
-            return self._get_optimized_motorway_link(toll, route_coordinates)
+            result = self._get_optimized_motorway_link(toll, route_coordinates)
+            print(f"       → Recherche MotorwayLink: {'✅ Trouvé' if result else '❌ Non trouvé'}")
         else:
             # Fallback : essayer de trouver l'élément correspondant
-            return self._find_best_match(toll, route_coordinates)
+            result = self._find_best_match(toll, route_coordinates)
+            print(f"       → Recherche fallback: {'✅ Trouvé' if result else '❌ Non trouvé'}")
+        
+        return result
     
     def _get_toll_booth_station(self, toll: Dict) -> Optional[TollBoothStation]:
         """Récupère la TollBoothStation correspondante."""
         try:
+            # Utiliser CacheAccessor pour récupérer les péages
+            toll_stations = CacheAccessor.get_toll_stations()
+            
             osm_id = toll.get('osm_id')
             if osm_id:
-                return self.cache_manager.get_toll_booth_by_id(osm_id)
+                # Recherche par OSM ID
+                for station in toll_stations:
+                    if station.osm_id == osm_id:
+                        return station
             
             # Recherche par coordonnées si pas d'OSM ID
             coordinates = toll.get('coordinates', [])
@@ -108,14 +118,14 @@ class SelectionAnalyzer:
                 min_distance = float('inf')
                 closest_toll = None
                 
-                for toll_booth in self.cache_manager.toll_booths:
-                    distance = self._calculate_distance(toll_booth.get_coordinates(), coordinates)
+                for station in toll_stations:
+                    distance = self._calculate_distance(station.get_coordinates(), coordinates)
                     if distance < min_distance:
                         min_distance = distance
-                        closest_toll = toll_booth
+                        closest_toll = station
                 
-                # Retourner le plus proche si dans un rayon raisonnable (5km)
-                if closest_toll and min_distance < 5.0:
+                # Retourner le plus proche si dans un rayon raisonnable (500m)
+                if closest_toll and min_distance < 0.5:
                     return closest_toll
                 
         except Exception as e:
@@ -144,18 +154,25 @@ class SelectionAnalyzer:
             if not toll_coords:
                 return None
             
-            # Trouver les liens proches depuis le cache
+            # Utiliser CacheAccessor pour récupérer les liens
+            entry_links = CacheAccessor.get_entry_links()
+            exit_links = CacheAccessor.get_exit_links()
+            
+            # Trouver les liens proches
             nearby_entries = []
             nearby_exits = []
             
-            # Recherche simplifiée dans les liens complets
-            for link in self.cache_manager.complete_motorway_links:
+            for link in entry_links:
                 distance = self._calculate_distance(link.get_start_point(), toll_coords)
                 if distance < 2.0:  # Rayon de 2km
-                    if link.link_type == LinkType.ENTRY:
-                        nearby_entries.append(link)
-                    elif link.link_type == LinkType.EXIT:
-                        nearby_exits.append(link)
+                    nearby_entries.append(link)
+            
+            for link in exit_links:
+                distance = self._calculate_distance(link.get_end_point(), toll_coords)
+                if distance < 2.0:  # Rayon de 2km
+                    nearby_exits.append(link)
+            
+            print(f"   🔍 Liens trouvés près de {toll.get('name', 'Inconnu')}: {len(nearby_entries)} entrées, {len(nearby_exits)} sorties")
             
             # Choisir le meilleur lien selon la position sur la route
             best_link = self._choose_best_link_for_route(
@@ -277,7 +294,8 @@ class SelectionAnalyzer:
         min_distance = float('inf')
         closest_toll = None
         
-        for toll_booth in self.cache_manager.toll_booths:
+        toll_stations = CacheAccessor.get_toll_stations()
+        for toll_booth in toll_stations:
             distance = self._calculate_distance(toll_booth.get_coordinates(), coordinates)
             if distance < min_distance:
                 min_distance = distance
@@ -291,7 +309,8 @@ class SelectionAnalyzer:
         min_distance = float('inf')
         closest_link = None
         
-        for link in self.cache_manager.complete_motorway_links:
+        complete_links = CacheAccessor.get_complete_motorway_links()
+        for link in complete_links:
             distance = self._calculate_distance(link.get_start_point(), coordinates)
             if distance < min_distance:
                 min_distance = distance

@@ -210,8 +210,22 @@ class CoreTollIdentifier:
         """Phase 3.5: Déduplique les péages basé sur la proximité (<1m) et similarité sémantique."""
         print("   🔄 Phase 3.5: Déduplication des péages...")
         
+        # Debug: afficher les péages AVANT déduplication
+        print(f"   🔍 Péages AVANT déduplication: {len(classified_tolls['on_route'])}")
+        for i, toll_data in enumerate(classified_tolls['on_route']):
+            toll_station = toll_data.get('toll')
+            toll_name = toll_station.display_name if toll_station and hasattr(toll_station, 'display_name') else "Inconnu"
+            print(f"     {i+1}. {toll_name}")
+        
         # Dédupliquer SEULEMENT les péages sur la route
         deduplicated_on_route = self._deduplicate_toll_list(classified_tolls['on_route'])
+        
+        # Debug: afficher les péages APRÈS déduplication  
+        print(f"   🔍 Péages APRÈS déduplication: {len(deduplicated_on_route)}")
+        for i, toll_data in enumerate(deduplicated_on_route):
+            toll_station = toll_data.get('toll')
+            toll_name = toll_station.display_name if toll_station and hasattr(toll_station, 'display_name') else "Inconnu"
+            print(f"     {i+1}. {toll_name}")
         
         # NE PAS dédupliquer les péages à proximité - on s'en fout
         deduplicated_nearby = classified_tolls['nearby']
@@ -428,6 +442,15 @@ class CoreTollIdentifier:
             toll_data_with_position = toll_data.copy()
             toll_data_with_position['route_position'] = position
             tolls_with_position.append(toll_data_with_position)
+            
+            # Debug: récupérer le nom du péage correctement
+            toll_station = toll_data.get('toll')  # Récupérer l'objet TollBoothStation
+            if toll_station and hasattr(toll_station, 'display_name'):
+                toll_name = toll_station.display_name
+            else:
+                toll_name = f"Péage inconnu"
+            
+            print(f"   🔍 {toll_name}: position {position:.4f} at {toll_coords}")
         
         # Trier par position croissante le long de la route
         sorted_tolls = sorted(tolls_with_position, key=lambda x: x['route_position'])

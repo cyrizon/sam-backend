@@ -83,6 +83,10 @@ class TollIdentifier:
                 core_result['total_tolls_on_route'] = len(core_result['tolls_on_route'])
                 core_result['verification_applied'] = True
                 
+                # ⭐ IMPORTANT: Re-trier les péages après modification par Shapely
+                print("   🔄 Re-tri des péages après vérification Shapely...")
+                core_result = self._resort_tolls_after_shapely(core_result, route_coordinates)
+                
                 print(f"   ✅ Vérification Shapely : {len(core_result['tolls_on_route'])} péages confirmés")
             else:
                 core_result['verification_applied'] = False
@@ -92,6 +96,51 @@ class TollIdentifier:
             core_result['verification_applied'] = False
         
         return core_result
+    
+    def _resort_tolls_after_shapely(self, result: Dict, route_coordinates: List[List[float]]) -> Dict:
+        """Re-trie les péages par position après la vérification Shapely."""
+        tolls_on_route = result['tolls_on_route']
+        
+        if len(tolls_on_route) <= 1:
+            return result
+        
+        # Calculer la position de chaque péage le long de la route
+        tolls_with_position = []
+        
+        for toll_data in tolls_on_route:
+            # Récupérer les coordonnées selon la structure après Shapely
+            toll_coords = None
+            
+            # Essayer différentes méthodes pour récupérer les coordonnées
+            if 'coordinates' in toll_data:
+                toll_coords = toll_data['coordinates']
+            elif 'toll' in toll_data and hasattr(toll_data['toll'], 'get_coordinates'):
+                toll_coords = toll_data['toll'].get_coordinates()
+            elif 'toll' in toll_data and hasattr(toll_data['toll'], 'coordinates'):
+                toll_coords = toll_data['toll'].coordinates
+            
+            if toll_coords:
+                position = self.core_identifier._calculate_position_along_route(toll_coords, route_coordinates)
+                toll_data_with_position = toll_data.copy()
+                toll_data_with_position['route_position'] = position
+                tolls_with_position.append(toll_data_with_position)
+                
+                # Debug: afficher la position
+                toll_station = toll_data.get('toll')
+                toll_name = toll_station.display_name if toll_station and hasattr(toll_station, 'display_name') else "Inconnu"
+                print(f"   🔍 Re-tri {toll_name}: position {position:.4f} at {toll_coords}")
+            else:
+                # Si pas de coordonnées, garder tel quel
+                tolls_with_position.append(toll_data)
+        
+        # Trier par position croissante le long de la route
+        sorted_tolls = sorted(tolls_with_position, key=lambda x: x.get('route_position', 0))
+        
+        # Mettre à jour le résultat avec la liste triée
+        result['tolls_on_route'] = sorted_tolls
+        
+        print(f"   ✅ {len(sorted_tolls)} péages re-triés par position")
+        return result
     
     def get_spatial_index_stats(self) -> Dict:
         """Retourne les statistiques des index spatiaux."""

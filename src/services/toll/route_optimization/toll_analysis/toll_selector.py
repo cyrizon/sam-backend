@@ -65,6 +65,7 @@ class TollSelector:
         # ÉTAPE 3: Création structure segments
         segments_structure = self._create_segments_structure(
             optimized_elements, 
+            step1_result['selected_tolls'],  # Passer aussi les péages sélectionnés comme fallback
             route_coords[0],  # départ
             route_coords[1]   # arrivée
         )
@@ -415,18 +416,18 @@ class TollSelector:
     def _create_segments_structure(
         self, 
         selected_elements: List, 
+        selected_tolls: List,  # Nouveau paramètre
         start_point: List[float], 
         end_point: List[float]
     ) -> List[Dict]:
         """
         Crée la structure simple de segments selon la logique :
-        - EXIT → avec péage jusqu'à end_coordinates
-        - Entre EXIT et ENTRY → sans péage
-        - ENTRY → avec péage à partir de start_coordinates
-        - TollBoothStation → toujours avec péage
+        - Si des éléments optimisés existent, les utiliser
+        - Sinon, utiliser les péages sélectionnés comme fallback
         
         Args:
             selected_elements: Éléments optimisés (TollBoothStation, CompleteMotorwayLink)
+            selected_tolls: Péages sélectionnés (fallback si selected_elements est vide)
             start_point: Point de départ [lon, lat]
             end_point: Point d'arrivée [lon, lat]
             
@@ -434,6 +435,14 @@ class TollSelector:
             Liste de segments [start->end, avec/sans péage]
         """
         print(f"   📋 Création structure : {len(selected_elements)} éléments optimisés")
+        print(f"   📋 Debug: {len(selected_tolls)} péages sélectionnés en fallback")
+        
+        # Si pas d'éléments optimisés mais des péages sélectionnés, créer un segment simple avec péages
+        if not selected_elements and selected_tolls:
+            print(f"   🔄 Fallback: utiliser {len(selected_tolls)} péages sélectionnés")
+            return self._create_simple_segment_with_selected_tolls(selected_tolls, start_point, end_point)
+        elif not selected_elements and not selected_tolls:
+            print(f"   ⚠️ Aucun élément optimisé ET aucun péage sélectionné - segment sans péage")
         
         segments = []
         current_point = start_point
@@ -605,3 +614,74 @@ class TollSelector:
         else:
             # Objet TollBoothStation direct
             return toll_data
+    
+    def _create_simple_segment_with_selected_tolls(
+        self, 
+        selected_tolls: List, 
+        start_point: List[float], 
+        end_point: List[float]
+    ) -> List[Dict]:
+        """
+        Crée un segment simple qui passe par les péages sélectionnés.
+        
+        Args:
+            selected_tolls: Liste des péages sélectionnés
+            start_point: Point de départ
+            end_point: Point d'arrivée
+            
+        Returns:
+            Segment unique avec waypoints des péages
+        """
+        # Extraire les coordonnées des péages sélectionnés
+        toll_waypoints = []
+        for i, toll in enumerate(selected_tolls):
+            print(f"     🔍 Debug toll {i}: keys = {list(toll.keys())}")
+            
+            coords = None
+            
+            # Cas 1: Objet TollBoothStation dans toll['toll']
+            if 'toll' in toll and hasattr(toll['toll'], 'get_coordinates'):
+                coords = toll['toll'].get_coordinates()
+                print(f"     📍 Coordonnées via get_coordinates(): {coords}")
+            elif 'toll' in toll and hasattr(toll['toll'], 'coordinates'):
+                coords = toll['toll'].coordinates
+                print(f"     📍 Coordonnées via .coordinates: {coords}")
+            # Cas 2: Coordonnées directes
+            elif 'coordinates' in toll:
+                coords = toll['coordinates']
+                print(f"     📍 Coordonnées directes: {coords}")
+            # Cas 3: Latitude/longitude séparés
+            else:
+                lat = toll.get('latitude') or toll.get('lat')
+                lon = toll.get('longitude') or toll.get('lon') or toll.get('lng')
+                if lat is not None and lon is not None:
+                    coords = [float(lon), float(lat)]
+                    print(f"     🔄 Coordonnées reconstruites: {coords}")
+            
+            if coords and len(coords) == 2:
+                toll_waypoints.append(coords)
+                print(f"     ✅ Waypoint ajouté: {coords}")
+            else:
+                print(f"     ❌ Pas de coordonnées trouvées pour toll {i}")
+                # Debug supplémentaire
+                if 'toll' in toll:
+                    print(f"     🔍 Type toll['toll']: {type(toll['toll'])}")
+                    if hasattr(toll['toll'], '__dict__'):
+                        print(f"     🔍 Attributs toll['toll']: {vars(toll['toll'])}")
+        
+        # Créer le chemin : start -> péages -> end
+        waypoints = [start_point] + toll_waypoints + [end_point]
+        
+        # Créer un segment unique qui passe par tous les péages
+        segment = {
+            'start_point': start_point,
+            'end_point': end_point,
+            'has_toll': True,
+            'toll_info': {'selected_tolls': selected_tolls},
+            'segment_reason': f'Segment avec {len(selected_tolls)} péages sélectionnés',
+            'waypoints': waypoints,  # Points de passage obligatoires
+            'force_tolls': toll_waypoints  # Forcer le passage par ces péages
+        }
+        
+        print(f"     ✅ Segment créé avec {len(toll_waypoints)} waypoints de péages")
+        return [segment]
