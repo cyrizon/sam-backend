@@ -64,6 +64,7 @@ class IntelligentOptimizer:
             return None
         
         try:
+            print("Etape 1")
             # ÉTAPE 1: Route sans péage (cas spécial)
             if optimization_mode == 'count' and target_tolls == 0:
                 return self._handle_zero_tolls(coordinates)
@@ -73,6 +74,7 @@ class IntelligentOptimizer:
             if not route_data or not identification_result:
                 return None
             
+            print("Etape 4")
             # ÉTAPE 4: Validation quantité (cas suffisant)
             if self._is_base_route_sufficient(identification_result, target_tolls, optimization_mode):
                 return self.route_assembler.format_base_route_as_result(
@@ -127,12 +129,14 @@ class IntelligentOptimizer:
     ) -> tuple:
         """ÉTAPES 2-3: Analyse route de base + identification péages."""
         
+        print("Etape 2")
         # ÉTAPE 2: Route de base avec tollways
         route_data, tollways_data = self.route_provider.get_base_route_with_tollways(coordinates)
         if not route_data or not tollways_data:
             print("❌ Échec analyse route de base")
             return None, None
         
+        print("Etape 3")
         # ÉTAPE 3: Identification péages sur route/autour
         identification_result = self.toll_identifier.identify_tolls_on_route(
             route_data['route_coords'], tollways_data['segments']
@@ -189,6 +193,7 @@ class IntelligentOptimizer:
     ) -> Optional[Dict]:
         """ÉTAPES 5-8: Optimisation complète avec segmentation."""
         
+        print("Etape 5")
         # ÉTAPE 5: Sélection péages avec remplacement intelligent
         # Exemple: [Ouvert,Fermé1,Fermé2,Fermé3,Fermé4] → objectif 2
         # Enlève: Ouvert,Fermé1,Fermé2 → reste: Fermé3,Fermé4
@@ -200,6 +205,7 @@ class IntelligentOptimizer:
             print("❌ Échec sélection péages")
             return None
         
+        print("Etape 6")
         # ÉTAPE 6: Création segments optimisés
         # Segment 1: [Départ → Début EntréeX] (SANS péage)
         # Segment 2: [Début EntréeX → Arrivée] (AVEC péages: EntréeX + Fermé4)
@@ -211,6 +217,7 @@ class IntelligentOptimizer:
             print("❌ Échec création segments")
             return None
         
+        print("Etape 7")
         # ÉTAPE 7: Calcul segments avec ORS
         # Appel 1: Route sans péage pour segment 1
         # Appel 2: Route avec péages pour segment 2
@@ -221,6 +228,7 @@ class IntelligentOptimizer:
             print("❌ Échec calcul segments")
             return None
         
+        print("Etape 8")
         # ÉTAPE 8: Assemblage final des segments
         # Combine: segment1 + segment2 → route finale optimisée
         final_route = self.route_assembler.assemble_final_route(

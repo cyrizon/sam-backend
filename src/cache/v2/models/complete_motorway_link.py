@@ -58,9 +58,32 @@ class CompleteMotorwayLink:
     
     def get_all_coordinates(self) -> List[List[float]]:
         """Retourne toutes les coordonnées de la bretelle complète."""
+        if not self.segments:
+            return []
+        
         all_coords = []
-        for segment in self.segments:
-            all_coords.extend(segment.get_all_coordinates())
+        
+        # Ajouter toutes les coordonnées du premier segment
+        all_coords.extend(self.segments[0].get_all_coordinates())
+        
+        # Pour les segments suivants, ignorer la première coordonnée si elle est identique à la dernière du segment précédent
+        for i in range(1, len(self.segments)):
+            segment_coords = self.segments[i].get_all_coordinates()
+            
+            if not segment_coords:
+                continue
+            
+            # Vérifier si la première coordonnée de ce segment est identique à la dernière du segment précédent
+            if (all_coords and 
+                len(all_coords) > 0 and 
+                len(segment_coords) > 0 and
+                all_coords[-1] == segment_coords[0]):
+                # Ignorer la première coordonnée (doublon)
+                all_coords.extend(segment_coords[1:])
+            else:
+                # Pas de doublon, ajouter toutes les coordonnées
+                all_coords.extend(segment_coords)
+        
         return all_coords
     
     def has_toll(self) -> bool:

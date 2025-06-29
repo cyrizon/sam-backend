@@ -46,7 +46,7 @@ class BudgetTollSelector:
             return self._create_result([], 0.0, "Aucun péage sur route")
         
         # Calculer le coût initial avec le cache
-        initial_cost = CacheAccessor.calculate_total_cost(tolls_on_route)
+        initial_cost = self._calculate_total_cost(tolls_on_route)
         print(f"   Coût initial : {initial_cost:.2f}€")
         
         if initial_cost <= budget_limit:
@@ -85,7 +85,7 @@ class BudgetTollSelector:
         
         if not closed_tolls:
             # Que des ouverts, teste le coût
-            cost = CacheAccessor.calculate_total_cost(open_tolls)
+            cost = self._calculate_total_cost(open_tolls)
             if cost <= budget_limit:
                 return self._create_result(open_tolls, cost, "Ouverts seulement")
             else:
@@ -118,7 +118,7 @@ class BudgetTollSelector:
         """
         if open_tolls:
             # Tester si les ouverts respectent le budget
-            cost = CacheAccessor.calculate_total_cost(open_tolls)
+            cost = self._calculate_total_cost(open_tolls)
             if cost <= budget_limit:
                 return self._create_result(
                     open_tolls, cost, 
@@ -170,3 +170,34 @@ class BudgetTollSelector:
             'selection_reason': f"Route sans péage : {reason}",
             'optimization_applied': True
         }
+
+    def _calculate_total_cost(self, tolls: List[Dict]) -> float:
+        """
+        Calcule le coût total d'une liste de péages.
+        
+        Args:
+            tolls: Liste des péages
+            
+        Returns:
+            Coût total en euros
+        """
+        total_cost = 0.0
+        
+        for toll in tolls:
+            try:
+                # Utiliser le coût estimé s'il existe
+                if 'estimated_cost' in toll:
+                    total_cost += toll['estimated_cost']
+                else:
+                    # Utiliser le CacheAccessor pour calculer le coût
+                    toll_cost = CacheAccessor.calculate_toll_cost(
+                        toll, vehicle_category="1"
+                    )
+                    total_cost += toll_cost
+                    
+            except Exception as e:
+                print(f"   ⚠️ Erreur calcul coût péage {toll.get('name', 'Inconnu')}: {e}")
+                # Coût par défaut si erreur
+                total_cost += 3.0
+        
+        return total_cost

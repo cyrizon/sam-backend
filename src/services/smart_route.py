@@ -17,7 +17,7 @@ Pipeline complet :
 """
 from __future__ import annotations
 from src.services.ors_service import ORSService
-from src.services.toll_strategies import TollRouteOptimizer
+from src.services.toll.route_optimization.main.intelligent_optimizer import IntelligentOptimizer
 from src.services.budget_strategies import BudgetRouteOptimizer
 
 class SmartRouteService:
@@ -32,7 +32,7 @@ class SmartRouteService:
         """
         self.ors_service = ORSService()
         # Utiliser la stratégie intelligente V2 simplifiée
-        self.toll_optimizer = TollRouteOptimizer(self.ors_service)
+        self.toll_optimizer = IntelligentOptimizer(self.ors_service)
         self.budget_optimizer = BudgetRouteOptimizer(self.ors_service)
     
     def compute_route_with_toll_limit(
@@ -63,13 +63,11 @@ class SmartRouteService:
         )
         
         try:
-            result = self.toll_optimizer.compute_route_with_toll_limit(
+            result = self.intelligent_optimizer.find_optimized_route(
                 coordinates,
-                max_tolls,
-                veh_class,
-                max_comb_size
+                max_tolls
             )
-            return result        
+            return result
         finally:
             # TERMINER LA SESSION - Le résumé sera automatiquement loggé
             performance_tracker.end_optimization_session(result if 'result' in locals() else {})

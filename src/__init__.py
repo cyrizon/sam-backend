@@ -15,18 +15,37 @@ def create_app():
     config = Config().dev_config if env == "dev" else Config().production_config
     app.config.from_object(config)
 
-    print(" Initialisation du cache global OSM avec sérialisation...")
-    from src.cache import osm_data_cache
+    print("🚀 Initialisation du cache V2 complet avec linking...")
+    from src.cache.v2.managers.v2_cache_manager_with_linking import V2CacheManagerWithLinking
     
-    # Charger le cache OSM depuis le disque ou créer s'il n'existe pas
-    # (Le cache des péages sera automatiquement initialisé si nécessaire)
-    osm_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "osm_export_toll.geojson")
-    success = osm_data_cache.load_osm_data_with_cache(osm_file_path)
+    # Initialiser le cache V2 avec le répertoire des données
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+    data_dir = os.path.abspath(data_dir)
+    
+    # Initialiser le cache V2 uniquement
+    cache_v2 = V2CacheManagerWithLinking(data_dir)
+    success = cache_v2.load_all_including_motorway_linking()
     
     if success:
-        print("✅ Cache OSM chargé avec succès")
+        print("✅ Cache V2 complet avec linking chargé avec succès")
+        print(f"📊 Statistiques:")
+        print(f"   - Total toll booths: {len(cache_v2.toll_booths)}")
+        
+        # Calculer les stats
+        open_tolls = len([t for t in cache_v2.toll_booths if t.is_open_toll])
+        closed_tolls = len([t for t in cache_v2.toll_booths if t.is_closed_toll])
+        
+        print(f"   - Péages ouverts: {open_tolls}")
+        print(f"   - Péages fermés: {closed_tolls}")
+        print(f"   - Opérateurs disponibles: {len(cache_v2.pricing_manager.operators)}")
+        print(f"   - Liens complets: {len(cache_v2.complete_motorway_links)}")
+        
+        # Stocker le cache globalement pour l'application
+        app.config['CACHE_V2'] = cache_v2
+        
     else:
-        print("❌ Erreur lors du chargement du cache OSM")
+        print("❌ Erreur critique lors du chargement du cache V2")
+        raise RuntimeError("Impossible de charger le cache V2. Vérifiez les fichiers de données.")
 
     # Enregistrer les routes
     from src.routes import register_routes

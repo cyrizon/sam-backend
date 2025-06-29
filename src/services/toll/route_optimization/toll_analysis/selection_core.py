@@ -139,35 +139,5 @@ class TollSelectionCore:
                 'open_tolls': 0,
                 'closed_tolls': 0,
                 'total_selected': 0
-            },
-            'needs_optimization': False
+            }
         }
-    
-    def analyze_selection_for_optimization(self, selection_result: Dict, route_coordinates: List[List[float]]) -> Dict:
-        """
-        Analyse si une sélection nécessite une optimisation (remplacement de péages).
-        
-        Args:
-            selection_result: Résultat de sélection initial
-            route_coordinates: Coordonnées de la route pour l'optimisation
-            
-        Returns:
-            Résultat enrichi avec analyse d'optimisation
-        """
-        if not selection_result.get('selection_valid'):
-            return selection_result
-        
-        selected_tolls = selection_result['selected_tolls']
-        closed_tolls_on_route = [
-            t for t in selected_tolls 
-            if t.get('toll_type') == 'fermé' and t.get('is_on_route', True)
-        ]
-        
-        # Si des péages fermés sont sur la route → optimisation nécessaire
-        if closed_tolls_on_route:
-            selection_result['needs_optimization'] = True
-            selection_result['tolls_to_optimize'] = closed_tolls_on_route
-            selection_result['optimization_reason'] = f"{len(closed_tolls_on_route)} péages fermés sur route à optimiser"
-            print(f"   🔄 Optimisation nécessaire : {len(closed_tolls_on_route)} fermés sur route")
-        
-        return selection_result

@@ -7,7 +7,6 @@ Version simplifiée pour l'optimiseur de routes.
 """
 
 from typing import List, Dict
-from ..utils.route_extractor import RouteExtractor
 
 
 class RouteAssembler:
@@ -44,12 +43,25 @@ class RouteAssembler:
         total_duration = 0
         
         for i, segment in enumerate(segments):
-            coords = RouteExtractor.extract_coordinates(segment)
-            instructions = RouteExtractor.extract_instructions(segment)
-            distance = RouteExtractor.extract_distance(segment)
-            duration = RouteExtractor.extract_duration(segment)
+            # Utiliser les données extraites par segment_calculator
+            coords = segment.get('coordinates', [])
+            distance = segment.get('distance_m', 0)
+            duration = segment.get('duration_s', 0)
+            segments_detail = segment.get('segments_detail', [])
             
             print(f"   📍 Segment {i+1}: {distance/1000:.1f}km, {len(coords)} points")
+            
+            # Extraire les instructions depuis segments_detail
+            instructions = []
+            for seg_detail in segments_detail:
+                steps = seg_detail.get('steps', [])
+                for step in steps:
+                    instructions.append({
+                        'instruction': step.get('instruction', ''),
+                        'name': step.get('name', ''),
+                        'distance': step.get('distance', 0),
+                        'duration': step.get('duration', 0)
+                    })
             
             # Premier segment : ajouter tous les points
             if i == 0:
@@ -58,12 +70,7 @@ class RouteAssembler:
             else:
                 # Segments suivants : éviter la duplication du premier point
                 all_coords.extend(coords[1:] if coords else [])
-                
-                # Ajuster les instructions pour éviter les doublons
-                if instructions:
-                    # Sauter la première instruction (point de départ dupliqué)
-                    adjusted_instructions = instructions[1:] if len(instructions) > 1 else []
-                    all_instructions.extend(adjusted_instructions)
+                all_instructions.extend(instructions)
             
             total_distance += distance
             total_duration += duration
@@ -179,15 +186,32 @@ class RouteAssembler:
         Utilisé quand l'optimisation n'est pas nécessaire.
         
         Args:
-            base_route: Route de base
+            base_route: Route de base (réponse ORS directe)
             target_tolls: Nombre de péages demandé
             
         Returns:
             Route formatée comme résultat d'optimisation
         """
-        distance = RouteExtractor.extract_distance(base_route)
-        duration = RouteExtractor.extract_duration(base_route)
-        instructions = RouteExtractor.extract_instructions(base_route)
+        # Extraire les données de la réponse ORS
+        feature = base_route.get('features', [{}])[0]
+        properties = feature.get('properties', {})
+        summary = properties.get('summary', {})
+        
+        distance = summary.get('distance', 0)
+        duration = summary.get('duration', 0)
+        
+        # Extraire les instructions depuis les segments
+        instructions = []
+        segments = properties.get('segments', [])
+        for segment in segments:
+            steps = segment.get('steps', [])
+            for step in steps:
+                instructions.append({
+                    'instruction': step.get('instruction', ''),
+                    'name': step.get('name', ''),
+                    'distance': step.get('distance', 0),
+                    'duration': step.get('duration', 0)
+                })
         
         # Calculer les coûts de péages
         toll_cost, toll_details = RouteAssembler._calculate_toll_costs(base_route)
