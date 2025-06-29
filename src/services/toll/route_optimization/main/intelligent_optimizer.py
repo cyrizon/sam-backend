@@ -173,14 +173,19 @@ class IntelligentOptimizer:
                     print("⚠️ 1 péage demandé mais que des fermés → route sans péage")
                     return True
             
-            # Logique principale : route de base suffisante si on a assez de péages
-            # OU si on a atteint le maximum possible (on demande plus qu'il n'y en a)
-            if target_tolls <= tolls_available:
-                print(f"✅ Route de base suffisante : {tolls_available} péages disponibles >= {target_tolls} demandés")
-                return True
-            else:
+            # Logique principale : route de base suffisante SEULEMENT si :
+            # 1. On demande plus qu'il n'y en a (maximum atteint)
+            # 2. OU on demande exactement ce qu'il y a
+            if target_tolls > tolls_available:
                 print(f"✅ Route de base suffisante : {tolls_available} péages disponibles (maximum atteint pour {target_tolls} demandés)")
                 return True
+            elif target_tolls == tolls_available:
+                print(f"✅ Route de base suffisante : {tolls_available} péages disponibles = {target_tolls} demandés")
+                return True
+            else:
+                # target_tolls < tolls_available → on peut optimiser pour avoir moins de péages
+                print(f"🔧 Optimisation nécessaire : {target_tolls} péages demandés < {tolls_available} disponibles")
+                return False
         
         elif optimization_mode == 'budget':
             # TODO: Implémenter validation budget

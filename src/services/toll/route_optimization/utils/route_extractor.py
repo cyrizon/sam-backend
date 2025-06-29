@@ -51,15 +51,34 @@ class RouteExtractor:
         """
         if not route_response or "features" not in route_response:
             return []
-        
+
         features = route_response["features"]
         if not features:
             return []
-        
+
         feature = features[0]
         properties = feature.get("properties", {})
         
-        return properties.get("instructions", [])
+        # Essayer d'abord properties.instructions (format direct)
+        instructions = properties.get("instructions", [])
+        if instructions:
+            return instructions
+        
+        # Si pas d'instructions directes, extraire depuis les segments
+        segments = properties.get("segments", [])
+        all_instructions = []
+        
+        for segment in segments:
+            steps = segment.get("steps", [])
+            for step in steps:
+                all_instructions.append({
+                    'instruction': step.get('instruction', ''),
+                    'name': step.get('name', ''),
+                    'distance': step.get('distance', 0),
+                    'duration': step.get('duration', 0)
+                })
+        
+        return all_instructions
     
     @staticmethod
     def extract_distance(route_response: Dict) -> float:
