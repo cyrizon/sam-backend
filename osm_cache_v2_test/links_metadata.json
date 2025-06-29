@@ -1,0 +1,22 @@
+{
+  "created_at": "2025-06-29T15:07:43.232152",
+  "links_count": 8149,
+  "source_files": {
+    "motorway_entries.geojson": {
+      "path": "data\\osm\\motorway_entries.geojson",
+      "mtime": 1751185673.1082196,
+      "size": 5734385
+    },
+    "motorway_exits.geojson": {
+      "path": "data\\osm\\motorway_exits.geojson",
+      "mtime": 1751185673.205798,
+      "size": 4645913
+    },
+    "motorway_indeterminate.geojson": {
+      "path": "data\\osm\\motorway_indeterminate.geojson",
+      "mtime": 1751185673.3679247,
+      "size": 16970824
+    }
+  },
+  "version": "2.0"
+}
