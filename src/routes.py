@@ -1,10 +1,10 @@
 import json
 import os
-from flask import jsonify, request
+from flask import jsonify, request, current_app
 from flask_cors import CORS
 from pathlib import Path
 from src.services.smart_route import SmartRouteService
-from src.services.toll_locator import locate_tolls
+from src.services.toll.route_optimization.toll_analysis.toll_identifier import TollIdentifier
 import requests
 from dotenv import load_dotenv
 from flask_limiter import Limiter
@@ -39,7 +39,11 @@ def register_routes(app):
                 print("Données GeoJSON manquantes ou invalides :", geojson_data)
                 return jsonify({"error": "No data provided"}), 400
 
-            # Si c'est une liste, on traite chaque trajet séparément
+            # Cas spécial : le frontend envoie souvent [FeatureCollection] (array avec un seul élément)
+            if isinstance(geojson_data, list) and len(geojson_data) == 1:
+                geojson_data = geojson_data[0]  # Extraire le FeatureCollection du tableau
+
+            # Si c'est encore une liste (vraiment plusieurs trajets), traiter séparément
             if isinstance(geojson_data, list):
                 results = []
                 for traj in geojson_data:
@@ -50,8 +54,36 @@ def register_routes(app):
                         traj_data = {"type": "FeatureCollection", "features": [traj]}
                     else:
                         continue  # Ignore format inconnu
-                    tolls_dict = locate_tolls(traj_data, buffer_m=1.0, veh_class="c1")
-                    results.append(tolls_dict["on_route"])
+                    
+                    # Extraire les coordonnées et utiliser TollIdentifier comme dans intelligent_optimizer
+                    coordinates = []
+                    if traj_data.get("features") and traj_data["features"][0].get("geometry", {}).get("type") == "LineString":
+                        coordinates = traj_data["features"][0]["geometry"]["coordinates"]
+                    
+                    if coordinates:
+                        toll_identifier = TollIdentifier()
+                        identification_result = toll_identifier.identify_tolls_on_route(coordinates)
+                        tolls_on_route = identification_result.get('tolls_on_route', [])
+                        
+                        # Formater les péages pour ce trajet
+                        formatted_tolls = []
+                        for toll_data in tolls_on_route:
+                            toll_station = toll_data.get('toll')
+                            if toll_station:
+                                toll_info = {
+                                    'id': toll_station.osm_id,
+                                    'nom': toll_station.display_name,
+                                    'operator': toll_station.operator or "Inconnu",
+                                    'autoroute': toll_station.highway_ref or "",
+                                    'latitude': toll_station.coordinates[1],
+                                    'longitude': toll_station.coordinates[0],
+                                    'type': 'ouvert' if toll_station.is_open_toll else 'fermé',
+                                    'distance_route': toll_data.get('distance', 0)
+                                }
+                                formatted_tolls.append(toll_info)
+                        results.append(formatted_tolls)
+                    else:
+                        results.append([])
                 return jsonify(results)
             else:
                 # Cas unique
@@ -61,8 +93,42 @@ def register_routes(app):
                     geojson_data = {"type": "FeatureCollection", "features": [geojson_data]}
                 else:
                     return jsonify({"error": "Invalid GeoJSON format"}), 400
-                tolls_dict = locate_tolls(geojson_data, buffer_m=1.0, veh_class="c1")
-                return jsonify([tolls_dict["on_route"]])
+                
+                # Extraire les coordonnées et utiliser TollIdentifier
+                coordinates = []
+                if geojson_data.get("features") and geojson_data["features"][0].get("geometry", {}).get("type") == "LineString":
+                    coordinates = geojson_data["features"][0]["geometry"]["coordinates"]
+                
+                if coordinates:
+                    toll_identifier = TollIdentifier()
+                    identification_result = toll_identifier.identify_tolls_on_route(coordinates)
+                    tolls_on_route = identification_result.get('tolls_on_route', [])
+                    
+                    # Extraire et formater les données des péages pour le frontend
+                    result = []
+                    for toll_data in tolls_on_route:
+                        toll_station = toll_data.get('toll')  # L'objet TollBoothStation
+                        if toll_station:
+                            toll_info = {
+                                'id': toll_station.osm_id,
+                                'nom': toll_station.display_name,
+                                'operator': toll_station.operator or "Inconnu",
+                                'autoroute': toll_station.highway_ref or "",
+                                'latitude': toll_station.coordinates[1],  # lat
+                                'longitude': toll_station.coordinates[0], # lon
+                                'type': 'ouvert' if toll_station.is_open_toll else 'fermé',
+                                'distance_route': toll_data.get('distance', 0)  # Distance à la route
+                            }
+                            result.append(toll_info)
+                    
+                    for toll in result:
+                        print(f"Formatted toll: {toll}")
+                else:
+                    result = []
+
+                print("Tolls identified:", result)
+                
+                return jsonify(result)  # Retourner directement la liste des péages
         except Exception as e:
             return jsonify({"error": str(e)}), 500
         
@@ -107,11 +173,21 @@ def register_routes(app):
             cost = None
             toll_count = None
             if route_geojson:
-                tolls_dict = locate_tolls(route_geojson, buffer_m=1.0, veh_class="c1")
-                from src.services.toll_cost import add_marginal_cost
-                tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
-                cost = sum(t.get("cost", 0) for t in tolls)
-                toll_count = len(tolls)
+                # Extraire les coordonnées et utiliser TollIdentifier
+                coordinates = []
+                if route_geojson.get("features") and route_geojson["features"][0].get("geometry", {}).get("type") == "LineString":
+                    coordinates = route_geojson["features"][0]["geometry"]["coordinates"]
+                
+                if coordinates:
+                    toll_identifier = TollIdentifier()
+                    identification_result = toll_identifier.identify_tolls_on_route(coordinates)
+                    tolls_on_route = identification_result.get('tolls_on_route', [])
+                    toll_count = len(tolls_on_route)
+                else:
+                    toll_count = 0
+                
+                # Pour compatibilité, on retourne 0 coût car c'est géré par le système V2
+                cost = 0.0
             # Réponse enrichie
             return jsonify({
                 **ors_result,

@@ -16,8 +16,8 @@ import pandas as pd
 from shapely.geometry import Point, LineString
 from shapely.strtree import STRtree
 from pyproj import Transformer
-from src.cache import osm_data_cache
 import unicodedata
+from flask import current_app
 
 # ────────────────────────────────────────────────────────────────────────────
 # Préparation des données (barriers.csv)

@@ -32,7 +32,7 @@ class SmartRouteService:
         """
         self.ors_service = ORSService()
         # Utiliser la stratégie intelligente V2 simplifiée
-        self.toll_optimizer = IntelligentOptimizer(self.ors_service)
+        self.intelligent_optimizer = IntelligentOptimizer(self.ors_service)
         self.budget_optimizer = BudgetRouteOptimizer(self.ors_service)
     
     def compute_route_with_toll_limit(

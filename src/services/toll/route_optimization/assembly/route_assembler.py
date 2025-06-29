@@ -7,6 +7,7 @@ Version simplifiée pour l'optimiseur de routes.
 """
 
 from typing import List, Dict
+from ..toll_analysis.toll_identifier import TollIdentifier
 
 
 class RouteAssembler:
@@ -80,23 +81,32 @@ class RouteAssembler:
             all_coords, total_distance, total_duration, all_instructions
         )
         
-        # Calculer les coûts de péages
-        toll_cost, toll_details = RouteAssembler._calculate_toll_costs(final_route)
+        # Calculer les coûts de péages avec identification V2
+        toll_cost, actual_toll_count, toll_details = RouteAssembler._calculate_toll_costs(final_route)
+        
+        # Extraire les informations des péages pour toll_info
+        toll_names = [toll.get('from_name', 'Péage') for toll in toll_details]
+        if toll_details:  # Ajouter le dernier péage
+            toll_names.append(toll_details[-1].get('to_name', 'Péage'))
+        toll_systems = list(set(toll.get('operator', 'Inconnu') for toll in toll_details))
+        toll_coordinates = [toll.get('from_coordinates', [0, 0]) for toll in toll_details]
+        if toll_details:  # Ajouter les coordonnées du dernier péage
+            toll_coordinates.append(toll_details[-1].get('to_coordinates', [0, 0]))
         
         print(f"✅ Route assemblée: {total_distance/1000:.1f}km, "
-              f"{total_duration/60:.1f}min, {toll_cost}€")
+              f"{total_duration/60:.1f}min, {toll_cost}€, {actual_toll_count} péages")
         
         return {
             'route': final_route,
             'target_tolls': target_tolls,
             'found_solution': 'optimization_success',
-            'respects_constraint': True,
+            'respects_constraint': actual_toll_count >= target_tolls if target_tolls > 0 else True,
             'strategy_used': 'intelligent_optimization',
             'distance': total_distance,
             'duration': total_duration,
             'instructions': all_instructions,
             'cost': toll_cost,
-            'toll_count': len(toll_details),
+            'toll_count': actual_toll_count,
             'tolls': toll_details,
             'segments': {
                 'count': len(segments),
@@ -104,9 +114,9 @@ class RouteAssembler:
                 'free_segments': len([s for s in segments if not s.get('has_tolls', False)])
             },
             'toll_info': {
-                'selected_tolls': [t.get('name', 'Inconnu') for t in (selected_tolls or [])],
-                'toll_systems': [],
-                'coordinates': []
+                'selected_tolls': toll_names,
+                'toll_systems': toll_systems,
+                'coordinates': toll_coordinates
             }
         }
     
@@ -154,7 +164,7 @@ class RouteAssembler:
     @staticmethod
     def _calculate_toll_costs(route: Dict) -> tuple:
         """
-        Calcule les coûts de péages pour la route assemblée.
+        Calcule les coûts de péages pour la route assemblée avec le cache V2 (binômes consécutifs).
         
         Args:
             route: Route au format GeoJSON
@@ -163,35 +173,91 @@ class RouteAssembler:
             Tuple (coût_total, détails_péages)
         """
         try:
-            from src.services.toll_locator import locate_tolls
-            from src.services.toll_cost import add_marginal_cost
+            print("   💰 Identification des péages sur la route assemblée...")
+            from ..utils.cache_accessor import CacheAccessor
+
+            # Extraire les coordonnées de la route
+            if route.get("type") == "FeatureCollection":
+                features = route.get("features", [])
+                if features and features[0].get("geometry", {}).get("type") == "LineString":
+                    coordinates = features[0]["geometry"]["coordinates"]
+                else:
+                    print("   ⚠️ Pas de coordonnées LineString trouvées")
+                    return 0.0, 0, []
+            else:
+                print("   ⚠️ Format de route non reconnu")
+                return 0.0, 0, []
+
+            # Utiliser le TollIdentifier pour identifier les péages
+            toll_identifier = TollIdentifier()
+            identification_result = toll_identifier.identify_tolls_on_route(coordinates)
+
+            if not identification_result.get('identification_success'):
+                print("   ⚠️ Échec identification des péages")
+                return 0.0, 0, []
+
+            tolls_on_route = identification_result.get('tolls_on_route', [])
+            print(f"   ✅ {len(tolls_on_route)} péages identifiés sur la route")
+
+            # Calcul du coût total par binômes consécutifs
+            total_cost = 0.0
+            toll_details = []
+            vehicle_category = "1"  # Peut être paramétré
+
+            # Récupérer les objets TollBoothStation
+            toll_stations = [toll_data.get('toll') for toll_data in tolls_on_route if toll_data.get('toll')]
+            print([toll.name for toll in toll_stations])
+
+            for i in range(len(toll_stations) - 1):
+                toll_from = toll_stations[i]
+                toll_to = toll_stations[i + 1]
+                print(toll_stations[i].name, toll_stations[i + 1].name)
+                cost = CacheAccessor.calculate_toll_cost(toll_from, toll_to, vehicle_category)
+                if cost is None:
+                    cost = 0.0
+                total_cost += cost
+                # Ajout d'un détail pour chaque binôme
+                toll_details.append({
+                    'from_id': toll_from.osm_id,
+                    'from_name': getattr(toll_from, 'display_name', getattr(toll_from, 'nom', 'Péage')),
+                    'to_id': toll_to.osm_id,
+                    'to_name': getattr(toll_to, 'display_name', getattr(toll_to, 'nom', 'Péage')),
+                    'operator': toll_from.operator or "Inconnu",
+                    'autoroute': toll_from.highway_ref or getattr(toll_from, 'autoroute', ''),
+                    'from_coordinates': toll_from.coordinates,
+                    'to_coordinates': toll_to.coordinates,
+                    'type': 'ouvert' if toll_from.is_open_toll else 'fermé',
+                    'cost': cost
+                })
+
+            print(f"   💰 Coût total calculé : {total_cost}€ pour {len(toll_details)} binômes de péages")
             
-            # Localiser les péages sur la route
-            tolls_dict = locate_tolls(route, buffer_m=1.0, veh_class="c1")
+            # Retourner le coût total et le nombre réel de péages (pas les binômes)
+            actual_toll_count = len(toll_stations)
             
-            # Calculer les coûts
-            detailed_tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
-            total_cost = sum(toll.get("cost", 0) for toll in detailed_tolls)
-            
-            return total_cost, detailed_tolls
-            
+            # Créer une structure pour le retour : (coût, nombre_péages, détails_binômes)
+            return total_cost, actual_toll_count, toll_details
+
         except Exception as e:
-            print(f"⚠️ Erreur calcul coûts péages : {e}")
-            return 0.0, []
+            print(f"   ❌ Erreur calcul coûts péages : {e}")
+            return 0.0, 0, []
     
     @staticmethod
     def format_base_route_as_result(base_route: Dict, target_tolls: int) -> Dict:
         """
         Formate une route de base comme résultat final.
         Utilisé quand l'optimisation n'est pas nécessaire.
+        Identifie également les péages sur cette route de base.
         
         Args:
             base_route: Route de base (réponse ORS directe)
             target_tolls: Nombre de péages demandé
             
         Returns:
-            Route formatée comme résultat d'optimisation
+            Route formatée comme résultat d'optimisation avec péages identifiés
         """
+        print("   📋 Formatage de la route de base avec identification des péages...")
+        
         # Extraire les données de la réponse ORS
         feature = base_route.get('features', [{}])[0]
         properties = feature.get('properties', {})
@@ -213,25 +279,35 @@ class RouteAssembler:
                     'duration': step.get('duration', 0)
                 })
         
-        # Calculer les coûts de péages
-        toll_cost, toll_details = RouteAssembler._calculate_toll_costs(base_route)
+        # Identifier et calculer les coûts de péages avec le système V2
+        toll_cost, actual_toll_count, toll_details = RouteAssembler._calculate_toll_costs(base_route)
+        
+        # Extraire les noms des péages pour toll_info
+        toll_names = [toll.get('from_name', 'Péage') for toll in toll_details]
+        if toll_details:  # Ajouter le dernier péage
+            toll_names.append(toll_details[-1].get('to_name', 'Péage'))
+        toll_coordinates = [toll.get('from_coordinates', [0, 0]) for toll in toll_details]
+        if toll_details:  # Ajouter les coordonnées du dernier péage
+            toll_coordinates.append(toll_details[-1].get('to_coordinates', [0, 0]))
+        
+        print(f"   ✅ Route de base formatée : {distance/1000:.1f}km, {actual_toll_count} péages")
         
         return {
             'route': base_route,
             'target_tolls': target_tolls,
             'found_solution': 'base_route_sufficient',
-            'respects_constraint': True,
+            'respects_constraint': actual_toll_count >= target_tolls if target_tolls > 0 else True,
             'strategy_used': 'base_route',
             'distance': distance,
             'duration': duration,
             'instructions': instructions,
             'cost': toll_cost,
-            'toll_count': len(toll_details),
+            'toll_count': actual_toll_count,
             'tolls': toll_details,
-            'segments': {'count': 1, 'toll_segments': 1, 'free_segments': 0},
+            'segments': {'count': 1, 'toll_segments': 1 if toll_details else 0, 'free_segments': 1 if not toll_details else 0},
             'toll_info': {
-                'selected_tolls': [t.get('name', 'Péage') for t in toll_details],
-                'toll_systems': [],
-                'coordinates': []
+                'selected_tolls': toll_names,
+                'toll_systems': list(set(toll.get('operator', 'Inconnu') for toll in toll_details)),
+                'coordinates': toll_coordinates
             }
         }

@@ -14,7 +14,7 @@ class ShapelyVerifier:
     """Vérificateur de péages avec Shapely ultra-précis."""
     
     # Seuil strict pour péages SUR la route avec Shapely
-    SHAPELY_ON_ROUTE_THRESHOLD = 5.0  # 5 mètres
+    SHAPELY_ON_ROUTE_THRESHOLD = 1.0  # 1 mètre
     
     @staticmethod
     def verify_tolls_with_shapely(
@@ -90,8 +90,8 @@ class ShapelyVerifier:
             Résultats de vérification
         """
         results = {
-            'shapely_on_route': [],      # < 5m avec Shapely
-            'shapely_around': [],        # >= 5m avec Shapely
+            'shapely_on_route': [],      # < 1m avec Shapely
+            'shapely_around': [],        # >= 1m avec Shapely
             'verification_stats': {
                 'total_verified': 0,
                 'confirmed_on_route': 0,
@@ -115,7 +115,7 @@ class ShapelyVerifier:
                     results['verification_stats']['shapely_errors'] += 1
                     continue
                 
-                # Classification selon seuil Shapely (5m)
+                # Classification selon seuil Shapely (1m)
                 if shapely_distance <= ShapelyVerifier.SHAPELY_ON_ROUTE_THRESHOLD:
                     results['shapely_on_route'].append({
                         'toll': toll,

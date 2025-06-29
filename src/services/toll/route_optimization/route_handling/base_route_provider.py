@@ -145,29 +145,18 @@ class BaseRouteProvider:
     def _calculate_toll_costs(self, route: Dict) -> Tuple[float, List[Dict]]:
         """
         Calcule les coûts de péages pour une route.
+        DEPRECATED: Le calcul des coûts est maintenant géré par le TollIdentifier V2.
         
         Args:
             route: Route au format GeoJSON
             
         Returns:
-            Tuple[coût_total, détails_péages]
+            Tuple[coût_total, détails_péages] - Valeurs par défaut
         """
-        try:
-            from src.services.toll_locator import locate_tolls
-            from src.services.toll_cost import add_marginal_cost
-            
-            # Localiser les péages sur la route
-            tolls_dict = locate_tolls(route, buffer_m=1.0, veh_class="c1")
-            
-            # Calculer les coûts
-            detailed_tolls = add_marginal_cost(tolls_dict["on_route"], veh_class="c1")
-            total_cost = sum(toll.get("cost", 0) for toll in detailed_tolls)
-            
-            return total_cost, detailed_tolls
-            
-        except Exception as e:
-            print(f"⚠️ Erreur calcul coûts péages : {e}")
-            return 0.0, []
+        # Le calcul des coûts est maintenant géré par le système V2
+        # Cette méthode est conservée pour compatibilité mais ne fait plus de calculs
+        print("   💰 Calcul coûts péages désactivé (géré par TollIdentifier V2)")
+        return 0.0, []
     
     def validate_coordinates(self, coordinates: List[List[float]]) -> bool:
         """

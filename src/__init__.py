@@ -37,7 +37,7 @@ def create_app():
         
         print(f"   - Péages ouverts: {open_tolls}")
         print(f"   - Péages fermés: {closed_tolls}")
-        print(f"   - Opérateurs disponibles: {len(cache_v2.pricing_manager.operators)}")
+        print(f"   - Opérateurs disponibles: {len(cache_v2.pricing_manager.get_available_operators())}")
         print(f"   - Liens complets: {len(cache_v2.complete_motorway_links)}")
         
         # Stocker le cache globalement pour l'application

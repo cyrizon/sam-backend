@@ -48,13 +48,16 @@ class TollIdentifier:
         if not core_result.get('identification_success'):
             return core_result
         
-        # Vérification Shapely pour plus de précision (optionnel)
-        if tollway_segments and len(core_result['tolls_on_route']) > 0:
+        # Vérification Shapely pour plus de précision (toujours appliquée si péages trouvés)
+        print(f"   🔍 Debug Shapely: tollway_segments={tollway_segments is not None}, tolls_count={len(core_result['tolls_on_route'])}")
+        if len(core_result['tolls_on_route']) > 0:
             verified_result = self._enhance_with_shapely_verification(
                 core_result, route_coordinates, tollway_segments
             )
             return verified_result
-        
+        else:
+            print(f"   ⚠️ Vérification Shapely ignorée: aucun péage trouvé")
+
         return core_result
     
     def _enhance_with_shapely_verification(
@@ -67,22 +70,22 @@ class TollIdentifier:
         print("   🔍 Vérification Shapely pour précision...")
         
         try:
-            # Vérifier les péages sur route avec Shapely
-            verified_tolls = []
-            for toll_data in core_result['tolls_on_route']:
-                if self.verifier.verify_toll_on_route(
-                    toll_data['coordinates'], 
-                    route_coordinates,
-                    tolerance_m=100
-                ):
-                    verified_tolls.append(toll_data)
+            # Utiliser la méthode disponible dans ShapelyVerifier
+            shapely_result = self.verifier.verify_tolls_with_shapely(
+                core_result['tolls_on_route'],
+                core_result.get('nearby_tolls', []),
+                route_coordinates
+            )
             
-            # Mettre à jour le résultat
-            core_result['tolls_on_route'] = verified_tolls
-            core_result['total_tolls_on_route'] = len(verified_tolls)
-            core_result['verification_applied'] = True
-            
-            print(f"   ✅ Vérification Shapely : {len(verified_tolls)} péages confirmés")
+            # Mettre à jour le résultat avec les données Shapely
+            if 'shapely_on_route' in shapely_result:
+                core_result['tolls_on_route'] = shapely_result['shapely_on_route']
+                core_result['total_tolls_on_route'] = len(core_result['tolls_on_route'])
+                core_result['verification_applied'] = True
+                
+                print(f"   ✅ Vérification Shapely : {len(core_result['tolls_on_route'])} péages confirmés")
+            else:
+                core_result['verification_applied'] = False
             
         except Exception as e:
             print(f"   ⚠️ Erreur vérification Shapely : {e}")
