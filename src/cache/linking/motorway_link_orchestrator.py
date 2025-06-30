@@ -24,7 +24,7 @@ from .coordinate_chain_builder import CoordinateChainBuilder, CoordinateChain
 class MotorwayLinkOrchestrator:
     """Orchestrateur principal pour la construction des liens complets."""
     
-    def __init__(self, max_distance_m: float = 2.0, output_dir: str = "osm_cache_v2_test"):
+    def __init__(self, max_distance_m: float = 2.0, output_dir: str = "osm_cache_test"):
         """
         Initialise l'orchestrateur.
         

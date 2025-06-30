@@ -1,1 +1,1 @@
-# V2 Services package
+# Services package

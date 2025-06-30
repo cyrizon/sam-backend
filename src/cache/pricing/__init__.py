@@ -1,5 +1,5 @@
 """
-Cache V2 Pricing Package
+Cache Pricing Package
 -----------------------
 
 Modules for toll pricing calculation and operator data management.

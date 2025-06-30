@@ -1,5 +1,5 @@
 """
-Cache V2 Package
+Cache Package
 ---------------
 
 New multi-source OSM cache system.
@@ -34,4 +34,4 @@ __all__ = [
     'OSMDataManager'
 ]
 
-__version__ = "2.0.0"
+__version__ = "1.0.0"

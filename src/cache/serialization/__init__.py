@@ -1,8 +1,8 @@
 """
-Cache V2 Serialization Package
+Cache Serialization Package
 ------------------------------
 
-Serialization system for the multi-source OSM cache V2.
+Serialization system for the multi-source OSM cache.
 """
 
 from .cache_metadata import CacheMetadata

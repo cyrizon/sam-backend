@@ -1,8 +1,8 @@
 """
-Cache Serializer V2
+Cache Serializer
 ------------------
 
-Main serializer for OSM cache V2 with multi-source support.
+Main serializer for OSM cache with multi-source support.
 """
 
 import os
@@ -23,15 +23,15 @@ if TYPE_CHECKING:
 
 class CacheSerializer:
     """
-    Main serializer for OSM cache V2.
+    Main serializer for OSM cache.
     
     Handles serialization/deserialization of multi-source OSM data with
     compression, metadata management, and integrity validation.
     """
     
-    def __init__(self, cache_dir: str = "osm_cache_v2"):
+    def __init__(self, cache_dir: str = "osm_cache"):
         """
-        Initialize the cache serializer V2.
+        Initialize the cache serializer.
         
         Args:
             cache_dir: Directory where cache files will be stored
@@ -40,16 +40,16 @@ class CacheSerializer:
         self.ensure_cache_directory()
         
         # File names
-        self.metadata_file = os.path.join(cache_dir, "metadata_v2.json")
-        self.cache_data_file = os.path.join(cache_dir, "cache_data_v2.bin")
+        self.metadata_file = os.path.join(cache_dir, "metadata.json")
+        self.cache_data_file = os.path.join(cache_dir, "cache_data.bin")
         
-        print(f"🗂️ Cache Serializer V2 initialisé: {cache_dir}")
+        print(f"🗂️ Cache Serializer initialisé: {cache_dir}")
     
     def ensure_cache_directory(self) -> None:
         """Create cache directory if it doesn't exist."""
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir)
-            print(f"📁 Dossier cache V2 créé: {self.cache_dir}")
+            print(f"📁 Dossier cache créé: {self.cache_dir}")
     
     def save_cache(
         self,
@@ -59,10 +59,10 @@ class CacheSerializer:
         compression_type: Optional[CompressionType] = None
     ) -> bool:
         """
-        Save OSM cache V2 data to disk.
+        Save OSM cache data to disk.
         
         Args:
-            osm_data: Complete OSM data V2
+            osm_data: Complete OSM data
             source_files: Source file paths
             processing_times: Processing time measurements
             compression_type: Compression type (auto-detect if None)
@@ -70,7 +70,7 @@ class CacheSerializer:
         Returns:
             bool: True if save successful
         """
-        print(f"💾 Sauvegarde du cache OSM V2...")
+        print(f"💾 Sauvegarde du cache OSM...")
         start_time = time.time()
         
         try:
@@ -144,13 +144,13 @@ class CacheSerializer:
             metadata.save_to_file(self.metadata_file)
             
             save_time = time.time() - start_time
-            print(f"✅ Cache V2 sauvegardé avec succès en {save_time:.2f}s")
+            print(f"✅ Cache sauvegardé avec succès en {save_time:.2f}s")
             print(f"   💾 Taille: {cache_size / 1024 / 1024:.1f} MB")
             
             return True
             
         except Exception as e:
-            print(f"❌ Erreur sauvegarde cache V2: {e}")
+            print(f"❌ Erreur sauvegarde cache: {e}")
             return False
     
     def load_cache(
@@ -159,7 +159,7 @@ class CacheSerializer:
         force_reload: bool = False
     ):
         """
-        Load OSM cache V2 data from disk.
+        Load OSM cache data from disk.
         
         Args:
             source_files: Source file paths for validation
@@ -168,24 +168,24 @@ class CacheSerializer:
         Returns:
             OSMData or None: Loaded data or None if failed
         """
-        print(f"📂 Chargement du cache OSM V2...")
+        print(f"📂 Chargement du cache OSM...")
         start_time = time.time()
         
         try:
             # Check if cache files exist
             if not os.path.exists(self.metadata_file) or not os.path.exists(self.cache_data_file):
-                print("⚠️ Fichiers de cache V2 introuvables")
+                print("⚠️ Fichiers de cache introuvables")
                 return None
             
             # Load and validate metadata
             metadata = CacheMetadata.load_from_file(self.metadata_file)
             if not metadata:
-                print("❌ Impossible de charger les métadonnées V2")
+                print("❌ Impossible de charger les métadonnées")
                 return None
             
             # Check cache validity
             if not force_reload and not metadata.is_cache_valid(source_files):
-                print("🔄 Cache V2 invalide, rechargement nécessaire")
+                print("🔄 Cache invalide, rechargement nécessaire")
                 return None
             
             # Load compressed data
@@ -208,12 +208,12 @@ class CacheSerializer:
             osm_data = self._reconstruct_osm_data(cache_data)
             
             load_time = time.time() - start_time
-            print(f"✅ Cache V2 chargé avec succès en {load_time:.2f}s")
+            print(f"✅ Cache chargé avec succès en {load_time:.2f}s")
             
             return osm_data
             
         except Exception as e:
-            print(f"❌ Erreur chargement cache V2: {e}")
+            print(f"❌ Erreur chargement cache: {e}")
             return None
     
     def _reconstruct_osm_data(self, cache_data: Dict):
@@ -289,9 +289,9 @@ class CacheSerializer:
                     os.remove(file_path)
                     print(f"🗑️ Supprimé: {file_path}")
             
-            print("✅ Cache V2 vidé avec succès")
+            print("✅ Cache vidé avec succès")
             return True
             
         except Exception as e:
-            print(f"❌ Erreur suppression cache V2: {e}")
+            print(f"❌ Erreur suppression cache: {e}")
             return False

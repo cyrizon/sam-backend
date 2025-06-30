@@ -1,5 +1,5 @@
 """
-Cache V2 Parsers Package
+Cache Parsers Package
 -----------------------
 
 Parsers for the different OSM data sources.

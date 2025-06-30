@@ -1,8 +1,8 @@
 """
-V2 Cache Manager with Motorway Linking
+Cache Manager with Motorway Linking
 --------------------------------------
 
-Extended V2 Cache Manager that includes motorway segment linking capabilities.
+Extended Cache Manager that includes motorway segment linking capabilities.
 """
 
 import os
@@ -19,9 +19,9 @@ from ..services.toll_association_service import TollAssociationService
 
 
 class CacheManagerWithLinking(CacheManagerWithPricing):
-    """Gestionnaire V2 étendu avec capacités de liaison de segments motorway."""
+    """Gestionnaire étendu avec capacités de liaison de segments motorway."""
     
-    def __init__(self, data_dir: str, cache_dir: str = "osm_cache_v2_test"):
+    def __init__(self, data_dir: str, cache_dir: str = "osm_cache_test"):
         """
         Initialise le gestionnaire étendu.
         
@@ -92,11 +92,11 @@ class CacheManagerWithLinking(CacheManagerWithPricing):
             # 6. Sauvegarder dans le cache
             self._save_links_to_cache(source_files)
             
-            print("✅ Cache V2 complet avec liaison motorway chargé avec succès")
+            print("✅ Cache complet avec liaison motorway chargé avec succès")
             return True
             
         except Exception as e:
-            print(f"❌ Erreur lors du chargement complet du cache V2: {e}")
+            print(f"❌ Erreur lors du chargement complet du cache: {e}")
             return False
     
     def _load_motorway_segments(self) -> bool:

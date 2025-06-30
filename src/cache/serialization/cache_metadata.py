@@ -1,8 +1,8 @@
 """
-Cache Metadata V2
+Cache Metadata
 ----------------
 
-Metadata management for OSM cache V2 with multi-source support.
+Metadata management for OSM cache with multi-source support.
 """
 
 import os
@@ -16,7 +16,7 @@ from dataclasses import dataclass, asdict, field
 @dataclass
 class CacheMetadata:
     """
-    Metadata for cached OSM data V2 (multi-source).
+    Metadata for cached OSM data (multi-source).
     
     Attributes:
         version: Cache format version (2.0)
@@ -203,7 +203,7 @@ class CacheMetadata:
                 json.dump(asdict(self), f, indent=2, ensure_ascii=False)
             return True
         except Exception as e:
-            print(f"❌ Erreur sauvegarde métadonnées V2: {e}")
+            print(f"❌ Erreur sauvegarde métadonnées: {e}")
             return False
     
     @classmethod
@@ -218,12 +218,12 @@ class CacheMetadata:
             
             return cls(**data)
         except Exception as e:
-            print(f"❌ Erreur chargement métadonnées V2: {e}")
+            print(f"❌ Erreur chargement métadonnées: {e}")
             return None
     
     def print_summary(self):
         """Print a summary of cache metadata."""
-        print(f"📊 Cache OSM V2 - Résumé:")
+        print(f"📊 Cache OSM - Résumé:")
         print(f"   Version: {self.version}")
         print(f"   Créé le: {self.creation_time}")
         print(f"   Sources:")

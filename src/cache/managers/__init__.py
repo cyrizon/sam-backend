@@ -1,5 +1,5 @@
 """
-Cache V2 Managers Package
+Cache Managers Package
 ------------------------
 
 High-level managers for the new cache system.

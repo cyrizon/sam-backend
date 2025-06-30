@@ -86,7 +86,7 @@ class CoordinateChainBuilder:
                 continue
             
             # Construire une chaîne à partir de ce segment
-            chain_segments = self._build_chain_from_segment_v2(
+            chain_segments = self._build_chain_from_segment(
                 segment, start_points, end_points, used_segments
             )
             
@@ -134,7 +134,7 @@ class CoordinateChainBuilder:
         
         return dict(index)
     
-    def _build_chain_from_segment_v2(
+    def _build_chain_from_segment(
         self,
         start_segment: MotorwayLink,
         start_points: Dict[str, List[MotorwayLink]],

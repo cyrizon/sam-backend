@@ -1,0 +1,21 @@
+{
+  "input_segments": {
+    "entries": 4140,
+    "exits": 4011,
+    "indeterminates": 15872,
+    "total": 24023
+  },
+  "output_links": {
+    "complete_links": 8151,
+    "entry_links": 4140,
+    "exit_links": 4011
+  },
+  "orphaned": {
+    "unused_chains": 2138,
+    "orphaned_segments": 0
+  },
+  "linking_efficiency": {
+    "segments_in_complete_links": 20029,
+    "usage_percentage": 83.37
+  }
+}

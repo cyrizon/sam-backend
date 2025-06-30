@@ -19,7 +19,7 @@ from ..models.link_types import LinkType
 class CompleteMotorwayLinksSerializer:
     """Sérialiseur pour les liens motorway complets."""
     
-    def __init__(self, cache_dir: str = "osm_cache_v2_test"):
+    def __init__(self, cache_dir: str = "osm_cache_test"):
         """
         Initialise le sérialiseur.
         

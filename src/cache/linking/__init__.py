@@ -1,5 +1,5 @@
 """
-Cache V2 Linking Package
+Cache Linking Package
 -----------------------
 
 Modules for linking motorway segments and detecting tolls.

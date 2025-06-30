@@ -1,5 +1,5 @@
 """
-V2 Cache Manager with Toll Pricing
+Cache Manager with Toll Pricing
 ----------------------------------
 
 Main manager that coordinates toll booth loading, pricing data, and cost calculations.
@@ -15,7 +15,7 @@ from ..services.toll_cost_calculator import TollCostCalculator
 
 
 class CacheManagerWithPricing:
-    """Gestionnaire principal du cache V2 avec logique de prix."""
+    """Gestionnaire principal du cache avec logique de prix."""
     
     def __init__(self, data_dir: str):
         """
@@ -45,7 +45,7 @@ class CacheManagerWithPricing:
             bool: True si le chargement a réussi
         """
         try:
-            print("🔄 Chargement du cache V2 avec pricing...")
+            print("🔄 Chargement du cache avec pricing...")
             
             # 1. Charger les péages ouverts
             self._load_open_tolls()
@@ -60,13 +60,13 @@ class CacheManagerWithPricing:
             self._initialize_cost_calculator()
             
             self.is_loaded = True
-            print("✅ Cache V2 avec pricing chargé avec succès")
+            print("✅ Cache avec pricing chargé avec succès")
             self._print_statistics()
             
             return True
             
         except Exception as e:
-            print(f"❌ Erreur lors du chargement du cache V2: {e}")
+            print(f"❌ Erreur lors du chargement du cache: {e}")
             return False
     
     def _load_open_tolls(self):

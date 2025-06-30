@@ -1,5 +1,5 @@
 """
-OSM Data Manager V2
+OSM Data Manager
 ------------------
 
 High-level manager for the new multi-source OSM cache system.
@@ -21,7 +21,7 @@ from ..serialization.cache_metadata import CacheMetadata
 
 @dataclass
 class OSMData:
-    """Container pour toutes les données OSM V2."""
+    """Container pour toutes les données OSM."""
     parsed_data: ParsedOSMData
     linking_result: LinkingResult
     toll_detection_result: TollDetectionResult
@@ -37,13 +37,13 @@ class OSMData:
 
 class OSMDataManager:
     """
-    Gestionnaire principal pour le système de cache OSM V2.
+    Gestionnaire principal pour le système de cache OSM.
     
     Coordonne le parsing, la liaison et la détection de péages.
     """
     
-    def __init__(self, cache_dir: str = "osm_cache_v2"):
-        """Initialise le gestionnaire OSM V2."""
+    def __init__(self, cache_dir: str = "osm_cache"):
+        """Initialise le gestionnaire OSM."""
         self._data: Optional[OSMData] = None
         self._initialized = False
         
@@ -71,11 +71,11 @@ class OSMDataManager:
             bool: True si l'initialisation a réussi
         """
         if self._initialized and not force_rebuild:
-            print("⚠️ OSM Data Manager V2 déjà initialisé")
+            print("⚠️ OSM Data Manager déjà initialisé")
             return True
         
         try:
-            print("🚀 Initialisation OSM Data Manager V2...")
+            print("🚀 Initialisation OSM Data Manager...")
             
             # 1. Vérifier que tous les fichiers existent
             if not self._validate_data_sources(data_sources):
@@ -87,7 +87,7 @@ class OSMDataManager:
                 if cached_data:
                     self._data = cached_data
                     self._initialized = True
-                    print("✅ Données chargées depuis le cache V2!")
+                    print("✅ Données chargées depuis le cache!")
                     self._print_initialization_summary()
                     return True
             
@@ -141,7 +141,7 @@ class OSMDataManager:
             )
             
             if cache_saved:
-                print("💾 Cache V2 sauvegardé pour les prochains démarrages")
+                print("💾 Cache sauvegardé pour les prochains démarrages")
             
             self._initialized = True
             self._print_initialization_summary()
@@ -149,7 +149,7 @@ class OSMDataManager:
             return True
             
         except Exception as e:
-            print(f"❌ Erreur lors de l'initialisation OSM V2: {e}")
+            print(f"❌ Erreur lors de l'initialisation OSM: {e}")
             return False
     
     def _validate_data_sources(self, data_sources: Dict[str, str]) -> bool:
@@ -175,7 +175,7 @@ class OSMDataManager:
             return
         
         stats = self._data.get_complete_stats()
-        print(f"\n🎉 OSM Data Manager V2 initialisé avec succès!")
+        print(f"\n🎉 OSM Data Manager initialisé avec succès!")
         print(f"📊 Statistiques finales:")
         print(f"   • Toll booths: {stats['toll_booths']}")
         print(f"   • Entry links: {stats['entry_links']} → Complets: {stats['complete_entry_links']}")
@@ -223,7 +223,7 @@ class OSMDataManager:
     def _ensure_initialized(self):
         """Vérifie que le gestionnaire est initialisé."""
         if not self._initialized:
-            raise RuntimeError("OSM Data Manager V2 non initialisé! Appelez initialize() d'abord.")
+            raise RuntimeError("OSM Data Manager non initialisé! Appelez initialize() d'abord.")
     
     @staticmethod
     def get_default_data_sources(project_root: str) -> Dict[str, str]:
@@ -247,11 +247,11 @@ class OSMDataManager:
     
     # Méthodes de gestion du cache
     def clear_cache(self) -> bool:
-        """Vide le cache V2."""
+        """Vide le cache."""
         return self.cache_serializer.clear_cache()
     
     def get_cache_info(self) -> Optional[CacheMetadata]:
-        """Retourne les informations du cache V2."""
+        """Retourne les informations du cache."""
         return self.cache_serializer.get_cache_info()
     
     def is_cache_available(self, data_sources: Dict[str, str]) -> bool:

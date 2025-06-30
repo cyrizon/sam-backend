@@ -1,5 +1,5 @@
 """
-Cache V2 Models Package
+Cache Models Package
 ----------------------
 
 New data models for the multi-source OSM cache system.
