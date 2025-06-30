@@ -9,7 +9,7 @@ Utilise CompleteMotorwayLink du cache V2 pour une détection optimisée.
 import rtree.index
 from typing import List, Dict, Tuple, Optional
 from ...utils.cache_accessor import CacheAccessor
-from src.cache.v2.models.complete_motorway_link import CompleteMotorwayLink
+from src.cache.models.complete_motorway_link import CompleteMotorwayLink
 
 
 class MotorwayLinksSpatialIndex:

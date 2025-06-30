@@ -10,8 +10,8 @@ from typing import List, Tuple, Optional
 from shapely.geometry import Point, LineString
 from shapely.ops import nearest_points
 
-from src.cache.v2.models.complete_motorway_link import CompleteMotorwayLink
-from src.cache.v2.models.toll_booth_station import TollBoothStation
+from src.cache.models.complete_motorway_link import CompleteMotorwayLink
+from src.cache.models.toll_booth_station import TollBoothStation
 
 
 class RouteProximityAnalyzer:

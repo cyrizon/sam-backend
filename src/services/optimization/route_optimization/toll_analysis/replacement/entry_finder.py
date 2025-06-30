@@ -11,7 +11,7 @@ from shapely.geometry import Point, LineString
 from shapely.ops import nearest_points
 
 from ...utils.cache_accessor import CacheAccessor
-from src.cache.v2.models.complete_motorway_link import CompleteMotorwayLink
+from src.cache.models.complete_motorway_link import CompleteMotorwayLink
 
 
 class EntryFinder:

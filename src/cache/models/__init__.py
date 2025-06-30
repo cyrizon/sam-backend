@@ -1,18 +1,18 @@
 """
-Cache Models Package
--------------------
+Cache V2 Models Package
+----------------------
 
-Data models for the cache system.
+New data models for the multi-source OSM cache system.
 """
 
-from .motorway_junction import MotorwayJunction
+from .link_types import LinkType
+from .toll_booth_station import TollBoothStation
 from .motorway_link import MotorwayLink
-from .toll_station import TollStation
-from .matched_toll import MatchedToll
+from .complete_motorway_link import CompleteMotorwayLink
 
 __all__ = [
-    'MotorwayJunction',
-    'MotorwayLink', 
-    'TollStation',
-    'MatchedToll'
+    'LinkType',
+    'TollBoothStation', 
+    'MotorwayLink',
+    'CompleteMotorwayLink'
 ]

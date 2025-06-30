@@ -1,16 +1,14 @@
 """
-Cache Linking Package
---------------------
+Cache V2 Linking Package
+-----------------------
 
-Linking utilities for connecting OSM elements (junctions, links, tolls).
+Modules for linking motorway segments and detecting tolls.
 """
 
-from src.cache.linking.junction_linker import JunctionLinker
-from src.cache.linking.link_finder import LinkFinder
-from src.cache.linking.distance_calculator import is_within_distance
+from .link_builder import LinkBuilder
+from .toll_detector import TollDetector
 
 __all__ = [
-    'JunctionLinker',
-    'LinkFinder', 
-    'is_within_distance'
+    'LinkBuilder',
+    'TollDetector'
 ]

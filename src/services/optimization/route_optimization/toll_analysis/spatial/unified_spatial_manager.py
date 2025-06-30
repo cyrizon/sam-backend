@@ -9,8 +9,8 @@ Combine péages, entrées et sorties dans une interface simple.
 from typing import List, Dict, Optional
 from .spatial_index import SpatialIndexManager  
 from .motorway_links_index import MotorwayLinksSpatialIndex
-from src.cache.v2.models.toll_booth_station import TollBoothStation
-from src.cache.v2.models.complete_motorway_link import CompleteMotorwayLink
+from src.cache.models.toll_booth_station import TollBoothStation
+from src.cache.models.complete_motorway_link import CompleteMotorwayLink
 
 
 class UnifiedSpatialIndexManager:

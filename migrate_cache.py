@@ -149,12 +149,24 @@ def update_external_imports():
 def test_imports():
     """Teste que les imports fonctionnent encore"""
     try:
-        from src.cache.managers.v2_cache_manager_with_linking import V2CacheManagerWithLinking
-        from src.cache.models.toll_booth_station import TollBoothStation
-        print("✅ Tests d'imports réussis")
+        # Test avec les chemins actuels avant migration
+        from src.cache.v2.managers.v2_cache_manager_with_linking import CacheManagerWithLinking
+        from src.cache.v2.models.toll_booth_station import TollBoothStation
+        print("✅ Tests d'imports V2 réussis")
         return True
     except Exception as e:
-        print(f"❌ Erreur d'import: {e}")
+        print(f"❌ Erreur d'import V2: {e}")
+        return False
+
+def test_imports_after_migration():
+    """Teste que les imports fonctionnent après migration"""
+    try:
+        from src.cache.managers.cache_manager_with_linking import CacheManagerWithLinking
+        from src.cache.models.toll_booth_station import TollBoothStation
+        print("✅ Tests d'imports finaux réussis")
+        return True
+    except Exception as e:
+        print(f"❌ Erreur d'import final: {e}")
         return False
 
 def main():
@@ -193,7 +205,7 @@ def main():
     
     # 8. Test final
     print("\n8. Test final...")
-    if test_imports():
+    if test_imports_after_migration():
         print("✅ Migration cache réussie!")
         print("📁 Sauvegarde V1 disponible dans: backup_cache_v1/")
     else:

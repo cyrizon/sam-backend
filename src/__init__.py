@@ -16,14 +16,14 @@ def create_app():
     app.config.from_object(config)
 
     print("🚀 Initialisation du cache V2 complet avec linking...")
-    from src.cache.v2.managers.v2_cache_manager_with_linking import V2CacheManagerWithLinking
+    from src.cache.managers.cache_manager_with_linking import CacheManagerWithLinking
     
     # Initialiser le cache V2 avec le répertoire des données
     data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
     data_dir = os.path.abspath(data_dir)
     
     # Initialiser le cache V2 uniquement
-    cache_v2 = V2CacheManagerWithLinking(data_dir)
+    cache_v2 = CacheManagerWithLinking(data_dir)
     success = cache_v2.load_all_including_motorway_linking()
     
     if success:

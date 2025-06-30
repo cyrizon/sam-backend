@@ -11,8 +11,8 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 
-from src.cache.v2.models.toll_booth_station import TollBoothStation
-from src.cache.v2.models.complete_motorway_link import CompleteMotorwayLink, LinkType
+from src.cache.models.toll_booth_station import TollBoothStation
+from src.cache.models.complete_motorway_link import CompleteMotorwayLink, LinkType
 from ..utils.cache_accessor import CacheAccessor
 
 

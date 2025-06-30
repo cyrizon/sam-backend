@@ -9,7 +9,7 @@ Orchestre EntryFinder et RouteProximityAnalyzer pour une sélection intelligente
 from typing import List, Optional, Dict, Any
 from .entry_finder import EntryFinder
 from .route_proximity_analyzer import RouteProximityAnalyzer
-from src.cache.v2.models.complete_motorway_link import CompleteMotorwayLink
+from src.cache.models.complete_motorway_link import CompleteMotorwayLink
 
 
 class TollReplacementEngine:

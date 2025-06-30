@@ -10,7 +10,7 @@ Utilise le cache V2 avec TollBoothStation.
 import rtree.index
 from typing import List, Dict, Tuple, Optional
 from ...utils.cache_accessor import CacheAccessor
-from src.cache.v2.models.toll_booth_station import TollBoothStation
+from src.cache.models.toll_booth_station import TollBoothStation
 
 
 class SpatialIndexManager:

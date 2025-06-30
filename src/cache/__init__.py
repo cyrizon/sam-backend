@@ -1,32 +1,37 @@
 """
-Cache module for SAM Backend
----------------------------
+Cache V2 Package
+---------------
 
-Centralizes all caching functionality including:
-- OSM data parsing and caching with serialization
-- Toll data management
-- Geographic matching utilities
-- Element linking (junctions, links, tolls)
-- High-performance cache serialization
+New multi-source OSM cache system.
+
+This package provides:
+- Parsing from 4 separate GeoJSON files (toll_booths, entries, exits, indeterminate)
+- Linking of motorway segments into complete links
+- Toll detection and association with motorway links
+- High-performance spatial operations
 """
 
-from .managers.toll_data_manager import TollDataManager
-from .managers.osm_data_manager import OSMDataManager
-from .cached_osm_manager import CachedOSMDataManager, cached_osm_data_manager
-
-# Global cache instances
-print("🚀 Initialisation du cache global des péages...")
-toll_data_cache = TollDataManager()
-
-print("🚦 Initialisation du cache global OSM avec sérialisation...")
-# Use the new cached manager for better performance
-osm_data_cache = cached_osm_data_manager
+from .models import LinkType, TollBoothStation, MotorwayLink, CompleteMotorwayLink
+from .parsers import MultiSourceParser
+from .linking import LinkBuilder, TollDetector
+from .managers import OSMDataManager
 
 __all__ = [
-    'toll_data_cache',
-    'osm_data_cache',
-    'TollDataManager',
-    'OSMDataManager',
-    'CachedOSMDataManager',
-    'cached_osm_data_manager'
+    # Models
+    'LinkType',
+    'TollBoothStation', 
+    'MotorwayLink',
+    'CompleteMotorwayLink',
+    
+    # Parsers
+    'MultiSourceParser',
+    
+    # Linking
+    'LinkBuilder',
+    'TollDetector',
+    
+    # Managers
+    'OSMDataManager'
 ]
+
+__version__ = "2.0.0"

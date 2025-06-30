@@ -1,14 +1,12 @@
 """
-Cache Managers Package
----------------------
+Cache V2 Managers Package
+------------------------
 
-Manager classes for handling different types of cache data.
+High-level managers for the new cache system.
 """
 
-from .toll_data_manager import TollDataManager
 from .osm_data_manager import OSMDataManager
 
 __all__ = [
-    'TollDataManager',
     'OSMDataManager'
 ]

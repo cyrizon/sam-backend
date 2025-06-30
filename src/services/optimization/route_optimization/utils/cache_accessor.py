@@ -7,15 +7,15 @@ Utilise le nouveau cache V2 avec liens motorway et association automatique des p
 """
 
 from typing import List, Optional, Dict, Any
-from src.cache.v2.managers.v2_cache_manager_with_linking import V2CacheManagerWithLinking
-from src.cache.v2.models.complete_motorway_link import CompleteMotorwayLink
-from src.cache.v2.models.toll_booth_station import TollBoothStation
+from src.cache.managers.cache_manager_with_linking import CacheManagerWithLinking
+from src.cache.models.complete_motorway_link import CompleteMotorwayLink
+from src.cache.models.toll_booth_station import TollBoothStation
 
 
 class CacheAccessor:
     """Accesseur unifié au cache V2 avec liens motorway et péages associés."""
     
-    _cache_manager: Optional[V2CacheManagerWithLinking] = None
+    _cache_manager: Optional[CacheManagerWithLinking] = None
     _initialized: bool = False
     
     @classmethod
@@ -26,7 +26,7 @@ class CacheAccessor:
         
         try:
             print("🚀 Initialisation du cache V2 pour route optimization...")
-            cls._cache_manager = V2CacheManagerWithLinking("data")
+            cls._cache_manager = CacheManagerWithLinking("data")
             success = cls._cache_manager.load_all_including_motorway_linking()
             
             if success:
