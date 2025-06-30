@@ -12,7 +12,7 @@ src/cache/
 ├── 📁 models/             # Modèles de données (péages, liaisons, tarifs)
 ├── 📁 linking/            # Système de liaison autoroutière
 ├── 📁 parsers/            # Parseurs de données externes
-├── 📁 pricing/            # Gestion des tarifs et coûts
+├── 📁 pricing/            # Gestion des tarifs et coûts (répertoire minimal)
 ├── 📁 serialization/      # Sérialisation binaire haute performance
 ├── 📁 services/           # Services spécialisés (association péages)
 └── 📁 utils/              # Utilitaires partagés

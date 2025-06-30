@@ -28,12 +28,37 @@ utils/
 
 ## 🧩 Composants détaillés
 
-### **1. GeographicUtils** - Utilitaires Géographiques
+### **1. Geographic Utils** - Utilitaires Géographiques
 
-Module principal d'utilitaires pour les calculs géographiques et spatiaux.
+Module d'utilitaires pour les calculs géographiques et spatiaux.
 
-#### **Calculs de distance**
+#### **Fonctions disponibles actuellement**
 ```python
+from src.cache.utils.geographic_utils import calculate_distance, distance_point_to_polyline_meters
+
+# Distance géodésique entre deux points (en kilomètres)
+distance_km = calculate_distance(
+    point1=[4.8345, 46.7123],  # [longitude, latitude]
+    point2=[4.8234, 46.2891]
+)
+print(f"Distance: {distance_km:.2f} km")
+
+# Distance minimale point-à-polyline (en mètres)
+point = [4.8300, 46.5000]
+polyline = [[4.8345, 46.7123], [4.8234, 46.2891], [4.8100, 46.2500]]
+
+distance_to_line_m = distance_point_to_polyline_meters(
+    point=point,
+    polyline=polyline
+)
+print(f"Distance à la ligne: {distance_to_line_m:.1f} mètres")
+```
+
+#### **Extension recommandée - GeographicUtils (classe)**
+La documentation ci-dessous présente une classe `GeographicUtils` étendue recommandée pour des fonctionnalités géographiques avancées :
+
+```python
+# Exemple d'utilisation future recommandée
 from src.cache.utils.geographic_utils import GeographicUtils
 
 # Distance géodésique précise
@@ -56,7 +81,7 @@ distance_m = GeographicUtils.calculate_euclidean_distance(
 )
 ```
 
-#### **Calculs géométriques**
+#### **Calculs géométriques (extension recommandée)**
 ```python
 # Distance point-à-ligne
 point = [4.8300, 46.5000]

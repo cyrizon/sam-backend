@@ -19,13 +19,17 @@ from ..models.link_types import LinkType
 class CompleteMotorwayLinksSerializer:
     """Sérialiseur pour les liens motorway complets."""
     
-    def __init__(self, cache_dir: str = "osm_cache_test"):
+    def __init__(self, cache_dir: str = None):
         """
         Initialise le sérialiseur.
         
         Args:
-            cache_dir: Répertoire du cache
+            cache_dir: Répertoire du cache. Si None, utilise CACHE_DIR depuis l'environnement
         """
+        # Utiliser la variable d'environnement si cache_dir n'est pas fourni
+        if cache_dir is None:
+            cache_dir = os.getenv("CACHE_DIR", "./osm_cache_test")
+            
         self.cache_dir = cache_dir
         self.links_file = os.path.join(cache_dir, "complete_motorway_links.bin")
         self.stats_file = os.path.join(cache_dir, "linking_stats.json")

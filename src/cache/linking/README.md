@@ -181,23 +181,23 @@ Composant de correspondance spatiale haute performance utilisant des algorithmes
 
 #### **Utilisation**
 ```python
-from src.cache.linking.coordinate_matcher import CoordinateMatcher
+from src.cache.linking.coordinate_matcher import are_coordinates_equal, calculate_distance_meters
 
-# Initialisation
-matcher = CoordinateMatcher(
-    max_distance_m=2.0,
-    coordinate_precision=6,    # Précision des coordonnées
-    enable_geometric_validation=True
-)
+# Comparaison de coordonnées avec précision
+point1 = [4.8345, 46.7123]
+point2 = [4.8346, 46.7124]
 
-# Correspondance de points
-matches = matcher.find_coordinate_matches(
-    source_points=entry_coordinates,
-    target_points=exit_coordinates
-)
+are_equal = are_coordinates_equal(point1, point2, precision=6)
+print(f"Coordonnées identiques (6 décimales): {are_equal}")
 
-# Validation des correspondances
-validated_matches = matcher.validate_matches(matches)
+# Calcul de distance
+distance_m = calculate_distance_meters(point1, point2)
+print(f"Distance: {distance_m:.2f} mètres")
+```
+
+**Note**: Le module `coordinate_matcher` fournit des fonctions de base pour la correspondance spatiale. La classe `CoordinateMatcher` documentée ci-dessous représente une version étendue recommandée.
+
+#### **Extension recommandée - CoordinateMatcher (classe)**
 
 # Statistiques de correspondance
 match_stats = matcher.get_matching_statistics()

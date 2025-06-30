@@ -6,6 +6,7 @@ Accès unifié au système de cache V2 pour récupérer péages, links complets 
 Utilise le nouveau cache V2 avec liens motorway et association automatique des péages.
 """
 
+import os
 from typing import List, Optional, Dict, Any
 from src.cache.managers.cache_manager_with_linking import CacheManagerWithLinking
 from src.cache.models.complete_motorway_link import CompleteMotorwayLink
@@ -26,7 +27,12 @@ class CacheAccessor:
         
         try:
             print("🚀 Initialisation du cache V2 pour route optimization...")
-            cls._cache_manager = CacheManagerWithLinking("data")
+            
+            # Utiliser les variables d'environnement pour les répertoires
+            data_dir = os.getenv("DATA_DIR", "./data")
+            cache_dir = os.getenv("CACHE_DIR", "./osm_cache_test")
+            
+            cls._cache_manager = CacheManagerWithLinking(data_dir, cache_dir)
             success = cls._cache_manager.load_all_including_motorway_linking()
             
             if success:

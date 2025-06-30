@@ -42,8 +42,12 @@ class OSMDataManager:
     Coordonne le parsing, la liaison et la détection de péages.
     """
     
-    def __init__(self, cache_dir: str = "osm_cache"):
+    def __init__(self, cache_dir: str = None):
         """Initialise le gestionnaire OSM."""
+        # Utiliser la variable d'environnement si cache_dir n'est pas fourni
+        if cache_dir is None:
+            cache_dir = os.getenv("CACHE_DIR", "./osm_cache")
+            
         self._data: Optional[OSMData] = None
         self._initialized = False
         

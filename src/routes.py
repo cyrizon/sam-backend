@@ -5,6 +5,7 @@ from flask_cors import CORS
 from pathlib import Path
 from src.services.smart_route import SmartRouteService
 from src.services.optimization.route_optimization.toll_analysis.toll_identifier import TollIdentifier
+from src.services.optimization.route_optimization.utils.cache_accessor import CacheAccessor
 import requests
 from dotenv import load_dotenv
 from flask_limiter import Limiter
@@ -15,6 +16,53 @@ load_dotenv()
 
 # Initialisation du service de routage intelligent
 smart_route_service = SmartRouteService()
+
+def calculate_route_cost(tolls_on_route):
+    """
+    Calcule le coût total d'une route en utilisant les péages identifiés.
+    
+    Args:
+        tolls_on_route: Liste des péages sur la route
+        
+    Returns:
+        Coût total en euros
+    """
+    try:
+        if not tolls_on_route:
+            return 0.0
+        
+        # Extraire les objets TollBoothStation
+        toll_stations = []
+        for toll_data in tolls_on_route:
+            if isinstance(toll_data, dict) and 'toll' in toll_data:
+                toll_station = toll_data['toll']
+                if hasattr(toll_station, 'osm_id') and hasattr(toll_station, 'name'):
+                    toll_stations.append(toll_station)
+        
+        if len(toll_stations) < 2:
+            print(f"   ⚠️ Moins de 2 péages ({len(toll_stations)}) - pas de calcul possible")
+            return 0.0
+        
+        # Calcul par binômes consécutifs
+        total_cost = 0.0
+        vehicle_category = "1"  # Catégorie standard
+        
+        for i in range(len(toll_stations) - 1):
+            toll_from = toll_stations[i]
+            toll_to = toll_stations[i + 1]
+            
+            cost = CacheAccessor.calculate_toll_cost(toll_from, toll_to, vehicle_category)
+            if cost is not None:
+                total_cost += cost
+                print(f"   💳 {toll_from.name} → {toll_to.name}: {cost}€")
+            else:
+                print(f"   ⚠️ Coût non trouvé: {toll_from.name} → {toll_to.name}")
+        
+        return round(total_cost, 2)
+        
+    except Exception as e:
+        print(f"   ❌ Erreur calcul coût route: {e}")
+        return 0.0
 
 def register_routes(app):
     CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})  # Autorise uniquement le frontend
@@ -172,8 +220,10 @@ def register_routes(app):
                     "type": "FeatureCollection",
                     "features": [ors_result["features"][0]]
                 }
-            cost = None
-            toll_count = None
+            
+            cost = 0.0
+            toll_count = 0
+            
             if route_geojson:
                 # Extraire les coordonnées et utiliser TollIdentifier
                 coordinates = []
@@ -185,11 +235,20 @@ def register_routes(app):
                     identification_result = toll_identifier.identify_tolls_on_route(coordinates)
                     tolls_on_route = identification_result.get('tolls_on_route', [])
                     toll_count = len(tolls_on_route)
-                else:
-                    toll_count = 0
-                
-                # Pour compatibilité, on retourne 0 coût car c'est géré par le système V2
-                cost = 0.0
+                    
+                    # Calculer le coût réel en utilisant CacheAccessor
+                    if toll_count >= 2:
+                        # Pour 2 péages ou plus, calculer le coût entre les couples
+                        cost = calculate_route_cost(tolls_on_route)
+                        print(f"✅ Route de base - Péages: {toll_count}, Coût: {cost}€")
+                    elif toll_count == 1:
+                        # Pour 1 seul péage, le coût est 0 (pas de segment fermé)
+                        cost = 0.0
+                        print(f"✅ Route de base - 1 péage unique, Coût: 0€")
+                    else:
+                        # Aucun péage
+                        cost = 0.0
+                        print(f"✅ Route de base - Aucun péage, Coût: 0€")
             # Réponse enrichie
             return jsonify({
                 **ors_result,

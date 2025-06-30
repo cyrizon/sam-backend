@@ -21,15 +21,20 @@ from ..services.toll_association_service import TollAssociationService
 class CacheManagerWithLinking(CacheManagerWithPricing):
     """Gestionnaire étendu avec capacités de liaison de segments motorway."""
     
-    def __init__(self, data_dir: str, cache_dir: str = "osm_cache_test"):
+    def __init__(self, data_dir: str, cache_dir: str = None):
         """
         Initialise le gestionnaire étendu.
         
         Args:
             data_dir: Répertoire racine des données
-            cache_dir: Répertoire du cache (pour les orphelins)
+            cache_dir: Répertoire du cache (pour les orphelins). Si None, utilise CACHE_DIR depuis l'environnement
         """
         super().__init__(data_dir)
+        
+        # Utiliser la variable d'environnement si cache_dir n'est pas fourni
+        if cache_dir is None:
+            cache_dir = os.getenv("CACHE_DIR", "./osm_cache_test")
+        
         self.cache_dir = cache_dir
         
         # Composants de liaison

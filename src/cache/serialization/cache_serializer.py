@@ -29,13 +29,17 @@ class CacheSerializer:
     compression, metadata management, and integrity validation.
     """
     
-    def __init__(self, cache_dir: str = "osm_cache"):
+    def __init__(self, cache_dir: str = None):
         """
         Initialize the cache serializer.
         
         Args:
-            cache_dir: Directory where cache files will be stored
+            cache_dir: Directory where cache files will be stored. Si None, utilise CACHE_DIR depuis l'environnement
         """
+        # Utiliser la variable d'environnement si cache_dir n'est pas fourni
+        if cache_dir is None:
+            cache_dir = os.getenv("CACHE_DIR", "./osm_cache")
+            
         self.cache_dir = cache_dir
         self.ensure_cache_directory()
         

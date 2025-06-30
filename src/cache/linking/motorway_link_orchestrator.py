@@ -24,14 +24,18 @@ from .coordinate_chain_builder import CoordinateChainBuilder, CoordinateChain
 class MotorwayLinkOrchestrator:
     """Orchestrateur principal pour la construction des liens complets."""
     
-    def __init__(self, max_distance_m: float = 2.0, output_dir: str = "osm_cache_test"):
+    def __init__(self, max_distance_m: float = 2.0, output_dir: str = None):
         """
         Initialise l'orchestrateur.
         
         Args:
             max_distance_m: Distance maximale pour lier deux segments (ignoré maintenant)
-            output_dir: Répertoire de sortie pour les orphelins
+            output_dir: Répertoire de sortie pour les orphelins. Si None, utilise CACHE_DIR depuis l'environnement
         """
+        # Utiliser la variable d'environnement si output_dir n'est pas fourni
+        if output_dir is None:
+            output_dir = os.getenv("CACHE_DIR", "./osm_cache_test")
+            
         self.analyzer = SegmentConnectionAnalyzer(max_distance_m)
         self.chain_builder = CoordinateChainBuilder()
         self.output_dir = output_dir
