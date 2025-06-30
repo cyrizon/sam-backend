@@ -299,8 +299,23 @@ class CoreTollIdentifier:
     
     def _calculate_distance_between_points(self, coords1: List[float], coords2: List[float]) -> float:
         """Calcule la distance en mètres entre deux points (lat, lon)."""
-        lat1, lon1 = coords1[1], coords1[0]  # coords sont [lon, lat]
-        lat2, lon2 = coords2[1], coords2[0]
+        try:
+            # Conversion sécurisée en float si nécessaire
+            if isinstance(coords1[0], str):
+                lon1, lat1 = float(coords1[0]), float(coords1[1])
+            else:
+                lon1, lat1 = coords1[0], coords1[1]  # coords sont [lon, lat]
+                
+            if isinstance(coords2[0], str):
+                lon2, lat2 = float(coords2[0]), float(coords2[1])
+            else:
+                lon2, lat2 = coords2[0], coords2[1]  # coords sont [lon, lat]
+                
+        except (ValueError, IndexError, TypeError) as e:
+            print(f"❌ Erreur conversion coordonnées pour distance: {e}")
+            print(f"   coords1: {coords1}")
+            print(f"   coords2: {coords2}")
+            return 0.0
         
         # Formule haversine pour distance précise
         R = 6371000  # Rayon de la Terre en mètres
@@ -504,10 +519,26 @@ class CoreTollIdentifier:
         Returns:
             Tuple (distance_en_metres, position_sur_segment_0_1)
         """
-        # Convertir en coordonnées métriques approximatives
-        px, py = point[0], point[1]
-        ax, ay = seg_a[0], seg_a[1]
-        bx, by = seg_b[0], seg_b[1]
+        try:
+            # Conversion sécurisée en float
+            if isinstance(point[0], str):
+                px, py = float(point[0]), float(point[1])
+            else:
+                px, py = point[0], point[1]
+                
+            if isinstance(seg_a[0], str):
+                ax, ay = float(seg_a[0]), float(seg_a[1])
+            else:
+                ax, ay = seg_a[0], seg_a[1]
+                
+            if isinstance(seg_b[0], str):
+                bx, by = float(seg_b[0]), float(seg_b[1])
+            else:
+                bx, by = seg_b[0], seg_b[1]
+                
+        except (ValueError, IndexError, TypeError) as e:
+            print(f"❌ Erreur conversion coordonnées pour segment: {e}")
+            return 0.0, 0.0
         
         # Vecteur segment
         dx = bx - ax

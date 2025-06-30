@@ -81,10 +81,32 @@ class RouteAssembler:
             all_coords, total_distance, total_duration, all_instructions
         )
         
-        # Calculer les coûts de péages basés sur les péages sélectionnés
-        toll_cost, actual_toll_count, toll_details = RouteAssembler._calculate_toll_costs_from_selected(
-            final_route, selected_tolls
-        )
+        # RE-ANALYSE: Identifier les vrais péages empruntés sur la route finale
+        print("   🔍 Re-analyse des péages sur la route finale...")
+        try:
+            toll_identifier = TollIdentifier()
+            reanalysis_result = toll_identifier.identify_tolls_on_route(all_coords, None)
+            
+            if reanalysis_result.get('identification_success'):
+                actual_tolls_on_route = reanalysis_result.get('tolls_on_route', [])
+                print(f"   🎯 {len(actual_tolls_on_route)} péages réellement empruntés détectés")
+                
+                # Utiliser les péages re-analysés au lieu des sélectionnés pour le calcul des coûts
+                toll_cost, actual_toll_count, toll_details = RouteAssembler._calculate_toll_costs_from_selected(
+                    final_route, actual_tolls_on_route
+                )
+            else:
+                print("   ⚠️ Échec re-analyse - utilisation des péages sélectionnés")
+                # Fallback sur les péages sélectionnés
+                toll_cost, actual_toll_count, toll_details = RouteAssembler._calculate_toll_costs_from_selected(
+                    final_route, selected_tolls
+                )
+        except Exception as e:
+            print(f"   ❌ Erreur re-analyse: {e} - utilisation des péages sélectionnés")
+            # Fallback sur les péages sélectionnés
+            toll_cost, actual_toll_count, toll_details = RouteAssembler._calculate_toll_costs_from_selected(
+                final_route, selected_tolls
+            )
         
         # Extraire les informations des péages pour toll_info
         toll_names = [toll.get('from_name', 'Péage') for toll in toll_details]
@@ -367,6 +389,7 @@ class RouteAssembler:
                     'duration': step.get('duration', 0)
                 })
         
+        print("   💰 Identification des péages sur la route assemblée...")
         # Identifier et calculer les coûts de péages avec le système V2
         toll_cost, actual_toll_count, toll_details = RouteAssembler._calculate_toll_costs(base_route)
         

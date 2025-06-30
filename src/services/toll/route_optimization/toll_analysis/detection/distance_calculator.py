@@ -34,12 +34,33 @@ class OptimizedDistanceCalculator:
         if not all([point, segment_start, segment_end]):
             return float('inf')
         
-        # Distance Manhattan au milieu du segment
-        mid_x = (segment_start[0] + segment_end[0]) / 2
-        mid_y = (segment_start[1] + segment_end[1]) / 2
+        try:
+            # Conversion sécurisée en float si nécessaire
+            if isinstance(point[0], str):
+                px, py = float(point[0]), float(point[1])
+            else:
+                px, py = point[0], point[1]
+                
+            if isinstance(segment_start[0], str):
+                sx, sy = float(segment_start[0]), float(segment_start[1])
+            else:
+                sx, sy = segment_start[0], segment_start[1]
+                
+            if isinstance(segment_end[0], str):
+                ex, ey = float(segment_end[0]), float(segment_end[1])
+            else:
+                ex, ey = segment_end[0], segment_end[1]
+                
+        except (ValueError, IndexError, TypeError) as e:
+            print(f"❌ Erreur conversion coordonnées pour approximation: {e}")
+            return float('inf')
         
-        dx = abs(point[0] - mid_x)
-        dy = abs(point[1] - mid_y)
+        # Distance Manhattan au milieu du segment
+        mid_x = (sx + ex) / 2
+        mid_y = (sy + ey) / 2
+        
+        dx = abs(px - mid_x)
+        dy = abs(py - mid_y)
         
         # Conversion approximative degrés → mètres
         # 1 degré ≈ 111000m, correction Manhattan → Euclidienne ≈ 0.7
@@ -168,16 +189,32 @@ class OptimizedDistanceCalculator:
         if not coord1 or not coord2 or len(coord1) < 2 or len(coord2) < 2:
             return float('inf')
         
+        try:
+            # Conversion sécurisée en float si nécessaire
+            if isinstance(coord1[0], str):
+                lon1, lat1 = float(coord1[0]), float(coord1[1])
+            else:
+                lon1, lat1 = coord1[0], coord1[1]
+                
+            if isinstance(coord2[0], str):
+                lon2, lat2 = float(coord2[0]), float(coord2[1])
+            else:
+                lon2, lat2 = coord2[0], coord2[1]
+                
+        except (ValueError, IndexError, TypeError) as e:
+            print(f"❌ Erreur conversion coordonnées pour haversine: {e}")
+            return float('inf')
+        
         R = 6371000  # Rayon terrestre en mètres
         
-        lat1, lon1 = math.radians(coord1[1]), math.radians(coord1[0])
-        lat2, lon2 = math.radians(coord2[1]), math.radians(coord2[0])
+        lat1_rad, lon1_rad = math.radians(lat1), math.radians(lon1)
+        lat2_rad, lon2_rad = math.radians(lat2), math.radians(lon2)
         
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
+        dlat = lat2_rad - lat1_rad
+        dlon = lon2_rad - lon1_rad
         
         a = (math.sin(dlat / 2) ** 2 + 
-             math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2)
+             math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2) ** 2)
         c = 2 * math.asin(math.sqrt(a))
         
         return R * c

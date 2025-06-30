@@ -119,8 +119,27 @@ class TollCostCalculator:
         Returns:
             float: Distance en kilomètres
         """
-        lon1, lat1 = toll_from.coordinates
-        lon2, lat2 = toll_to.coordinates
+        try:
+            # S'assurer que les coordonnées sont des float
+            coords_from = toll_from.coordinates
+            coords_to = toll_to.coordinates
+            
+            # Conversion sécurisée en float si nécessaire
+            if isinstance(coords_from[0], str):
+                lon1, lat1 = float(coords_from[0]), float(coords_from[1])
+            else:
+                lon1, lat1 = coords_from[0], coords_from[1]
+                
+            if isinstance(coords_to[0], str):
+                lon2, lat2 = float(coords_to[0]), float(coords_to[1])
+            else:
+                lon2, lat2 = coords_to[0], coords_to[1]
+        
+        except (ValueError, IndexError, TypeError) as e:
+            print(f"❌ Erreur conversion coordonnées: {e}")
+            print(f"   From: {toll_from.coordinates}")
+            print(f"   To: {toll_to.coordinates}")
+            return 0.0
         
         # Formule de Haversine
         R = 6371  # Rayon terrestre en km
@@ -165,13 +184,13 @@ class TollCostCalculator:
             "from_toll": {
                 "id": toll_from.osm_id,
                 "name": toll_from.display_name,
-                "type": toll_from.type,
+                "type": toll_from.toll_type,
                 "operator": toll_from.operator
             },
             "to_toll": {
                 "id": toll_to.osm_id,
                 "name": toll_to.display_name,
-                "type": toll_to.type,
+                "type": toll_to.toll_type,
                 "operator": toll_to.operator
             },
             "calculation_details": {

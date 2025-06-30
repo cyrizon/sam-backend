@@ -27,9 +27,21 @@ class DistanceCalculator:
         """
         if not coord1 or not coord2 or len(coord1) < 2 or len(coord2) < 2:
             return float('inf')
-        
-        lon1, lat1 = coord1[0], coord1[1]
-        lon2, lat2 = coord2[0], coord2[1]
+        try:
+            # Conversion sécurisée en float si nécessaire
+            if isinstance(coord1[0], str):
+                lon1, lat1 = float(coord1[0]), float(coord1[1])
+            else:
+                lon1, lat1 = coord1[0], coord1[1]
+                
+            if isinstance(coord2[0], str):
+                lon2, lat2 = float(coord2[0]), float(coord2[1])
+            else:
+                lon2, lat2 = coord2[0], coord2[1]
+                
+        except (ValueError, IndexError, TypeError) as e:
+            print(f"❌ Erreur conversion coordonnées pour distance: {e}")
+            return 0.0
         
         # Formule de Haversine
         R = 6371000  # Rayon de la Terre en mètres

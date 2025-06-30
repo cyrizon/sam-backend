@@ -65,8 +65,8 @@ class IntelligentOptimizer:
         
         try:
             print("Etape 1")
-            # ÉTAPE 1: Route sans péage (cas spécial)
-            if optimization_mode == 'count' and target_tolls == 0:
+            # ÉTAPE 1: Route sans péage (cas spéciaux : 0 ou 1 péage)
+            if optimization_mode == 'count' and (target_tolls == 0 or target_tolls == 1):
                 return self._handle_zero_tolls(coordinates)
             
             # ÉTAPES 2-3: Route de base + identification péages
@@ -112,8 +112,8 @@ class IntelligentOptimizer:
         return True
     
     def _handle_zero_tolls(self, coordinates: List[List[float]]) -> Optional[Dict]:
-        """ÉTAPE 1: Gère le cas spécial 0 péage."""
-        print("🚫 Cas spécial : 0 péage demandé")
+        """ÉTAPE 1: Gère le cas spécial 0 ou 1 péage (route sans péage)."""
+        print("🚫 Cas spécial : route sans péage demandée")
         
         result = self.route_provider.get_toll_free_route(coordinates)
         if not result:
@@ -162,16 +162,6 @@ class IntelligentOptimizer:
         
         if optimization_mode == 'count':
             tolls_available = identification_result['total_tolls_on_route']
-            
-            # Cas spécial : si on ne demande qu'1 péage et qu'on n'a que des fermés
-            # → impossible de respecter la règle (fermé doit être accompagné)
-            # → renvoyer route sans péage
-            if target_tolls == 1:
-                open_tolls = sum(1 for toll in identification_result['tolls_on_route'] 
-                               if toll.get('toll_type') == 'ouvert')
-                if open_tolls == 0:
-                    print("⚠️ 1 péage demandé mais que des fermés → route sans péage")
-                    return True
             
             # Logique principale : route de base suffisante SEULEMENT si :
             # 1. On demande plus qu'il n'y en a (maximum atteint)

@@ -82,5 +82,5 @@ class TollBoothParser:
             highway_ref=properties.get('highway:ref'),
             coordinates=coordinates,
             properties=properties,
-            type=toll_type
+            toll_type=toll_type
         )

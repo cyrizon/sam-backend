@@ -19,17 +19,17 @@ class TollBoothStation:
     highway_ref: Optional[str]  # Ex: "A 6"
     coordinates: List[float]    # [lon, lat]
     properties: Dict
-    type: str = "F"  # "O" pour ouvert, "F" pour fermé (défaut)
+    toll_type: str = "F"  # "O" pour ouvert, "F" pour fermé (défaut)
     
     @property
     def is_open_toll(self) -> bool:
         """Retourne True si c'est un péage ouvert."""
-        return self.type == "O"
+        return self.toll_type == "O"
     
     @property
     def is_closed_toll(self) -> bool:
         """Retourne True si c'est un péage fermé."""
-        return self.type == "F"
+        return self.toll_type == "F"
     
     @property
     def display_name(self) -> str:
