@@ -43,10 +43,13 @@ class BudgetOptimizer:
         Returns:
             Résultat optimisé
         """
+        # Cas spécial : budget = 0 → route sans péage
+        if budget_limit == 0.0:
+            return self._create_no_toll_result("Budget 0 → aucun péage autorisé")
         if not closed_tolls:
             # Pas de péages fermés à optimiser
             total_cost = CacheAccessor.calculate_total_cost(open_tolls)
-            if total_cost <= budget_limit:
+            if total_cost is not None and total_cost <= budget_limit:
                 return self._create_result(
                     open_tolls, total_cost, "Ouverts seulement"
                 )
@@ -65,21 +68,23 @@ class BudgetOptimizer:
             )
         
         # Stratégie progressive simple : essayer chaque entrée séquentiellement
-        current_tolls = open_tolls + closed_tolls
+        # D'abord, convertir tous les péages en objets cache V2
+        current_tolls = self._convert_tolls_to_objects(open_tolls + closed_tolls)
+        closed_objects = self._convert_tolls_to_objects(closed_tolls)
         
         for i, replacement_entry in enumerate(replacement_entries):
             print(f"   🔄 Test entrée {i + 1}/{len(replacement_entries)}")
             
             # Remplacer le premier péage fermé par cette entrée
             new_tolls = self._replace_first_closed_toll(
-                current_tolls, closed_tolls[0], replacement_entry
+                current_tolls, closed_objects[0], replacement_entry
             )
             
             # Tester le coût
             new_cost = CacheAccessor.calculate_total_cost(new_tolls)
-            print(f"     Coût avec entrée {i + 1} : {new_cost:.2f}€")
+            print(f"     Coût avec entrée {i + 1} : {new_cost:.2f}€" if new_cost is not None else f"     Coût avec entrée {i + 1} : N/A")
             
-            if new_cost <= budget_limit:
+            if new_cost is not None and new_cost <= budget_limit:
                 return self._create_result(
                     new_tolls, new_cost, 
                     f"Optimisé avec entrée séquentielle {i + 1}"
@@ -124,36 +129,78 @@ class BudgetOptimizer:
         current_tolls: List[Dict], 
         closed_toll: Dict, 
         replacement_entry
-    ) -> List[Dict]:
+    ) -> List:
         """
         Remplace le premier péage fermé par une entrée de remplacement.
-        Logique simple : remplacement direct 1:1.
+        Retourne directement l'objet CompleteMotorwayLink au lieu d'un dictionnaire.
         
         Args:
             current_tolls: Liste actuelle des péages
             closed_toll: Péage fermé à remplacer
-            replacement_entry: Entrée de remplacement
+            replacement_entry: Entrée de remplacement (CompleteMotorwayLink)
             
         Returns:
-            Nouvelle liste avec remplacement
+            Nouvelle liste avec remplacement (objets TollBoothStation et CompleteMotorwayLink)
         """
         new_tolls = []
         
         for toll in current_tolls:
             if toll == closed_toll:
-                # Remplacer par l'entrée de remplacement
-                new_tolls.append({
-                    'toll_type': 'fermé',
-                    'name': f"Entrée {replacement_entry.link_id}",
-                    'coordinates': replacement_entry.get_start_point(),
-                    'associated_toll': replacement_entry.associated_toll
-                })
+                # Remplacer par l'objet CompleteMotorwayLink directement
+                new_tolls.append(replacement_entry)
                 print(f"     ✅ Remplacé par entrée {replacement_entry.link_id}")
             else:
-                new_tolls.append(toll)
+                # Convertir les dictionnaires en objets TollBoothStation si nécessaire
+                if isinstance(toll, dict) and 'toll' in toll:
+                    # C'est un résultat d'identification Shapely, extraire l'objet TollBoothStation
+                    new_tolls.append(toll['toll'])
+                elif isinstance(toll, dict):
+                    # Essayer de trouver l'objet TollBoothStation correspondant dans le cache
+                    toll_station = self._find_toll_station_in_cache(toll)
+                    if toll_station:
+                        new_tolls.append(toll_station)
+                    else:
+                        print(f"     ⚠️ Impossible de convertir le péage {toll.get('name', 'Inconnu')} - IGNORÉ")
+                        # Ne pas ajouter le dict - garantir que seuls les objets sont ajoutés
+                        continue
+                else:
+                    # C'est déjà un objet TollBoothStation ou CompleteMotorwayLink
+                    new_tolls.append(toll)
         
         return new_tolls
     
+    def _convert_tolls_to_objects(self, tolls_list: List[Dict]) -> List:
+        """
+        Convertit une liste de dictionnaires en objets TollBoothStation ou CompleteMotorwayLink.
+        Garantit que seuls des objets (jamais des dicts) sont retournés.
+        
+        Args:
+            tolls_list: Liste de dictionnaires de péages
+            
+        Returns:
+            Liste d'objets TollBoothStation ou CompleteMotorwayLink uniquement
+        """
+        converted_tolls = []
+        
+        for toll in tolls_list:
+            if isinstance(toll, dict) and 'toll' in toll:
+                # C'est un résultat d'identification Shapely, extraire l'objet TollBoothStation
+                converted_tolls.append(toll['toll'])
+            elif isinstance(toll, dict):
+                # Essayer de trouver l'objet TollBoothStation correspondant dans le cache
+                toll_station = self._find_toll_station_in_cache(toll)
+                if toll_station:
+                    converted_tolls.append(toll_station)
+                else:
+                    print(f"     ⚠️ Impossible de convertir le péage {toll.get('name', 'Inconnu')} - IGNORÉ")
+                    # Ne pas ajouter le dict - garantir que seuls les objets sont retournés
+                    continue
+            else:
+                # C'est déjà un objet TollBoothStation ou CompleteMotorwayLink
+                converted_tolls.append(toll)
+        
+        return converted_tolls
+
     def _test_open_only_fallback(
         self, 
         open_tolls: List[Dict], 
@@ -174,7 +221,7 @@ class BudgetOptimizer:
         
         cost = CacheAccessor.calculate_total_cost(open_tolls)
         
-        if cost <= budget_limit:
+        if cost is not None and cost <= budget_limit:
             return self._create_result(
                 open_tolls, cost, 
                 "Fallback : ouverts seulement"
@@ -224,3 +271,31 @@ class BudgetOptimizer:
             'selection_reason': f"Route sans péage : {reason}",
             'optimization_applied': True
         }
+    
+    def _find_toll_station_in_cache(self, toll_dict: Dict):
+        """
+        Trouve l'objet TollBoothStation correspondant dans le cache.
+        
+        Args:
+            toll_dict: Dictionnaire représentant un péage
+            
+        Returns:
+            TollBoothStation ou None
+        """
+        try:
+            osm_id = toll_dict.get('osm_id')
+            if not osm_id:
+                return None
+            
+            # Chercher dans le cache V2
+            toll_stations = CacheAccessor.get_toll_stations()
+            for toll_booth in toll_stations:
+                if toll_booth.osm_id == osm_id:
+                    return toll_booth
+            
+            print(f"     ⚠️ Péage {osm_id} non trouvé dans le cache")
+            return None
+            
+        except Exception as e:
+            print(f"     ❌ Erreur recherche cache: {e}")
+            return None

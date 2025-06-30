@@ -72,7 +72,7 @@ class TollSelector:
         
         result = {
             'selection_valid': True,
-            'selected_tolls': step1_result['selected_tolls'],  # Utiliser les péages sélectionnés, pas les optimisés
+            'selected_tolls': self._extract_toll_objects_from_result(step1_result['selected_tolls']),  # Extraire les objets des dicts
             'optimized_elements': optimized_elements,  # Garder les éléments optimisés séparément
             'selection_count': len([e for e in optimized_elements if hasattr(e, 'osm_id')]),
             'segments': segments_structure,
@@ -91,6 +91,10 @@ class TollSelector:
     ) -> Dict:
         """
         ÉTAPE 5b: Sélection par budget maximum.
+        Process similaire à select_tolls_by_count en 3 étapes:
+        1. Sélection de péages pour respecter le budget (via BudgetSelector)
+        2. Optimisation avec entrées/sorties si nécessaire  
+        3. Création structure segments
         
         Args:
             tolls_on_route: Péages disponibles sur la route
@@ -98,16 +102,49 @@ class TollSelector:
             identification_result: Résultat complet de l'identification
             
         Returns:
-            Péages sélectionnés respectant le budget
+            Structure avec segments [start->end, avec/sans péage]
         """
         print(f"🎯 Étape 5b: Sélection par budget ({target_budget}€)...")
         
-        # Utiliser le nouveau BudgetSelector avec cache V2
-        route_coords = identification_result.get('route_coordinates', [])
-        
-        return self.budget_selector.select_tolls_by_budget(
+        # ÉTAPE 1: Sélection par budget via BudgetSelector
+        route_coords = self._extract_route_coordinates(identification_result)
+        budget_result = self.budget_selector.select_tolls_by_budget(
             tolls_on_route, target_budget, route_coords
         )
+        
+        if not budget_result.get('selection_valid'):
+            # Cas échec budget → route sans péage
+            return self._create_no_toll_route_result(budget_result.get('reason', 'Budget impossible'))
+        
+        # Extraire les objets optimisés du résultat budget
+        # Le BudgetSelector devrait déjà retourner des TollBoothStation/CompleteMotorwayLink
+        optimized_elements = budget_result.get('selected_tolls', [])
+        
+        # ÉTAPE 2: Création structure segments (pas d'optimisation redondante)
+        segments_structure = self._create_segments_structure(
+            optimized_elements,  # Utiliser directement les objets optimisés du BudgetSelector
+            optimized_elements,  # Passer les mêmes objets comme fallback
+            route_coords[0],  # départ
+            route_coords[1]   # arrivée
+        )
+        
+        result = {
+            'selection_valid': True,
+            'selected_tolls': optimized_elements,  # Utiliser les objets optimisés par budget
+            'optimized_elements': optimized_elements,  # Garder les éléments optimisés séparément
+            'selection_count': len([e for e in optimized_elements if hasattr(e, 'osm_id')]),
+            'segments': segments_structure,
+            'optimization_applied': True,
+            'selection_reason': f"Sélection budget ({len(optimized_elements)} éléments)",
+            'budget_info': {
+                'target_budget': target_budget,
+                'actual_cost': budget_result.get('total_cost', 0.0),
+                'budget_respected': budget_result.get('budget_respected', True)
+            }
+        }
+        
+        print(f"   ✅ Sélection budget terminée : {len(segments_structure)} segments créés")
+        return result
     
     def _remove_tolls_to_match_count(self, tolls_on_route: List, target_count: int) -> Dict:
         """
@@ -621,6 +658,36 @@ class TollSelector:
             # Objet TollBoothStation direct
             return toll_data
     
+    def _extract_toll_objects_from_result(self, selected_tolls_list: List) -> List:
+        """
+        Extrait les objets TollBoothStation ou CompleteMotorwayLink des résultats de sélection.
+        Convertit les dictionnaires contenant {'toll': <objet>, ...} en liste d'objets uniquement.
+        
+        Args:
+            selected_tolls_list: Liste pouvant contenir des dicts avec 'toll' ou des objets directs
+            
+        Returns:
+            Liste d'objets TollBoothStation ou CompleteMotorwayLink uniquement
+        """
+        extracted_objects = []
+        
+        for item in selected_tolls_list:
+            if isinstance(item, dict) and 'toll' in item:
+                # Extraire l'objet TollBoothStation du dictionnaire
+                toll_object = item['toll']
+                if hasattr(toll_object, 'osm_id') or hasattr(toll_object, 'link_id'):
+                    extracted_objects.append(toll_object)
+                else:
+                    print(f"     ⚠️ Objet toll sans identifiant: {type(toll_object)}")
+            elif hasattr(item, 'osm_id') or hasattr(item, 'link_id'):
+                # C'est déjà un objet TollBoothStation ou CompleteMotorwayLink
+                extracted_objects.append(item)
+            else:
+                print(f"     ⚠️ Item non reconnu ignoré: {type(item)}")
+        
+        print(f"     🎯 {len(extracted_objects)} objets extraits sur {len(selected_tolls_list)} éléments")
+        return extracted_objects
+
     def _create_simple_segment_with_selected_tolls(
         self, 
         selected_tolls: List, 

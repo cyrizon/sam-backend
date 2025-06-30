@@ -42,16 +42,34 @@ class BudgetTollSelector:
         """
         print(f"💰 Sélection par budget : {budget_limit}€")
         
+        # Vérifications de sécurité
+        if budget_limit is None or budget_limit < 0:
+            print(f"   ⚠️ Budget limite invalide: {budget_limit}")
+            return self._create_no_toll_result("Budget limite invalide")
+        
+        # Cas spécial : budget = 0 → route sans péage
+        if budget_limit == 0.0:
+            print(f"   🚫 Budget = 0 → route sans péage")
+            return self._create_no_toll_result("Budget 0 → aucun péage autorisé")
+        
         if not tolls_on_route:
             return self._create_result([], 0.0, "Aucun péage sur route")
         
         # Calculer le coût initial avec le cache
         initial_cost = self._calculate_total_cost(tolls_on_route)
+        
+        # Vérification de sécurité pour le coût
+        if initial_cost is None:
+            print(f"   ⚠️ Impossible de calculer le coût initial")
+            return self._create_no_toll_result("Calcul de coût impossible")
+        
         print(f"   Coût initial : {initial_cost:.2f}€")
         
         if initial_cost <= budget_limit:
+            # Convertir en objets avant de retourner
+            converted_tolls = self._convert_tolls_to_objects(tolls_on_route)
             return self._create_result(
-                tolls_on_route, initial_cost, 
+                converted_tolls, initial_cost, 
                 f"Budget respecté ({initial_cost:.2f}€ <= {budget_limit}€)"
             )
         
@@ -86,8 +104,10 @@ class BudgetTollSelector:
         if not closed_tolls:
             # Que des ouverts, teste le coût
             cost = self._calculate_total_cost(open_tolls)
-            if cost <= budget_limit:
-                return self._create_result(open_tolls, cost, "Ouverts seulement")
+            if cost is not None and cost <= budget_limit:
+                # Convertir en objets avant de retourner
+                converted_tolls = self._convert_tolls_to_objects(open_tolls)
+                return self._create_result(converted_tolls, cost, "Ouverts seulement")
             else:
                 return self._create_no_toll_result("Budget dépassé même avec ouverts")
         
@@ -119,9 +139,11 @@ class BudgetTollSelector:
         if open_tolls:
             # Tester si les ouverts respectent le budget
             cost = self._calculate_total_cost(open_tolls)
-            if cost <= budget_limit:
+            if cost is not None and cost <= budget_limit:
+                # Convertir en objets avant de retourner
+                converted_tolls = self._convert_tolls_to_objects(open_tolls)
                 return self._create_result(
-                    open_tolls, cost, 
+                    converted_tolls, cost, 
                     "Ouverts seulement (fermé isolé évité)"
                 )
         
@@ -181,23 +203,86 @@ class BudgetTollSelector:
         Returns:
             Coût total en euros
         """
-        total_cost = 0.0
+        if not tolls:
+            return 0.0
         
-        for toll in tolls:
-            try:
-                # Utiliser le coût estimé s'il existe
-                if 'estimated_cost' in toll:
-                    total_cost += toll['estimated_cost']
+        if len(tolls) == 1:
+            # Un seul péage, coût par défaut
+            return 3.0
+        
+        try:
+            # Convertir en objets pour utiliser CacheAccessor.calculate_total_cost
+            converted_tolls = self._convert_tolls_to_objects(tolls)
+            
+            if len(converted_tolls) >= 2:
+                # Utiliser le calcul par binômes consécutifs
+                cost = CacheAccessor.calculate_total_cost(converted_tolls)
+                return cost if cost is not None else 3.0 * len(tolls)
+            else:
+                # Fallback si conversion échoue
+                return 3.0 * len(tolls)
+                
+        except Exception as e:
+            print(f"   ⚠️ Erreur calcul coût total: {e}")
+            # Coût par défaut en cas d'erreur
+            return 3.0 * len(tolls)
+
+    def _convert_tolls_to_objects(self, tolls_list: List[Dict]) -> List:
+        """
+        Convertit une liste de dictionnaires en objets TollBoothStation ou CompleteMotorwayLink.
+        Garantit que seuls des objets (jamais des dicts) sont retournés.
+        
+        Args:
+            tolls_list: Liste de dictionnaires de péages
+            
+        Returns:
+            Liste d'objets TollBoothStation ou CompleteMotorwayLink uniquement
+        """
+        converted_tolls = []
+        
+        for toll in tolls_list:
+            if isinstance(toll, dict) and 'toll' in toll:
+                # C'est un résultat d'identification Shapely, extraire l'objet TollBoothStation
+                converted_tolls.append(toll['toll'])
+            elif isinstance(toll, dict):
+                # Essayer de trouver l'objet TollBoothStation correspondant dans le cache
+                toll_station = self._find_toll_station_in_cache(toll)
+                if toll_station:
+                    converted_tolls.append(toll_station)
                 else:
-                    # Utiliser le CacheAccessor pour calculer le coût
-                    toll_cost = CacheAccessor.calculate_toll_cost(
-                        toll, vehicle_category="1"
-                    )
-                    total_cost += toll_cost
-                    
-            except Exception as e:
-                print(f"   ⚠️ Erreur calcul coût péage {toll.get('name', 'Inconnu')}: {e}")
-                # Coût par défaut si erreur
-                total_cost += 3.0
+                    print(f"     ⚠️ Impossible de convertir le péage {toll.get('name', 'Inconnu')} - IGNORÉ")
+                    # Ne pas ajouter le dict - garantir que seuls les objets sont retournés
+                    continue
+            else:
+                # C'est déjà un objet TollBoothStation ou CompleteMotorwayLink
+                converted_tolls.append(toll)
         
-        return total_cost
+        return converted_tolls
+
+    def _find_toll_station_in_cache(self, toll_dict: Dict):
+        """
+        Trouve l'objet TollBoothStation correspondant dans le cache.
+        
+        Args:
+            toll_dict: Dictionnaire représentant un péage
+            
+        Returns:
+            TollBoothStation ou None
+        """
+        try:
+            osm_id = toll_dict.get('osm_id')
+            if not osm_id:
+                return None
+            
+            # Chercher dans le cache V2
+            toll_stations = CacheAccessor.get_toll_stations()
+            for toll_booth in toll_stations:
+                if toll_booth.osm_id == osm_id:
+                    return toll_booth
+            
+            print(f"     ⚠️ Péage {osm_id} non trouvé dans le cache")
+            return None
+            
+        except Exception as e:
+            print(f"     ❌ Erreur recherche cache: {e}")
+            return None

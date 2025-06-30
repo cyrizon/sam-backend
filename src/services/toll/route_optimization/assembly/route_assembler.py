@@ -286,19 +286,31 @@ class RouteAssembler:
             print(f"   💰 Calcul des coûts pour {len(selected_tolls)} péages sélectionnés...")
             from ..utils.cache_accessor import CacheAccessor
 
-            # Filtrer pour ne garder que les TollBoothStation
+            # Filtrer pour ne garder que les TollBoothStation ou convertir les dictionnaires
             toll_stations = []
             for toll_data in selected_tolls:
-                # Les péages peuvent être soit des dicts avec 'toll', soit des objets TollBoothStation directement
+                toll_station = None
+                
+                # Cas 1: Dict avec 'toll' (résultat de ré-analyse)
                 if isinstance(toll_data, dict) and 'toll' in toll_data:
                     toll_station = toll_data['toll']
+                    
+                # Cas 2: Objet TollBoothStation direct
                 elif hasattr(toll_data, 'osm_id') and hasattr(toll_data, 'name'):
                     toll_station = toll_data
-                else:
-                    continue
                     
-                if hasattr(toll_station, 'osm_id') and hasattr(toll_station, 'name'):
+                # Cas 3: Dict simple (péages sélectionnés) - convertir en cherchant dans le cache
+                elif isinstance(toll_data, dict) and 'osm_id' in toll_data:
+                    osm_id = toll_data['osm_id']
+                    # Chercher l'objet TollBoothStation correspondant dans le cache
+                    toll_station = RouteAssembler._find_toll_in_cache(toll_data)
+                    if not toll_station:
+                        print(f"   ⚠️ Péage {toll_data.get('name', osm_id)} non trouvé dans le cache")
+                        continue
+                
+                if toll_station and hasattr(toll_station, 'osm_id') and hasattr(toll_station, 'name'):
                     toll_stations.append(toll_station)
+                    print(f"   📍 Péage ajouté: {toll_station.name}")
             
             print(f"   ✅ {len(toll_stations)} stations de péage à traiter")
 
@@ -422,3 +434,39 @@ class RouteAssembler:
                 'coordinates': toll_coordinates
             }
         }
+    
+    @staticmethod
+    def _find_toll_in_cache(toll_dict_or_osm_id):
+        """
+        Trouve un objet TollBoothStation dans le cache à partir d'un dictionnaire ou osm_id.
+        
+        Args:
+            toll_dict_or_osm_id: Dictionnaire péage ou osm_id string
+            
+        Returns:
+            TollBoothStation ou None
+        """
+        try:
+            from ..utils.cache_accessor import CacheAccessor
+            
+            # Extraire l'osm_id
+            if isinstance(toll_dict_or_osm_id, dict):
+                osm_id = toll_dict_or_osm_id.get('osm_id')
+            else:
+                osm_id = toll_dict_or_osm_id
+            
+            if not osm_id:
+                return None
+            
+            # Chercher dans le cache V2
+            toll_stations = CacheAccessor.get_toll_stations()
+            for toll_booth in toll_stations:
+                if toll_booth.osm_id == osm_id:
+                    return toll_booth
+            
+            print(f"   ⚠️ Péage {osm_id} non trouvé dans le cache ({len(toll_stations)} péages disponibles)")
+            return None
+            
+        except Exception as e:
+            print(f"   ❌ Erreur recherche cache: {e}")
+            return None

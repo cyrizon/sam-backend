@@ -181,6 +181,50 @@ class CacheAccessor:
             return None
     
     @classmethod
+    def calculate_total_cost(
+        cls, 
+        toll_objects: List, 
+        vehicle_category: str = "1"
+    ) -> float:
+        """
+        Calcule le coût total d'une liste de péages par couples consécutifs.
+        
+        Args:
+            toll_objects: Liste d'objets TollBoothStation ou CompleteMotorwayLink
+            vehicle_category: Catégorie du véhicule (1-5)
+            
+        Returns:
+            Coût total en euros
+        """
+        if not toll_objects or len(toll_objects) < 2:
+            return 0.0
+        
+        # Filtrer pour ne garder que les TollBoothStation
+        toll_stations = []
+        for obj in toll_objects:
+            if hasattr(obj, 'osm_id') and hasattr(obj, 'name'):
+                # C'est un TollBoothStation
+                toll_stations.append(obj)
+            elif hasattr(obj, 'associated_toll'):
+                # C'est un CompleteMotorwayLink avec péage associé
+                toll_stations.append(obj.associated_toll)
+        
+        if len(toll_stations) < 2:
+            return 0.0
+        
+        # Calcul par couples consécutifs
+        total_cost = 0.0
+        for i in range(len(toll_stations) - 1):
+            toll_from = toll_stations[i]
+            toll_to = toll_stations[i + 1]
+            
+            cost = cls.calculate_toll_cost(toll_from, toll_to, vehicle_category)
+            if cost is not None:
+                total_cost += cost
+        
+        return round(total_cost, 2)
+
+    @classmethod
     def is_cache_available(cls) -> bool:
         """
         Vérifie si le cache V2 est disponible et chargé.
