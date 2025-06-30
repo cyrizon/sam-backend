@@ -92,21 +92,6 @@ class ORSService:
         payload = ORSPayloadBuilder.build_base_payload(coordinates, include_tollways)
         return self.call_ors(payload)
     
-    def get_route_avoiding_polygons(self, coordinates, polygons, include_tollways=True):
-        """
-        Récupère un itinéraire en évitant certaines zones définies par des polygones.
-        
-        Args:
-            coordinates: Liste de coordonnées [départ, arrivée]
-            polygons: Polygones à éviter (format attendu par ORS)
-            include_tollways: Si True, inclut l'information sur les péages
-            
-        Returns:
-            dict: Résultat GeoJSON de l'itinéraire
-        """
-        payload = ORSPayloadBuilder.build_avoid_polygons_payload(coordinates, polygons, include_tollways)
-        return self.call_ors(payload)
-    
     def get_route_avoid_tollways(self, coordinates):
         """
         Récupère un itinéraire en évitant les autoroutes à péage.

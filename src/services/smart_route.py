@@ -17,8 +17,7 @@ Pipeline complet :
 """
 from __future__ import annotations
 from src.services.ors_service import ORSService
-from src.services.toll.route_optimization.main.intelligent_optimizer import IntelligentOptimizer
-from src.services.budget_strategies import BudgetRouteOptimizer
+from src.services.optimization.route_optimization.main.intelligent_optimizer import IntelligentOptimizer
 
 class SmartRouteService:
     """
@@ -33,14 +32,12 @@ class SmartRouteService:
         self.ors_service = ORSService()
         # Utiliser la stratégie intelligente V2 simplifiée
         self.intelligent_optimizer = IntelligentOptimizer(self.ors_service)
-        self.budget_optimizer = BudgetRouteOptimizer(self.ors_service)
     
     def compute_route_with_toll_limit(
         self,
         coordinates: list,
         max_tolls: int,
         veh_class: str = "c1",
-        max_comb_size: int = 2
     ):
         """
         Calcule un itinéraire avec une limite sur le nombre de péages.
@@ -80,7 +77,6 @@ class SmartRouteService:
         max_price: float = None,
         max_price_percent: float = None,
         veh_class: str = "c1",
-        max_comb_size: int = 2
     ):
         """
         Calcule un itinéraire avec une contrainte de budget maximum.
@@ -113,6 +109,3 @@ class SmartRouteService:
         finally:
             # TERMINER LA SESSION - Le résumé sera automatiquement loggé
             performance_tracker.end_optimization_session(result if 'result' in locals() else {})
-
-# Les fonctions wrapper ont été supprimées car elles ne sont plus nécessaires
-# Le code utilisateur importe maintenant directement la classe SmartRouteService

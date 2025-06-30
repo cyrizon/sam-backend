@@ -7,3 +7,4 @@ pytest
 shapely
 pandas
 pyproj
+rtree

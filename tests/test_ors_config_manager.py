@@ -63,22 +63,6 @@ class TestORSConfigManager:
         # BASE_TIMEOUT + (3-2)*2 = 10 + 2 = 12
         assert timeout == ORSConfigManager.BASE_TIMEOUT + 2
     
-    def test_calculate_timeout_avoid_polygons(self):
-        """Test calcul timeout avec évitement de polygones."""
-        payload = {
-            "coordinates": [[7.0, 48.0], [8.0, 49.0]],
-            "options": {
-                "avoid_polygons": {
-                    "coordinates": [[[1, 1], [2, 2]], [[3, 3], [4, 4]]]  # 2 polygones
-                }
-            }
-        }
-        
-        timeout = ORSConfigManager.calculate_timeout(payload)
-        
-        # BASE_TIMEOUT + 2*3 = 10 + 6 = 16
-        assert timeout == ORSConfigManager.BASE_TIMEOUT + 6
-    
     def test_calculate_timeout_avoid_features(self):
         """Test calcul timeout avec évitement de features."""
         payload = {
@@ -103,24 +87,6 @@ class TestORSConfigManager:
         # BASE_TIMEOUT + 2*2 = 14
         assert timeout == ORSConfigManager.BASE_TIMEOUT + 4
     
-    def test_calculate_timeout_max_cap(self):
-        """Test calcul timeout avec cap maximum."""
-        payload = {
-            "coordinates": [[7.0, 48.0], [7.1, 48.1], [7.2, 48.2], [7.3, 48.3], [8.0, 49.0]],
-            "options": {
-                "avoid_polygons": {
-                    "coordinates": [[[i, i], [i+1, i+1]] for i in range(10)]  # 10 polygones
-                },
-                "avoid_features": ["tollways"]
-            },
-            "extra_info": ["tollways", "surface", "waytype"]
-        }
-        
-        timeout = ORSConfigManager.calculate_timeout(payload)
-        
-        # Devrait être cappé au maximum
-        assert timeout == ORSConfigManager.MAX_TIMEOUT
-    
     def test_get_operation_name_base(self):
         """Test détermination nom d'opération pour route de base."""
         payload = {"coordinates": [[7.0, 48.0], [8.0, 49.0]]}
@@ -128,17 +94,6 @@ class TestORSConfigManager:
         name = ORSConfigManager.get_operation_name(payload)
         
         assert name == "ORS_base_route"
-    
-    def test_get_operation_name_avoid_polygons(self):
-        """Test détermination nom d'opération pour évitement polygones."""
-        payload = {
-            "coordinates": [[7.0, 48.0], [8.0, 49.0]],
-            "options": {"avoid_polygons": {"coordinates": []}}
-        }
-        
-        name = ORSConfigManager.get_operation_name(payload)
-        
-        assert name == "ORS_alternative_route"
     
     def test_get_operation_name_avoid_features(self):
         """Test détermination nom d'opération pour évitement features."""
@@ -201,14 +156,3 @@ class TestORSConfigManager:
         priority = ORSConfigManager.get_request_priority(payload)
         
         assert priority == "medium"
-    
-    def test_get_request_priority_low(self):
-        """Test priorité basse pour évitement polygones."""
-        payload = {
-            "coordinates": [[7.0, 48.0], [8.0, 49.0]],
-            "options": {"avoid_polygons": {"coordinates": []}}
-        }
-        
-        priority = ORSConfigManager.get_request_priority(payload)
-        
-        assert priority == "low"

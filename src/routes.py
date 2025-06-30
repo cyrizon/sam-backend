@@ -4,7 +4,7 @@ from flask import jsonify, request, current_app
 from flask_cors import CORS
 from pathlib import Path
 from src.services.smart_route import SmartRouteService
-from src.services.toll.route_optimization.toll_analysis.toll_identifier import TollIdentifier
+from src.services.optimization.route_optimization.toll_analysis.toll_identifier import TollIdentifier
 import requests
 from dotenv import load_dotenv
 from flask_limiter import Limiter
@@ -135,10 +135,12 @@ def register_routes(app):
     @app.route('/api/route/', methods=['POST'])
     def api_route_post():
         ors_base_url = os.environ.get("ORS_BASE_URL")
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if data is None:
+            return jsonify({"error": "No data provided"}), 410
         print("Received data:", data)
-        if not data or 'coordinates' not in data:
-            return jsonify({"error": "Missing coordinates"}), 400
+        if not data['coordinates']:
+            return jsonify({"error": "Missing coordinates"}), 411
 
         # Utilise le builder pour inclure "language": "fr" et demander GeoJSON
         payload = ORSPayloadBuilder.build_custom_payload(

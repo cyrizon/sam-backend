@@ -6,7 +6,7 @@ Gestionnaire centralisé pour la configuration des appels ORS.
 Responsabilité unique : valider et optimiser les paramètres des requêtes ORS.
 """
 
-from src.services.toll.constants import TollOptimizationConfig as Config
+from src.services.optimization.constants import TollOptimizationConfig as Config
 
 
 class ORSConfigManager:
@@ -77,9 +77,6 @@ class ORSConfigManager:
         
         # Évitement de polygones (plus complexe)
         options = payload.get("options", {})
-        if "avoid_polygons" in options:
-            polygon_count = len(options["avoid_polygons"].get("coordinates", []))
-            timeout += polygon_count * 3
         
         # Évitement de features (moyennement complexe)
         if "avoid_features" in options:
@@ -106,9 +103,7 @@ class ORSConfigManager:
         """
         options = payload.get("options", {})
         
-        if "avoid_polygons" in options:
-            return "ORS_alternative_route"
-        elif "avoid_features" in options:
+        if "avoid_features" in options:
             return "ORS_avoid_tollways"
         else:
             return "ORS_base_route"

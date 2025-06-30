@@ -59,35 +59,6 @@ class ORSPayloadBuilder:
         return ORSConfigManager.optimize_payload(payload)
     
     @staticmethod
-    def build_avoid_polygons_payload(coordinates, polygons, include_tollways=True):
-        """
-        Construit un payload pour éviter des polygones.
-        
-        Args:
-            coordinates: Liste de coordonnées [départ, arrivée]
-            polygons: Polygones à éviter (format ORS)
-            include_tollways: Inclure les informations de péages (défaut: True)
-            
-        Returns:
-            dict: Payload ORS
-        """
-        ORSConfigManager.validate_coordinates(coordinates)
-        
-        if not polygons:
-            raise ValueError("Au moins un polygone doit être fourni pour l'évitement")
-        
-        payload = {
-            "coordinates": coordinates,
-            "options": {"avoid_polygons": polygons},
-            "language": "fr"
-        }
-        
-        if include_tollways:
-            payload["extra_info"] = ["tollways"]
-        
-        return ORSConfigManager.optimize_payload(payload)
-    
-    @staticmethod
     def build_custom_payload(coordinates, options=None, extra_info=None):
         """
         Construit un payload personnalisé.
